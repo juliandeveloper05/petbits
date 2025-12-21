@@ -1,0 +1,30 @@
+# Crear .gitignore
+@"
+# PocketBase
+backend/pocketbase.exe
+backend/pocketbase
+backend/pb_data/
+backend/*.zip
+
+# Node modules (si usas npm en el futuro)
+node_modules/
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env files
+.env
+.env.local
+"@ | Out-File -FilePath .gitignore -Encoding utf8
