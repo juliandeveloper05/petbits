@@ -1,14 +1,16 @@
-# Crear .gitignore
-@"
-# PocketBase
+# Dependencias
+node_modules/
+
+# Build
+dist/
+dist-ssr/
+*.local
+
+# PocketBase (legado — ver legacy/)
 backend/pocketbase.exe
 backend/pocketbase
 backend/pb_data/
 backend/*.zip
-
-# Node modules (si usas npm en el futuro)
-node_modules/
-package-lock.json
 
 # IDE
 .vscode/
@@ -23,8 +25,13 @@ desktop.ini
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Env files
+# Entorno
 .env
 .env.local
-"@ | Out-File -FilePath .gitignore -Encoding utf8
+.env.*.local
+
+# Cobertura de tests
+coverage/
