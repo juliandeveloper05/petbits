@@ -173,14 +173,39 @@ function addEllipse(mask: Mask, cx: number, cy: number, rx: number, ry: number):
   }
 }
 
+/**
+ * Fila más alta que puede ocupar el cuerpo.
+ *
+ * El contorno se dibuja POR FUERA de la silueta, así que hace falta dejarle una
+ * fila libre arriba. Sin esto, una oreja alta sobre una cabeza alta llega a la
+ * fila 0, queda sin contorno y el sprite se ve recortado contra el borde.
+ */
+const MIN_BODY_Y = 2;
+
+/** Baja la base de un apéndice lo justo para que su punta no se salga por arriba. */
+function clampApexBase(baseY: number, height: number): number {
+  return Math.max(baseY, MIN_BODY_Y + height - 1);
+}
+
+/**
+ * Baja una forma si su borde superior se pasa del límite.
+ *
+ * Hace falta además del clamp de apéndices: con proporción máxima, una cabeza
+ * alta ya se sale sola, sin necesidad de orejas.
+ */
+function clampShapeTop(shape: Shape): Shape {
+  const overflow = MIN_BODY_Y - (shape.cy - shape.ry);
+  return overflow > 0 ? { ...shape, cy: shape.cy + overflow } : shape;
+}
+
 function addAppendages(mask: Mask, genes: Genes, head: Shape, body: Shape, legs: boolean): void {
   // bit 0 — orejas
   if ((genes.appendages & 1) !== 0) {
-    addTriangle(mask, AXIS - head.rx * 0.55, head.cy - head.ry * 0.6, 4, 5);
+    addTriangle(mask, AXIS - head.rx * 0.55, clampApexBase(head.cy - head.ry * 0.6, 5), 4, 5);
   }
   // bit 1 — cuernos
   if ((genes.appendages & 2) !== 0) {
-    addTriangle(mask, AXIS - head.rx * 0.42, head.cy - head.ry * 0.8, 2, 5);
+    addTriangle(mask, AXIS - head.rx * 0.42, clampApexBase(head.cy - head.ry * 0.8, 5), 2, 5);
   }
   // bit 2 — alas
   if ((genes.appendages & 4) !== 0) {
@@ -308,6 +333,9 @@ function applyPattern(
 // Cara
 // ---------------------------------------------------------------------------
 
+/** Ancho en píxeles de cada estilo de ojo, para poder centrar el par. */
+const EYE_WIDTHS: readonly number[] = [1, 2, 2, 3, 3, 3, 2, 2];
+
 function drawEye(buffer: PixelBuffer, cx: number, cy: number, style: number, ramp: Ramp): void {
   const dark = ramp[RAMP_OUTLINE];
   const x = Math.round(cx);
@@ -391,8 +419,17 @@ function drawFace(buffer: PixelBuffer, genes: Genes, head: Shape, ramp: Ramp): v
     buffer.set(left + 1, top + 2, SCLERA);
   } else {
     const spread = Math.max(2.2, head.rx * 0.44);
-    drawEye(buffer, AXIS - spread - 1, eyeY, style, ramp);
-    drawEye(buffer, AXIS + spread - 1, eyeY, style, ramp);
+    const width = EYE_WIDTHS[style] ?? 2;
+    const leftX = Math.round(AXIS - spread - 1);
+    // El ojo derecho va en la posición espejada del izquierdo, pero se DIBUJA
+    // igual, sin espejar. Así el par queda centrado sobre el eje y el brillo cae
+    // del mismo lado en los dos, coherente con la dirección de luz del sprite.
+    //
+    // Trasladarlo (leftX + 2·spread) parece equivalente pero no lo es: con ojos
+    // de ancho par deja el par corrido un píxel a la izquierda.
+    const rightX = SPRITE_SIZE - 1 - leftX - (width - 1);
+    drawEye(buffer, leftX, eyeY, style, ramp);
+    drawEye(buffer, rightX, eyeY, style, ramp);
   }
 
   // Boca
@@ -444,8 +481,8 @@ export function generateSprite(seed: bigint, stage: Stage = "adulto"): Sprite {
 
   const headScale = (0.88 + (genes.proportion & 0b11) * 0.06) * overall * headBoost;
   const bodyScale = (0.88 + ((genes.proportion >> 2) & 0b11) * 0.06) * overall;
-  const head = scaleShape(archetype.head, headScale);
-  const body = scaleShape(archetype.body, bodyScale);
+  const head = clampShapeTop(scaleShape(archetype.head, headScale));
+  const body = clampShapeTop(scaleShape(archetype.body, bodyScale));
 
   // 1. Silueta, en media grilla y espejada.
   const mask = new Mask(SPRITE_SIZE, SPRITE_SIZE);

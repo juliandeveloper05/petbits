@@ -119,7 +119,12 @@ export const PALETTE_MODES: readonly PaletteMode[] = [
   // Guiño a la consola verde fósforo que ya tenía el proyecto.
   { name: "Fósforo", baseLightness: 0.74, chroma: 0.135, accentHueShift: 18, hueBand: [118, 148] },
   { name: "Caramelo", baseLightness: 0.77, chroma: 0.155, accentHueShift: 62 },
-  { name: "Abismo", baseLightness: 0.46, chroma: 0.105, accentHueShift: 196 },
+  // Abismo estaba en 0.46 y el test de contraste lo bajó de un hondazo: con esa
+  // L la luminancia relativa queda en ~0.097, y el contraste máximo posible
+  // contra negro puro es (0.097+0.05)/0.05 = 2.94:1. Ningún contorno, por oscuro
+  // que fuera, podía llegar a 3:1. No era cuestión de afinar el contorno: el
+  // cuerpo mismo era demasiado oscuro para poder llevar uno.
+  { name: "Abismo", baseLightness: 0.53, chroma: 0.105, accentHueShift: 196 },
 ];
 
 export function paletteModeName(genes: Genes): string {
@@ -171,7 +176,7 @@ export function buildRamp(genes: Genes, traits: readonly Trait[] = []): Ramp {
   baseL = clamp(baseL, 0.3, 0.9);
 
   return [
-    oklchToRgb(Math.max(0.16, baseL - 0.44), chroma * 0.55, hue - 6),
+    oklchToRgb(Math.max(0.12, baseL - 0.44), chroma * 0.55, hue - 6),
     oklchToRgb(baseL - 0.17, chroma * 1.12, hue - 11),
     oklchToRgb(baseL, chroma, hue),
     oklchToRgb(Math.min(0.97, baseL + 0.14), chroma * 0.8, hue + 13),

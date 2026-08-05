@@ -20,8 +20,9 @@ export interface Trait {
   rule: string;
   tier: TraitTier;
   /**
-   * Frecuencia estimada analíticamente. TODO(Fase 1d): verificar por muestreo
-   * y corregir estos valores con lo medido — no mostrarlos en la UI hasta entonces.
+   * Frecuencia real, medida sobre 200.000 genomas en `test/traits.test.ts`.
+   * Las dos legendarias van con el valor analítico: son demasiado infrecuentes
+   * para medirlas con una muestra de ese tamaño.
    */
   approxRate: number;
 }
@@ -142,7 +143,7 @@ const TRAIT_RULES: readonly TraitRule[] = [
     name: "Equilibrado",
     rule: "Exactamente 32 de sus 64 bits están en 1",
     tier: "raro",
-    approxRate: 0.0993,
+    approxRate: 0.0998,
     test: (seed) => popcount(seed) === 32,
   },
   {
@@ -150,7 +151,7 @@ const TRAIT_RULES: readonly TraitRule[] = [
     name: "Vacío",
     rule: "24 bits o menos en 1 — genoma escaso, pigmentación pálida",
     tier: "raro",
-    approxRate: 0.0308,
+    approxRate: 0.03,
     test: (seed) => popcount(seed) <= 24,
   },
   {
@@ -158,7 +159,7 @@ const TRAIT_RULES: readonly TraitRule[] = [
     name: "Saturado",
     rule: "40 bits o más en 1 — genoma denso, pigmentación intensa",
     tier: "raro",
-    approxRate: 0.0308,
+    approxRate: 0.0296,
     test: (seed) => popcount(seed) >= 40,
   },
   {
@@ -166,7 +167,7 @@ const TRAIT_RULES: readonly TraitRule[] = [
     name: "Racha",
     rule: "Tiene 9 o más bits en 1 consecutivos",
     tier: "raro",
-    approxRate: 0.05,
+    approxRate: 0.0553,
     test: (seed) => longestRunOfOnes(seed) >= 9,
   },
   {
@@ -174,7 +175,7 @@ const TRAIT_RULES: readonly TraitRule[] = [
     name: "Primordial",
     rule: "El genoma es un número primo",
     tier: "epico",
-    approxRate: 0.0225,
+    approxRate: 0.0215,
     test: isPrime,
   },
   {
@@ -182,7 +183,7 @@ const TRAIT_RULES: readonly TraitRule[] = [
     name: "Uróboros",
     rule: "Su primer byte es idéntico al último",
     tier: "epico",
-    approxRate: 0.0039,
+    approxRate: 0.0035,
     test: (seed) => Number((seed >> 56n) & 0xffn) === Number(seed & 0xffn),
   },
   {
