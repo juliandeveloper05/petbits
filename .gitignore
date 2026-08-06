@@ -6,11 +6,21 @@ dist/
 dist-ssr/
 *.local
 
-# PocketBase (legado — ver legacy/)
+# PocketBase (legado). El rediseño es local-first: el backend recién vuelve a
+# discutirse en la Fase 6, y probablemente con Supabase en vez de PocketBase.
 backend/pocketbase.exe
 backend/pocketbase
 backend/pb_data/
 backend/*.zip
+
+# Archivos del propio PocketBase, que vienen dentro de su zip. No son del
+# proyecto: el CHANGELOG es el de PocketBase y la licencia es de su autor.
+backend/CHANGELOG.md
+backend/LICENSE.md
+
+# Migraciones autogeneradas del esquema viejo (profiles, coins). Describen un
+# backend que se retira, así que no se versionan. Siguen en disco.
+backend/pb_migrations/
 
 # IDE
 .vscode/
