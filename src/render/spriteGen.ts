@@ -44,6 +44,9 @@ const SCLERA: Rgb = { r: 248, g: 248, b: 252 };
 
 export type { Form, Stage };
 
+/** Gestos de la criatura. Solo cambian la cara, nunca la silueta. */
+export type Expression = "normal" | "parpadeo";
+
 /**
  * Cómo deforma el cuerpo cada forma evolutiva.
  *
@@ -454,12 +457,20 @@ function drawEye(buffer: PixelBuffer, cx: number, cy: number, style: number, ram
   }
 }
 
-function drawFace(buffer: PixelBuffer, genes: Genes, head: Shape, ramp: Ramp): void {
+function drawFace(
+  buffer: PixelBuffer,
+  genes: Genes,
+  head: Shape,
+  ramp: Ramp,
+  expression: Expression,
+): void {
   const dark = ramp[RAMP_OUTLINE];
-  const style = genes.eyes % 8;
+  // Parpadear es la animación más barata que existe y la que más hace por que
+  // algo lea como vivo. Se fuerza el estilo de ojo cerrado sobre el del genoma.
+  const style = expression === "parpadeo" ? 4 : genes.eyes % 8;
   const eyeY = head.cy - head.ry * 0.15;
 
-  if (style === 6 && genes.eyes >= 8) {
+  if (style === 6 && genes.eyes >= 8 && expression !== "parpadeo") {
     // Cíclope: un ojo grande centrado en el eje.
     //
     // Va oscuro por fuera y con un brillo blanco adentro, no al revés. Un bloque
@@ -539,6 +550,7 @@ export function generateSprite(
   seed: bigint,
   stage: Stage = "adulto",
   form: Form = "indefinida",
+  expression: Expression = "normal",
 ): Sprite {
   const genes = decodeGenome(seed);
   const traits = detectTraits(seed);
@@ -598,7 +610,7 @@ export function generateSprite(
   }
 
   // 6. La cara siempre arriba de todo.
-  drawFace(buffer, genes, head, ramp);
+  drawFace(buffer, genes, head, ramp, expression);
 
   return { width: SPRITE_SIZE, height: SPRITE_SIZE, data: buffer.data };
 }

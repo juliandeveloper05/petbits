@@ -129,8 +129,19 @@ describe("distribución de rarezas", () => {
   // Las rarezas basadas en bits son baratas de calcular, así que van con
   // muestra grande. La primalidad cuesta ~800 multiplicaciones de BigInt por
   // genoma y va aparte, con muestra chica.
-  it("las tasas declaradas coinciden con lo medido", () => {
-    const SAMPLES = 200_000;
+  /**
+   * Muestra de 60.000 y no de 200.000.
+   *
+   * Se mide llamando a `detectTraits` de verdad, no reimplementando las reglas
+   * acá: una copia de las reglas en el test pasaría aunque las reales se
+   * rompieran. El costo es que cada semilla paga un Miller-Rabin completo
+   * —unas 800 multiplicaciones de BigInt— aunque después se descarte ese dato.
+   *
+   * Con 60.000 la rareza menos frecuente que se verifica (Uróboros, 0,35%) cae
+   * unas 210 veces, de sobra para la tolerancia de ±50% que usa el test.
+   */
+  it("las tasas declaradas coinciden con lo medido", { timeout: 20_000 }, () => {
+    const SAMPLES = 60_000;
     const counts = new Map<string, number>();
 
     for (const seed of sample(SAMPLES)) {

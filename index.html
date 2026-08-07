@@ -1,425 +1,119 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>PetBits</title>
+    <meta
+      name="description"
+      content="Criaturas de datos: cada una nace de una semilla de 64 bits. Vive en tiempo real, aunque cierres la pestaña."
+    />
+    <meta name="theme-color" content="#0a0e0a" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/styles/game.css" />
+  </head>
+  <body>
+    <div class="scanlines" aria-hidden="true"></div>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎮 PetBits - Tienda de Mascotas Virtuales</title>
-    <meta name="description"
-        content="¡Compra, alimenta y cría a tu mascota virtual! Un videojuego vintage de mascotas bebé.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-</head>
+    <main class="console">
+      <div class="console-top">
+        <span class="brand">PetBits</span>
+        <button id="mute-btn" class="icon-btn" type="button" aria-pressed="false">
+          <span aria-hidden="true">♪</span>
+          <span class="sr-only">Silenciar</span>
+        </button>
+      </div>
 
-<body>
-    <div class="scanlines"></div>
-    <div class="crt-effect"></div>
+      <div class="screen">
+        <!-- ---------------------------------------------------- nacimiento -->
+        <section id="screen-nacer" class="panel" hidden>
+          <h1 class="title">PetBits</h1>
+          <p class="tagline">
+            Cada criatura nace de una semilla de 64&nbsp;bits. Ese número es su cuerpo, su color y su
+            carácter.
+          </p>
 
-    <div id="game-console">
-        <div class="console-frame">
-            <div class="console-top">
-                <div class="console-logo">PetBits</div>
-                <div class="led-indicator"></div>
+          <div class="hatch-preview">
+            <canvas id="hatch-canvas" width="192" height="192" aria-hidden="true"></canvas>
+            <p id="hatch-info" class="hatch-info"></p>
+          </div>
+
+          <form id="hatch-form" class="hatch-form">
+            <label class="field-label" for="hatch-seed">Semilla</label>
+            <input
+              id="hatch-seed"
+              class="field"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="tu nombre, o dejalo al azar"
+            />
+            <div class="hatch-actions">
+              <button class="btn btn-ghost" type="button" id="hatch-random">Otra</button>
+              <button class="btn" type="submit">Adoptarla</button>
             </div>
+          </form>
+        </section>
 
-            <div class="screen-wrapper">
-                <div id="screen" class="screen">
-                    <!-- Pantalla de Autenticación -->
-                    <section id="auth-screen" class="game-screen active">
-                        <div class="auth-content">
-                            <h1 class="game-title">
-                                <span class="title-pet">🐾</span>
-                                PetBits
-                                <span class="title-pet">🐾</span>
-                            </h1>
-                            <p class="subtitle">Inicia Sesión para Continuar</p>
-
-                            <div class="auth-tabs">
-                                <button class="auth-tab-btn active" data-tab="login">INICIAR SESIÓN</button>
-                                <button class="auth-tab-btn" data-tab="register">REGISTRARSE</button>
-                            </div>
-
-                            <!-- Login Form -->
-                            <form id="login-form" class="auth-form active">
-                                <div class="form-group">
-                                    <label>Email</label>
-                                    <input type="email" id="login-email" placeholder="tu@email.com" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Contraseña</label>
-                                    <input type="password" id="login-password" placeholder="••••••••" required>
-                                </div>
-                                <button type="submit" class="pixel-btn main-btn">ENTRAR</button>
-                                <p class="form-hint">¿Primera vez? Regístrate arriba</p>
-                            </form>
-
-                            <!-- Register Form -->
-                            <form id="register-form" class="auth-form">
-                                <div class="form-group">
-                                    <label>Usuario</label>
-                                    <input type="text" id="register-username" placeholder="jugador123" required
-                                        minlength="3">
-                                </div>
-                                <div class="form-group">
-                                    <label>Email</label>
-                                    <input type="email" id="register-email" placeholder="tu@email.com" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Contraseña</label>
-                                    <input type="password" id="register-password" placeholder="••••••••" required
-                                        minlength="6">
-                                </div>
-                                <div class="form-group">
-                                    <label>Confirmar Contraseña</label>
-                                    <input type="password" id="register-password-confirm" placeholder="••••••••"
-                                        required minlength="6">
-                                </div>
-                                <button type="submit" class="pixel-btn main-btn">CREAR CUENTA</button>
-                                <p class="form-hint">¿Ya tienes cuenta? Inicia sesión arriba</p>
-                            </form>
-
-                            <div id="auth-loading" class="auth-loading">
-                                <span class="loading-spinner">⏳</span>
-                                <p>Cargando...</p>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Pantalla de Título -->
-                    <section id="title-screen" class="game-screen">
-                        <div class="title-content">
-                            <h1 class="game-title">
-                                <span class="title-pet">🐾</span>
-                                PetBits
-                                <span class="title-pet">🐾</span>
-                            </h1>
-                            <p class="subtitle pixel-text">Virtual Pet Simulator</p>
-                            <div class="version-badge">v1.0</div>
-
-                            <button id="start-btn" class="pixel-btn main-btn">
-                                <span class="btn-icon">▶</span> INICIAR JUEGO
-                            </button>
-
-                            <p class="blink-text">PRESIONA PARA EMPEZAR</p>
-                        </div>
-                        <div class="floating-pets">
-                            <span class="float-pet" style="--delay: 0s; --x: 20%;">🐶</span>
-                            <span class="float-pet" style="--delay: 1s; --x: 80%;">🐱</span>
-                            <span class="float-pet" style="--delay: 2s; --x: 50%;">🐰</span>
-                            <span class="float-pet" style="--delay: 0.5s; --x: 35%;">🐹</span>
-                            <span class="float-pet" style="--delay: 1.5s; --x: 65%;">🐢</span>
-                        </div>
-                    </section>
-
-                    <!-- Pantalla de Tienda -->
-                    <section id="shop-screen" class="game-screen">
-                        <div class="screen-header">
-                            <h2 class="screen-title">🏪 TIENDA DE MASCOTAS</h2>
-                            <div class="coins-display">
-                                <span class="coin-icon">🪙</span>
-                                <span id="coins-amount">100</span>
-                            </div>
-                        </div>
-
-                        <div class="shop-tabs">
-                            <button class="tab-btn active" data-tab="pets">🐾 Mascotas</button>
-                            <button class="tab-btn" data-tab="food">🍎 Comida</button>
-                        </div>
-
-                        <div id="pets-tab" class="tab-content active">
-                            <div class="shop-grid">
-                                <div class="shop-item" data-pet="puppy" data-price="50">
-                                    <div class="item-sprite">🐶</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Perrito</span>
-                                        <span class="item-price">🪙 50</span>
-                                    </div>
-                                    <button class="buy-btn">COMPRAR</button>
-                                </div>
-                                <div class="shop-item" data-pet="kitten" data-price="50">
-                                    <div class="item-sprite">🐱</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Gatito</span>
-                                        <span class="item-price">🪙 50</span>
-                                    </div>
-                                    <button class="buy-btn">COMPRAR</button>
-                                </div>
-                                <div class="shop-item" data-pet="bunny" data-price="60">
-                                    <div class="item-sprite">🐰</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Conejito</span>
-                                        <span class="item-price">🪙 60</span>
-                                    </div>
-                                    <button class="buy-btn">COMPRAR</button>
-                                </div>
-                                <div class="shop-item" data-pet="hamster" data-price="40">
-                                    <div class="item-sprite">🐹</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Hamster</span>
-                                        <span class="item-price">🪙 40</span>
-                                    </div>
-                                    <button class="buy-btn">COMPRAR</button>
-                                </div>
-                                <div class="shop-item locked" data-pet="dragon" data-price="200">
-                                    <div class="item-sprite">🐲</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Dragón</span>
-                                        <span class="item-price">🪙 200</span>
-                                    </div>
-                                    <button class="buy-btn">COMPRAR</button>
-                                    <div class="lock-overlay">🔒</div>
-                                </div>
-                                <div class="shop-item locked" data-pet="unicorn" data-price="300">
-                                    <div class="item-sprite">🦄</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Unicornio</span>
-                                        <span class="item-price">🪙 300</span>
-                                    </div>
-                                    <button class="buy-btn">COMPRAR</button>
-                                    <div class="lock-overlay">🔒</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="food-tab" class="tab-content">
-                            <div class="shop-grid">
-                                <div class="food-item" data-food="apple" data-price="5" data-energy="10">
-                                    <div class="item-sprite">🍎</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Manzana</span>
-                                        <span class="item-stats">+10 ❤️</span>
-                                        <span class="item-price">🪙 5</span>
-                                    </div>
-                                    <div class="quantity-controls">
-                                        <button class="qty-btn minus">-</button>
-                                        <span class="qty-display">0</span>
-                                        <button class="qty-btn plus">+</button>
-                                    </div>
-                                </div>
-                                <div class="food-item" data-food="carrot" data-price="8" data-energy="15">
-                                    <div class="item-sprite">🥕</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Zanahoria</span>
-                                        <span class="item-stats">+15 ❤️</span>
-                                        <span class="item-price">🪙 8</span>
-                                    </div>
-                                    <div class="quantity-controls">
-                                        <button class="qty-btn minus">-</button>
-                                        <span class="qty-display">0</span>
-                                        <button class="qty-btn plus">+</button>
-                                    </div>
-                                </div>
-                                <div class="food-item" data-food="meat" data-price="15" data-energy="25">
-                                    <div class="item-sprite">🍖</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Carne</span>
-                                        <span class="item-stats">+25 ❤️</span>
-                                        <span class="item-price">🪙 15</span>
-                                    </div>
-                                    <div class="quantity-controls">
-                                        <button class="qty-btn minus">-</button>
-                                        <span class="qty-display">0</span>
-                                        <button class="qty-btn plus">+</button>
-                                    </div>
-                                </div>
-                                <div class="food-item" data-food="cake" data-price="25" data-energy="40">
-                                    <div class="item-sprite">🍰</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Pastel</span>
-                                        <span class="item-stats">+40 ❤️</span>
-                                        <span class="item-price">🪙 25</span>
-                                    </div>
-                                    <div class="quantity-controls">
-                                        <button class="qty-btn minus">-</button>
-                                        <span class="qty-display">0</span>
-                                        <button class="qty-btn plus">+</button>
-                                    </div>
-                                </div>
-                                <div class="food-item special" data-food="star" data-price="50" data-energy="100">
-                                    <div class="item-sprite rainbow">⭐</div>
-                                    <div class="item-info">
-                                        <span class="item-name">Estrella</span>
-                                        <span class="item-stats">+100 ❤️ +XP</span>
-                                        <span class="item-price">🪙 50</span>
-                                    </div>
-                                    <div class="quantity-controls">
-                                        <button class="qty-btn minus">-</button>
-                                        <span class="qty-display">0</span>
-                                        <button class="qty-btn plus">+</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="shop-footer">
-                            <button id="my-pets-btn" class="pixel-btn secondary-btn">
-                                🏠 MIS MASCOTAS
-                            </button>
-                        </div>
-                    </section>
-
-                    <!-- Pantalla de Cuidado -->
-                    <section id="care-screen" class="game-screen">
-                        <div class="screen-header">
-                            <button id="back-to-shop-btn" class="icon-btn">◀</button>
-                            <div class="pet-status-bar">
-                                <span id="pet-name-header">Mi Mascota</span>
-                                <span class="pet-stage-badge" id="stage-badge">BEBÉ</span>
-                            </div>
-                            <div class="coins-display small">
-                                <span class="coin-icon">🪙</span>
-                                <span id="coins-amount-care">100</span>
-                            </div>
-                        </div>
-
-                        <div class="care-content">
-                            <div class="pet-habitat">
-                                <div class="habitat-bg">
-                                    <div class="ground"></div>
-                                    <div class="decorations">
-                                        <span class="deco flower" style="--x: 10%;">🌸</span>
-                                        <span class="deco flower" style="--x: 85%;">🌼</span>
-                                        <span class="deco grass" style="--x: 25%;">🌿</span>
-                                        <span class="deco grass" style="--x: 70%;">🌱</span>
-                                    </div>
-                                </div>
-
-                                <div class="pet-container">
-                                    <div id="pet-sprite" class="pet-sprite baby">
-                                        <span class="sprite-emoji">🐶</span>
-                                    </div>
-                                    <div id="pet-reaction" class="pet-reaction">😋</div>
-                                    <div id="level-up-effect" class="level-up-effect">
-                                        <span>✨ NIVEL ARRIBA! ✨</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="stats-panel">
-                                <div class="stat-row">
-                                    <span class="stat-icon">❤️</span>
-                                    <span class="stat-label">Hambre</span>
-                                    <div class="pixel-bar">
-                                        <div id="hunger-fill" class="bar-fill" style="width: 50%;"></div>
-                                    </div>
-                                    <span id="hunger-value" class="stat-value">50%</span>
-                                </div>
-
-                                <div class="stat-row">
-                                    <span class="stat-icon">⭐</span>
-                                    <span class="stat-label">Experiencia</span>
-                                    <div class="pixel-bar xp-bar">
-                                        <div id="xp-fill" class="bar-fill xp" style="width: 0%;"></div>
-                                    </div>
-                                    <span id="xp-value" class="stat-value">0/100</span>
-                                </div>
-
-                                <div class="growth-info">
-                                    <span class="growth-label">Etapa de Crecimiento:</span>
-                                    <div class="growth-stages">
-                                        <div class="stage active" data-stage="baby">
-                                            <span>🥚</span>
-                                            <span class="stage-name">Bebé</span>
-                                        </div>
-                                        <div class="stage-arrow">→</div>
-                                        <div class="stage" data-stage="young">
-                                            <span>🐣</span>
-                                            <span class="stage-name">Joven</span>
-                                        </div>
-                                        <div class="stage-arrow">→</div>
-                                        <div class="stage" data-stage="adult">
-                                            <span>🌟</span>
-                                            <span class="stage-name">Adulto</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="action-bar">
-                                <div class="food-inventory">
-                                    <span class="inv-label">Inventario:</span>
-                                    <div class="inv-items" id="food-inventory">
-                                        <div class="inv-item" data-food="apple">
-                                            <span class="inv-icon">🍎</span>
-                                            <span class="inv-qty" id="inv-apple">0</span>
-                                        </div>
-                                        <div class="inv-item" data-food="carrot">
-                                            <span class="inv-icon">🥕</span>
-                                            <span class="inv-qty" id="inv-carrot">0</span>
-                                        </div>
-                                        <div class="inv-item" data-food="meat">
-                                            <span class="inv-icon">🍖</span>
-                                            <span class="inv-qty" id="inv-meat">0</span>
-                                        </div>
-                                        <div class="inv-item" data-food="cake">
-                                            <span class="inv-icon">🍰</span>
-                                            <span class="inv-qty" id="inv-cake">0</span>
-                                        </div>
-                                        <div class="inv-item special" data-food="star">
-                                            <span class="inv-icon rainbow">⭐</span>
-                                            <span class="inv-qty" id="inv-star">0</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="action-buttons">
-                                    <button id="feed-btn" class="action-btn feed">
-                                        <span class="btn-emoji">🍎</span>
-                                        <span>ALIMENTAR</span>
-                                    </button>
-                                    <button id="play-btn" class="action-btn play">
-                                        <span class="btn-emoji">🎾</span>
-                                        <span>JUGAR</span>
-                                    </button>
-                                    <button id="sleep-btn" class="action-btn sleep">
-                                        <span class="btn-emoji">💤</span>
-                                        <span>DORMIR</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Modal de selección de comida -->
-                    <div id="food-modal" class="modal">
-                        <div class="modal-content">
-                            <h3>¿Qué quieres darle de comer?</h3>
-                            <div class="modal-food-grid" id="modal-food-grid">
-                                <!-- Se llena dinámicamente -->
-                            </div>
-                            <button id="close-food-modal" class="pixel-btn">CERRAR</button>
-                        </div>
-                    </div>
-
-                    <!-- Notificación toast -->
-                    <div id="toast" class="toast">
-                        <span id="toast-message">¡Mensaje!</span>
-                    </div>
-                </div>
+        <!-- ------------------------------------------------------- cuidado -->
+        <section id="screen-cuidado" class="panel" hidden>
+          <header class="pet-header">
+            <div>
+              <span id="pet-lineage" class="pet-lineage"></span>
+              <span id="pet-form" class="pet-form"></span>
             </div>
+            <span id="pet-stage" class="badge"></span>
+          </header>
 
-            <div class="console-controls">
-                <div class="dpad">
-                    <button class="dpad-btn up">▲</button>
-                    <button class="dpad-btn left">◀</button>
-                    <button class="dpad-btn center">●</button>
-                    <button class="dpad-btn right">▶</button>
-                    <button class="dpad-btn down">▼</button>
-                </div>
-                <div class="action-btns">
-                    <button class="console-btn btn-a">A</button>
-                    <button class="console-btn btn-b">B</button>
-                </div>
+          <div class="stage-area">
+            <div id="pet-sprite" class="pet-sprite">
+              <canvas id="pet-canvas" width="192" height="192"></canvas>
             </div>
-        </div>
+            <span id="pet-reaction" class="reaction" aria-hidden="true"></span>
+            <span id="pet-mood" class="pet-mood"></span>
+          </div>
+
+          <dl class="stats" id="stats"></dl>
+        </section>
+      </div>
+
+      <div class="controls">
+        <button class="btn" type="button" data-action="alimentar">Alimentar</button>
+        <button class="btn" type="button" data-action="jugar">Jugar</button>
+        <button class="btn" type="button" data-action="mimo">Mimo</button>
+      </div>
+
+      <footer class="console-foot">
+        <span id="seed-label" class="seed-label"></span>
+        <a class="lab-link" href="./lab.html">Laboratorio →</a>
+      </footer>
+    </main>
+
+    <!-- ------------------------------------------------------------ modales -->
+    <div id="food-modal" class="modal" hidden>
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="food-title">
+        <h2 id="food-title" class="modal-title">¿Qué le damos?</h2>
+        <div id="food-grid" class="food-grid"></div>
+        <button class="btn btn-ghost" type="button" data-close-modal>Mejor no</button>
+      </div>
     </div>
 
-    <!-- PocketBase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/pocketbase@0.21.1/dist/pocketbase.umd.js"></script>
-    <script src="pb-client.js"></script>
-    <script src="main.js"></script>
-</body>
+    <div id="digest-modal" class="modal" hidden>
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="digest-title">
+        <h2 id="digest-title" class="modal-title">Mientras no estabas</h2>
+        <p id="digest-headline" class="digest-headline"></p>
+        <ul id="digest-list" class="digest-list"></ul>
+        <button class="btn" type="button" data-close-modal>Ya volví</button>
+      </div>
+    </div>
 
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="/src/game/main.ts"></script>
+  </body>
 </html>

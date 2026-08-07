@@ -122,20 +122,28 @@ describe("integridad del sprite", () => {
    * Los cuatro bordes o ninguno.
    */
   it("no toca ninguno de los cuatro bordes", () => {
+    // Se acumulan los desbordes y se afirma una sola vez, igual que en el test
+    // de simetría: un expect() por píxel son decenas de miles de llamadas y
+    // hacen que este test solo tarde varios segundos.
+    const desbordes: string[] = [];
+
     for (const seed of sample(200)) {
       for (const stage of STAGES) {
         const { data } = generateSprite(seed, stage);
-        const donde = `seed ${seed.toString(16)} ${stage}`;
+        const donde = `${seed.toString(16)} ${stage}`;
 
-        for (let x = 0; x < SPRITE_SIZE; x++) {
-          expect(alphaAt(data, x, 0), `${donde} toca el borde superior`).toBe(0);
-          expect(alphaAt(data, x, SPRITE_SIZE - 1), `${donde} toca el borde inferior`).toBe(0);
-        }
-        for (let y = 0; y < SPRITE_SIZE; y++) {
-          expect(alphaAt(data, 0, y), `${donde} toca el borde izquierdo`).toBe(0);
-          expect(alphaAt(data, SPRITE_SIZE - 1, y), `${donde} toca el borde derecho`).toBe(0);
+        for (let i = 0; i < SPRITE_SIZE; i++) {
+          if (alphaAt(data, i, 0) !== 0) desbordes.push(`${donde} arriba`);
+          if (alphaAt(data, i, SPRITE_SIZE - 1) !== 0) desbordes.push(`${donde} abajo`);
+          if (alphaAt(data, 0, i) !== 0) desbordes.push(`${donde} izquierda`);
+          if (alphaAt(data, SPRITE_SIZE - 1, i) !== 0) desbordes.push(`${donde} derecha`);
         }
       }
     }
+
+    expect(
+      [...new Set(desbordes)].slice(0, 5),
+      `${desbordes.length} píxeles fuera del lienzo`,
+    ).toEqual([]);
   });
 });

@@ -281,16 +281,20 @@ describe("sprites por forma", () => {
   it("las formas siguen respetando los límites del lienzo", () => {
     // Las ramas pétreas ensanchan el cuerpo: hay que confirmar que el tope de
     // ancho las contiene y no se salen por los costados.
+    const desbordes: string[] = [];
+
     for (const form of ["indefinida", ...ADULT_FORMS] as Form[]) {
       for (let i = 0; i < 40; i++) {
         const seed = BigInt(i) * 0x9e3779b97f4a7c15n;
         const { data } = generateSprite(seed, "adulto", form);
         for (let y = 0; y < 32; y++) {
           for (const x of [0, 31]) {
-            expect(data[(y * 32 + x) * 4 + 3], `${form} se sale en la columna ${x}`).toBe(0);
+            if (data[(y * 32 + x) * 4 + 3] !== 0) desbordes.push(`${form} en la columna ${x}`);
           }
         }
       }
     }
+
+    expect([...new Set(desbordes)], `${desbordes.length} píxeles fuera`).toEqual([]);
   });
 });

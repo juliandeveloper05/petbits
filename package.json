@@ -15,13 +15,15 @@
     "simular": "vite-node scripts/simular.ts",
     "lint": "biome check src test",
     "format": "biome format --write src test",
-    "formas": "vite-node scripts/formas.ts"
+    "formas": "vite-node scripts/formas.ts",
+    "iconos": "vite-node scripts/iconos.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
-    "vitest": "^2.1.8"
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^3.2.7"
   },
   "dependencies": {
     "idb-keyval": "^6.3.0",
