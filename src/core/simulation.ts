@@ -28,6 +28,18 @@
  * de corrido contra 10.080 pasos de un minuto.
  */
 
+import {
+  ADULTO_TICKS,
+  type Crianza,
+  type Form,
+  JUVENIL_TICKS,
+  MIN_SALUD_EVOLUCION,
+  type Stage,
+  crianzaInicial,
+  formName,
+  resolverAdulto,
+  resolverJuvenil,
+} from "./evolution.ts";
 import { decodeGenome } from "./genome.ts";
 import { deriveSeed, mulberry32 } from "./rng.ts";
 
@@ -88,6 +100,15 @@ export interface CreatureState {
   ticksSinCuidado: number;
   letargico: boolean;
   durmiendo: boolean;
+  /**
+   * Ticks en los que estuvo activa, sin contar el letargo. Es el reloj que rige
+   * la evolución: una criatura abandonada no crece sola.
+   */
+  ticksActivos: number;
+  etapa: Stage;
+  forma: Form;
+  /** Memoria de cómo la criaste. Decide en qué se convierte. */
+  crianza: Crianza;
 }
 
 export type SimEventKind =
@@ -98,6 +119,7 @@ export type SimEventKind =
   | "desperto"
   | "letargo"
   | "hallazgo"
+  | "evolucion"
   | "reloj";
 
 export interface SimEvent {
@@ -156,6 +178,25 @@ export function createCreature(seed: bigint, nowMs: number, tzOffsetMin: number)
     ticksSinCuidado: 0,
     letargico: false,
     durmiendo: isNight(localHour(nowMs, tzOffsetMin)),
+    ticksActivos: 0,
+    etapa: "bebe",
+    forma: "indefinida",
+    crianza: crianzaInicial(),
+  };
+}
+
+/**
+ * Copia profunda del estado.
+ *
+ * `{ ...state }` no alcanza: `stats` y `crianza` son objetos anidados y se
+ * compartirían por referencia. La simulación mutaría el estado que recibió, y
+ * `simulate` dejaría de ser pura sin que ningún test lo note hasta mucho después.
+ */
+function cloneState(state: CreatureState): CreatureState {
+  return {
+    ...state,
+    stats: { ...state.stats },
+    crianza: { ...state.crianza, dieta: { ...state.crianza.dieta } },
   };
 }
 
@@ -188,7 +229,7 @@ export function simulate(state: CreatureState, nowMs: number): SimResult {
   if (nowMs < state.lastTickMs) {
     emit("reloj", state.lastTickMs, "El reloj del sistema fue para atrás. No perdiste nada.");
     return {
-      state: { ...state, stats: { ...state.stats } },
+      state: cloneState(state),
       events,
       summary,
       omitted: 0,
@@ -199,7 +240,7 @@ export function simulate(state: CreatureState, nowMs: number): SimResult {
   const ticks = Math.floor((nowMs - state.lastTickMs) / TICK_MS);
   if (ticks === 0) {
     return {
-      state: { ...state, stats: { ...state.stats } },
+      state: cloneState(state),
       events,
       summary,
       omitted: 0,
@@ -211,7 +252,7 @@ export function simulate(state: CreatureState, nowMs: number): SimResult {
   const energyDrain = energyDrainFor(genes.metabolism);
   const eventBase = deriveSeed(BigInt(state.seed), "eventos");
 
-  const next: CreatureState = { ...state, stats: { ...state.stats } };
+  const next = cloneState(state);
 
   for (let i = 0; i < ticks; i++) {
     // Cada tick lee la hora de SU frontera, no de `nowMs`. Es lo que permite
@@ -281,6 +322,28 @@ export function simulate(state: CreatureState, nowMs: number): SimResult {
         emit("salud", tickStart, "No se la ve nada bien.");
       }
 
+      // Crianza: se acumula solo con la criatura activa. Sumar durante el
+      // letargo promediaría valores congelados y ensuciaría la rama evolutiva
+      // con tiempo en el que no pasó nada.
+      next.ticksActivos++;
+      next.crianza.sumaAnimo += next.stats.animo;
+      next.crianza.sumaSalud += next.stats.salud;
+      next.crianza.ticksMedidos++;
+
+      // Crecimiento. Requiere salud mínima: una criatura hecha pelota no
+      // evoluciona, primero hay que levantarla.
+      if (next.stats.salud >= MIN_SALUD_EVOLUCION) {
+        if (next.etapa === "bebe" && next.ticksActivos >= JUVENIL_TICKS) {
+          next.etapa = "juvenil";
+          next.forma = resolverJuvenil(next.crianza, genes);
+          emit("evolucion", tickStart, `Pegó el estirón. Ahora es ${formName(next.forma)}.`);
+        } else if (next.etapa === "juvenil" && next.ticksActivos >= ADULTO_TICKS) {
+          next.etapa = "adulto";
+          next.forma = resolverAdulto(next.crianza, genes, next.forma);
+          emit("evolucion", tickStart, `Terminó de crecer. Quedó ${formName(next.forma)}.`);
+        }
+      }
+
       // Hallazgos: azar sembrado por índice de tick, nunca por un flujo
       // arrastrado. Con un PRNG compartido, simular en dos pedazos daría otra
       // secuencia que simular de corrido.
@@ -342,6 +405,8 @@ const FINDINGS: readonly string[] = [
  * muestra nunca: el aviso de reloj es información de sistema, no una anécdota.
  */
 const EVENT_PRIORITY: Record<SimEventKind, number> = {
+  // Evolucionar es lo más importante que le puede pasar: va primero de todo.
+  evolucion: 120,
   letargo: 100,
   salud: 80,
   hambre: 60,

@@ -14,7 +14,8 @@
     "sheet": "vite-node scripts/contactSheet.ts",
     "simular": "vite-node scripts/simular.ts",
     "lint": "biome check src test",
-    "format": "biome format --write src test"
+    "format": "biome format --write src test",
+    "formas": "vite-node scripts/formas.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

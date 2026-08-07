@@ -10,10 +10,11 @@
  * diario para que la constancia valga más que el spam.
  */
 
+import type { FoodKind } from "./evolution.ts";
 import type { CreatureState } from "./simulation.ts";
 import { localDayIndex } from "./simulation.ts";
 
-export type FoodKind = "proteina" | "dulce" | "mineral" | "raro";
+export type { FoodKind };
 
 export interface Food {
   id: string;
@@ -84,7 +85,13 @@ function clamp01to100(value: number): number {
 
 /** Copia el estado y aplica lo común a toda interacción. */
 function touch(state: CreatureState, nowMs: number): { next: CreatureState; woke: boolean } {
-  const next: CreatureState = { ...state, stats: { ...state.stats } };
+  // Copia profunda: `crianza.dieta` es un objeto anidado y compartirlo por
+  // referencia haría que la acción mutara el estado que recibió.
+  const next: CreatureState = {
+    ...state,
+    stats: { ...state.stats },
+    crianza: { ...state.crianza, dieta: { ...state.crianza.dieta } },
+  };
 
   // El tope de vínculo se reinicia por día local, igual que en el tick.
   const day = localDayIndex(nowMs, next.tzOffsetMin);
@@ -133,6 +140,9 @@ export function alimentar(state: CreatureState, foodId: string, nowMs: number): 
     next.stats.salud + food.salud - (full ? OVERFEED_HEALTH_COST : 0),
   );
   grantBond(next, BOND_PER_ACTION);
+  // La dieta se registra siempre, aun cuando comió sin ganas: lo que le diste
+  // moldea en qué se convierte, más allá de cuánto le rindió esta vez.
+  next.crianza.dieta[food.tipo]++;
 
   const comida = `${food.articulo} ${food.name.toLowerCase()}`;
   const message = full
@@ -154,6 +164,7 @@ export function jugar(state: CreatureState, nowMs: number): ActionResult {
   next.stats.animo = clamp01to100(next.stats.animo + PLAY_MOOD_GAIN * efficiency);
   next.stats.energia = clamp01to100(next.stats.energia - PLAY_ENERGY_COST);
   grantBond(next, BOND_PER_ACTION);
+  next.crianza.juego++;
 
   const message =
     efficiency < 1
@@ -168,6 +179,9 @@ export function acariciar(state: CreatureState, nowMs: number): ActionResult {
 
   next.stats.animo = clamp01to100(next.stats.animo + PET_MOOD_GAIN);
   const granted = grantBond(next, BOND_PER_ACTION);
+  // Cuenta como crianza aunque el vínculo ya esté topeado: el tope limita el
+  // vínculo, no el hecho de haber estado ahí.
+  next.crianza.calma++;
 
   // Cuando el tope ya está alcanzado se dice, en vez de fingir que sumó.
   const message =

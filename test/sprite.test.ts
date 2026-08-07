@@ -113,15 +113,28 @@ describe("integridad del sprite", () => {
     expect(asymmetric.slice(0, 5), `${asymmetric.length} siluetas asimétricas`).toEqual([]);
   });
 
-  it("la criatura se apoya en la línea de piso y no toca los bordes", () => {
+  /**
+   * Ninguna criatura puede tocar el marco.
+   *
+   * La primera versión de este test solo miraba las filas 0 y 31, y por eso se
+   * le escapó un desborde lateral: alas y aletas se dibujan por fuera del
+   * cuerpo, y en un cuerpo ancho caían en la columna 0 y quedaban recortadas.
+   * Los cuatro bordes o ninguno.
+   */
+  it("no toca ninguno de los cuatro bordes", () => {
     for (const seed of sample(200)) {
-      const { data } = generateSprite(seed, "adulto");
-      for (let x = 0; x < SPRITE_SIZE; x++) {
-        expect(alphaAt(data, x, 0), `seed ${seed.toString(16)} toca el borde superior`).toBe(0);
-        expect(
-          alphaAt(data, x, SPRITE_SIZE - 1),
-          `seed ${seed.toString(16)} toca el borde inferior`,
-        ).toBe(0);
+      for (const stage of STAGES) {
+        const { data } = generateSprite(seed, stage);
+        const donde = `seed ${seed.toString(16)} ${stage}`;
+
+        for (let x = 0; x < SPRITE_SIZE; x++) {
+          expect(alphaAt(data, x, 0), `${donde} toca el borde superior`).toBe(0);
+          expect(alphaAt(data, x, SPRITE_SIZE - 1), `${donde} toca el borde inferior`).toBe(0);
+        }
+        for (let y = 0; y < SPRITE_SIZE; y++) {
+          expect(alphaAt(data, 0, y), `${donde} toca el borde izquierdo`).toBe(0);
+          expect(alphaAt(data, SPRITE_SIZE - 1, y), `${donde} toca el borde derecho`).toBe(0);
+        }
       }
     }
   });

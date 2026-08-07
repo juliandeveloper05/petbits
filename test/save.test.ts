@@ -85,6 +85,82 @@ describe("guardados rotos", () => {
   });
 });
 
+describe("migración real v1 → v2", () => {
+  /**
+   * Un guardado con la forma exacta que tenía la versión 1: sin crianza, sin
+   * etapa y sin forma evolutiva.
+   *
+   * Se escribe a mano en vez de derivarlo del estado actual a propósito. Si se
+   * construyera quitándole campos a `createCreature`, el día que cambie el
+   * estado el test mutaría con él y dejaría de probar la migración de la v1
+   * real.
+   */
+  function saveV1(ticksVividos: number): unknown {
+    return {
+      version: 1,
+      guardadoMs: T0,
+      criatura: {
+        seed: "11817069912113213192",
+        nacimientoMs: T0,
+        lastTickMs: T0 + ticksVividos * 60_000,
+        ticksVividos,
+        tzOffsetMin: -180,
+        stats: { energia: 62.5, animo: 48, salud: 91, vinculo: 14 },
+        vinculoHoy: 4,
+        diaIndice: 20514,
+        ticksSinCuidado: 30,
+        letargico: false,
+        durmiendo: false,
+      },
+    };
+  }
+
+  it("migra y valida contra el esquema nuevo", () => {
+    const outcome = parseSave(saveV1(100));
+    expect(outcome.ok, outcome.ok ? "" : outcome.reason).toBe(true);
+    if (!outcome.ok) return;
+
+    expect(outcome.save.version).toBe(SAVE_VERSION);
+    // Lo que ya existía se conserva intacto.
+    expect(outcome.save.criatura.stats.vinculo).toBe(14);
+    expect(outcome.save.criatura.ticksVividos).toBe(100);
+  });
+
+  it("reconstruye la etapa a partir de los ticks vividos", () => {
+    const bebe = parseSave(saveV1(100));
+    const juvenil = parseSave(saveV1(2000));
+    const adulto = parseSave(saveV1(9000));
+
+    expect(bebe.ok && bebe.save.criatura.etapa).toBe("bebe");
+    expect(juvenil.ok && juvenil.save.criatura.etapa).toBe("juvenil");
+    expect(adulto.ok && adulto.save.criatura.etapa).toBe("adulto");
+  });
+
+  it("la crianza arranca vacía porque la v1 no la registraba", () => {
+    // Ese historial se perdió y no hay forma honesta de inventarlo. La forma
+    // queda indefinida por lo mismo.
+    const outcome = parseSave(saveV1(9000));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+
+    expect(outcome.save.criatura.crianza.ticksMedidos).toBe(0);
+    expect(outcome.save.criatura.crianza.dieta).toEqual({
+      proteina: 0,
+      dulce: 0,
+      mineral: 0,
+      raro: 0,
+    });
+    expect(outcome.save.criatura.forma).toBe("indefinida");
+  });
+
+  it("usa los ticks vividos como aproximación de los activos", () => {
+    // No hay registro de cuánto estuvo en letargo, así que se asume que nunca:
+    // es la estimación más favorable para el jugador.
+    const outcome = parseSave(saveV1(5000));
+    expect(outcome.ok && outcome.save.criatura.ticksActivos).toBe(5000);
+  });
+});
+
 describe("migraciones", () => {
   it("un save de una versión futura se rechaza en vez de degradarse", () => {
     // Pasa si alguien abrió una versión más nueva del juego y volvió a una

@@ -9,6 +9,7 @@
  * criatura generada tiene contraste utilizable entre su base, su sombra y su luz.
  */
 
+import type { Form } from "./evolution.ts";
 import type { Genes } from "./genome.ts";
 import type { Trait } from "./traits.ts";
 
@@ -139,7 +140,33 @@ export function paletteModeName(genes: Genes): string {
  * hecho a mano, y es la diferencia entre una rampa que parece diseñada y una que
  * parece el mismo color con más y menos brillo.
  */
-export function buildRamp(genes: Genes, traits: readonly Trait[] = []): Ramp {
+/**
+ * Cómo corre la paleta cada forma evolutiva.
+ *
+ * A 32×32 la geometría sola no alcanza para distinguir cuatro adultos: dos
+ * píxeles más de ancho no se leen. El color sí se lee al instante, así que la
+ * crianza también tiñe.
+ *
+ * No es un capricho de legibilidad, es coherente con la idea: si el jugador es
+ * coautor de la criatura, criarla de una manera u otra tiene que notarse hasta
+ * en el color. El tono base viene del genoma y no se toca — solo se corren
+ * luminosidad y croma, así que la criatura sigue siendo reconociblemente ella.
+ */
+const FORM_PALETTE: Record<Form, { lightness: number; chroma: number }> = {
+  indefinida: { lightness: 0, chroma: 1 },
+  petreo: { lightness: -0.05, chroma: 1.1 },
+  vaporoso: { lightness: 0.06, chroma: 0.85 },
+  coloso: { lightness: -0.11, chroma: 1.3 },
+  guardian: { lightness: -0.04, chroma: 0.8 },
+  errante: { lightness: 0.09, chroma: 1.2 },
+  oraculo: { lightness: 0.13, chroma: 0.65 },
+};
+
+export function buildRamp(
+  genes: Genes,
+  traits: readonly Trait[] = [],
+  form: Form = "indefinida",
+): Ramp {
   const mode = PALETTE_MODES[genes.paletteMode % PALETTE_MODES.length] ?? PALETTE_MODES[0];
   if (!mode) throw new Error("No hay modos de paleta definidos");
 
@@ -172,8 +199,19 @@ export function buildRamp(genes: Genes, traits: readonly Trait[] = []): Ramp {
     chroma *= 1.3;
   }
 
+  // La forma evolutiva corre la paleta al final, sobre lo que ya definieron el
+  // genoma y las rarezas.
+  const shift = FORM_PALETTE[form];
+  baseL += shift.lightness;
+  chroma *= shift.chroma;
+
   chroma = clamp(chroma, 0, 0.36);
-  baseL = clamp(baseL, 0.3, 0.9);
+  // El piso de 0.50 no es arbitrario. En OKLab la luminancia relativa va como
+  // L³, así que un cuerpo con L = 0.50 tiene Y ≈ 0.125 y su contraste máximo
+  // contra negro puro es (0.125 + 0.05) / 0.05 = 3.5:1. Con 0.47 el techo baja
+  // a 3.08 y un contorno real —que no es negro puro— ya queda por debajo de
+  // 3:1. Las formas oscuras como Coloso rozan este piso.
+  baseL = clamp(baseL, 0.5, 0.92);
 
   return [
     oklchToRgb(Math.max(0.12, baseL - 0.44), chroma * 0.55, hue - 6),

@@ -46,3 +46,4 @@ yarn-error.log*
 # Cobertura de tests
 coverage/
 contact-sheet*.png
+formas*.png

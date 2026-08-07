@@ -9,7 +9,8 @@ import { z } from "zod";
 import type { CreatureState } from "../core/simulation.ts";
 import { type Migration, type RawSave, SaveVersionError, applyMigrations } from "./migrations.ts";
 
-export const SAVE_VERSION = 1;
+/** v2 agregó crianza, etapa y forma evolutiva. */
+export const SAVE_VERSION = 2;
 
 const StatsSchema = z.object({
   energia: z.number().min(0).max(100),
@@ -17,6 +18,32 @@ const StatsSchema = z.object({
   salud: z.number().min(0).max(100),
   vinculo: z.number().min(0),
 });
+
+const CrianzaSchema = z.object({
+  dieta: z.object({
+    proteina: z.number().min(0),
+    dulce: z.number().min(0),
+    mineral: z.number().min(0),
+    raro: z.number().min(0),
+  }),
+  juego: z.number().min(0),
+  calma: z.number().min(0),
+  sumaAnimo: z.number().min(0),
+  sumaSalud: z.number().min(0),
+  ticksMedidos: z.number().int().min(0),
+});
+
+const StageSchema = z.enum(["bebe", "juvenil", "adulto"]);
+
+const FormSchema = z.enum([
+  "indefinida",
+  "petreo",
+  "vaporoso",
+  "coloso",
+  "guardian",
+  "errante",
+  "oraculo",
+]);
 
 const CreatureStateSchema = z.object({
   // El genoma viaja como decimal en texto: JSON no sabe representar un bigint.
@@ -31,6 +58,10 @@ const CreatureStateSchema = z.object({
   ticksSinCuidado: z.number().int().min(0),
   letargico: z.boolean(),
   durmiendo: z.boolean(),
+  ticksActivos: z.number().int().min(0),
+  etapa: StageSchema,
+  forma: FormSchema,
+  crianza: CrianzaSchema,
 });
 
 export const SaveSchema = z.object({

@@ -16,6 +16,7 @@
  * Nada de esto toca el DOM: devuelve un buffer RGBA plano.
  */
 
+import type { Form, Stage } from "../core/evolution.ts";
 import { type Genes, decodeGenome } from "../core/genome.ts";
 import {
   RAMP_ACCENT,
@@ -41,7 +42,33 @@ const GROUND = 28;
 
 const SCLERA: Rgb = { r: 248, g: 248, b: 252 };
 
-export type Stage = "bebe" | "juvenil" | "adulto";
+export type { Form, Stage };
+
+/**
+ * Cómo deforma el cuerpo cada forma evolutiva.
+ *
+ * Es lo que hace visible la decisión de la Fase 3: sin esto, "crianzas opuestas
+ * dan adultos distintos" sería una etiqueta en una ficha y nada más.
+ *
+ * La rama pétrea engorda el cuerpo y sube el exponente de la superelipse, que
+ * la vuelve más cuadrada y pesada. La vaporosa afina y redondea. Los apéndices
+ * se suman por OR a los del genoma, así que la forma agrega rasgos sin borrar
+ * los que la criatura ya traía.
+ */
+const FORM_MODIFIERS: Record<
+  Form,
+  { body: number; head: number; exponent: number; appendages: number }
+> = {
+  indefinida: { body: 1, head: 1, exponent: 0, appendages: 0b0000 },
+  petreo: { body: 1.14, head: 0.94, exponent: 0.9, appendages: 0b0010 },
+  vaporoso: { body: 0.86, head: 1.08, exponent: -0.3, appendages: 0b0001 },
+  // El rango va de 0.78 a 1.24 en el cuerpo. Un rango más chico no se lee a
+  // 32×32: dos píxeles de diferencia pasan desapercibidos.
+  coloso: { body: 1.24, head: 0.88, exponent: 1.7, appendages: 0b1010 },
+  guardian: { body: 1.16, head: 1.02, exponent: 1.1, appendages: 0b0011 },
+  errante: { body: 0.8, head: 1.0, exponent: -0.5, appendages: 0b1101 },
+  oraculo: { body: 0.78, head: 1.2, exponent: -0.25, appendages: 0b0100 },
+};
 
 export interface Sprite {
   width: number;
@@ -187,33 +214,70 @@ function clampApexBase(baseY: number, height: number): number {
   return Math.max(baseY, MIN_BODY_Y + height - 1);
 }
 
+/** Columna más a la izquierda que puede ocupar el cuerpo. Igual que MIN_BODY_Y. */
+const MIN_BODY_X = 2;
+
 /**
- * Baja una forma si su borde superior se pasa del límite.
+ * Corre un apéndice lateral hacia adentro si se sale por el costado.
  *
- * Hace falta además del clamp de apéndices: con proporción máxima, una cabeza
- * alta ya se sale sola, sin necesidad de orejas.
+ * Alas y aletas se dibujan POR FUERA del cuerpo, así que en un cuerpo ancho su
+ * borde izquierdo caía en la columna 0 y quedaba recortado contra el marco. El
+ * clamp vertical de MIN_BODY_Y no cubría este caso: es el mismo tipo de
+ * desborde, en el otro eje.
+ *
+ * Al empujarlo hacia adentro el apéndice puede solaparse con el cuerpo, lo que
+ * visualmente lo deja pegado al costado. Preferible a que aparezca cortado.
  */
-function clampShapeTop(shape: Shape): Shape {
-  const overflow = MIN_BODY_Y - (shape.cy - shape.ry);
-  return overflow > 0 ? { ...shape, cy: shape.cy + overflow } : shape;
+function clampLateral(centerX: number, halfWidth: number): number {
+  return Math.max(centerX, MIN_BODY_X + halfWidth);
 }
 
-function addAppendages(mask: Mask, genes: Genes, head: Shape, body: Shape, legs: boolean): void {
+/**
+ * Semiancho máximo del cuerpo.
+ *
+ * Con el eje en 15.5, un radio de 13 deja la silueta entre las columnas 2 y 29,
+ * con lugar para el contorno. Las formas pétreas ensanchan el cuerpo y sin este
+ * tope el arquetipo más ancho se saldría por los costados.
+ */
+const MAX_HALF_WIDTH = 13;
+
+/**
+ * Encaja una forma dentro del lienzo y le aplica el sesgo de la forma evolutiva.
+ *
+ * El clamp vertical hace falta además del de apéndices: con proporción máxima,
+ * una cabeza alta ya se sale sola, sin necesidad de orejas.
+ */
+function fitShape(shape: Shape, exponentDelta: number): Shape {
+  const rx = Math.min(shape.rx, MAX_HALF_WIDTH);
+  // Piso de 1.8: por debajo la superelipse se afina en punta y deja de leerse
+  // como un cuerpo.
+  const n = Math.max(1.8, shape.n + exponentDelta);
+  const overflow = MIN_BODY_Y - (shape.cy - shape.ry);
+  return { ...shape, rx, n, cy: overflow > 0 ? shape.cy + overflow : shape.cy };
+}
+
+function addAppendages(
+  mask: Mask,
+  appendages: number,
+  head: Shape,
+  body: Shape,
+  legs: boolean,
+): void {
   // bit 0 — orejas
-  if ((genes.appendages & 1) !== 0) {
+  if ((appendages & 1) !== 0) {
     addTriangle(mask, AXIS - head.rx * 0.55, clampApexBase(head.cy - head.ry * 0.6, 5), 4, 5);
   }
   // bit 1 — cuernos
-  if ((genes.appendages & 2) !== 0) {
+  if ((appendages & 2) !== 0) {
     addTriangle(mask, AXIS - head.rx * 0.42, clampApexBase(head.cy - head.ry * 0.8, 5), 2, 5);
   }
   // bit 2 — alas
-  if ((genes.appendages & 4) !== 0) {
-    addEllipse(mask, AXIS - body.rx - 1.5, body.cy - 1, 3, 4.5);
+  if ((appendages & 4) !== 0) {
+    addEllipse(mask, clampLateral(AXIS - body.rx - 1.5, 3), body.cy - 1, 3, 4.5);
   }
   // bit 3 — aletas laterales (una "cola" espejada serían dos, así que va aleta)
-  if ((genes.appendages & 8) !== 0) {
-    addTriangle(mask, AXIS - body.rx - 1, body.cy + 3, 3, 3);
+  if ((appendages & 8) !== 0) {
+    addTriangle(mask, clampLateral(AXIS - body.rx - 1, 1.5), body.cy + 3, 3, 3);
   }
 
   if (legs) {
@@ -471,18 +535,24 @@ function drawFace(buffer: PixelBuffer, genes: Genes, head: Shape, ramp: Ramp): v
 // Entrada principal
 // ---------------------------------------------------------------------------
 
-export function generateSprite(seed: bigint, stage: Stage = "adulto"): Sprite {
+export function generateSprite(
+  seed: bigint,
+  stage: Stage = "adulto",
+  form: Form = "indefinida",
+): Sprite {
   const genes = decodeGenome(seed);
   const traits = detectTraits(seed);
-  const ramp = buildRamp(genes, traits);
+  const ramp = buildRamp(genes, traits, form);
 
   const archetype = archetypeFor(genes);
   const { overall, headBoost } = STAGE_SCALE[stage];
+  const shift = FORM_MODIFIERS[form];
 
-  const headScale = (0.88 + (genes.proportion & 0b11) * 0.06) * overall * headBoost;
-  const bodyScale = (0.88 + ((genes.proportion >> 2) & 0b11) * 0.06) * overall;
-  const head = clampShapeTop(scaleShape(archetype.head, headScale));
-  const body = clampShapeTop(scaleShape(archetype.body, bodyScale));
+  const headScale = (0.88 + (genes.proportion & 0b11) * 0.06) * overall * headBoost * shift.head;
+  const bodyScale = (0.88 + ((genes.proportion >> 2) & 0b11) * 0.06) * overall * shift.body;
+  const head = fitShape(scaleShape(archetype.head, headScale), shift.exponent);
+  const body = fitShape(scaleShape(archetype.body, bodyScale), shift.exponent);
+  const appendages = genes.appendages | shift.appendages;
 
   // 1. Silueta, en media grilla y espejada.
   const mask = new Mask(SPRITE_SIZE, SPRITE_SIZE);
@@ -491,7 +561,7 @@ export function generateSprite(seed: bigint, stage: Stage = "adulto"): Sprite {
       if (inSuperellipse(x, y, head) || inSuperellipse(x, y, body)) mask.setMirrored(x, y);
     }
   }
-  addAppendages(mask, genes, head, body, archetype.legs);
+  addAppendages(mask, appendages, head, body, archetype.legs);
 
   // 2. Relleno base.
   const buffer = new PixelBuffer(SPRITE_SIZE, SPRITE_SIZE);
