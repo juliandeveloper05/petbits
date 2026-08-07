@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "sheet": "vite-node scripts/contactSheet.ts",
+    "simular": "vite-node scripts/simular.ts",
     "lint": "biome check src test",
     "format": "biome format --write src test"
   },
@@ -20,5 +21,9 @@
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "idb-keyval": "^6.3.0",
+    "zod": "^4.4.3"
   }
 }
