@@ -16,6 +16,7 @@ import {
   type CreatureState,
   buildAbsenceDigest,
   createCreature,
+  localDayIndex,
   localHour,
   simulate,
 } from "../src/core/simulation.ts";
@@ -79,8 +80,13 @@ if (!digest) {
   console.log("(ausencia demasiado corta para contar algo)");
 } else {
   console.log(digest.headline);
+  // Se imprime el día además de la hora. Mostrando solo HH:00, una ausencia de
+  // varios días se lee como si los eventos estuvieran desordenados cuando en
+  // realidad están perfectamente en orden.
+  const primerDia = localDayIndex(state.lastTickMs, tz);
   for (const event of digest.highlights) {
-    const hour = String(localHour(event.atMs, tz)).padStart(2, "0");
-    console.log(`  ${hour}:00  ${event.text}`);
+    const dia = localDayIndex(event.atMs, tz) - primerDia + 1;
+    const hora = String(localHour(event.atMs, tz)).padStart(2, "0");
+    console.log(`  día ${dia}, ${hora}:00   ${event.text}`);
   }
 }

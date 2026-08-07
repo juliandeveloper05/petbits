@@ -283,6 +283,37 @@ describe("resumen de ausencia", () => {
     expect(digest.headline).toContain("días");
   });
 
+  it("lo importante no queda tapado por el color de los primeros días", () => {
+    // Tomar los primeros seis eventos en orden cronológico dejaba afuera el
+    // letargo y el hambre: los hallazgos del día uno se comían el cupo.
+    const digest = buildAbsenceDigest(simulate(fresh(), T0 + 4 * DAY));
+    expect(digest).not.toBeNull();
+    if (!digest) return;
+
+    const kinds = digest.highlights.map((event) => event.kind);
+    expect(kinds).toContain("letargo");
+    expect(kinds).toContain("hambre");
+  });
+
+  it("no repite el mismo hallazgo dentro de un resumen", () => {
+    const digest = buildAbsenceDigest(simulate(fresh(), T0 + 4 * DAY));
+    expect(digest).not.toBeNull();
+    if (!digest) return;
+
+    const texts = digest.highlights.map((event) => event.text);
+    expect(new Set(texts).size).toBe(texts.length);
+  });
+
+  it("los destacados se muestran en orden cronológico", () => {
+    // Se eligen por importancia, pero se leen como una línea de tiempo.
+    const digest = buildAbsenceDigest(simulate(fresh(), T0 + 4 * DAY));
+    expect(digest).not.toBeNull();
+    if (!digest) return;
+
+    const times = digest.highlights.map((event) => event.atMs);
+    expect(times).toEqual([...times].sort((a, b) => a - b));
+  });
+
   it("los eventos recortados se informan, no se ocultan", () => {
     const result = simulate(fresh(), T0 + 40 * HOUR);
     const totalInSummary = Object.values(result.summary).reduce((a, b) => a + b, 0);

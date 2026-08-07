@@ -186,7 +186,7 @@ export function simulate(state: CreatureState, nowMs: number): SimResult {
   // verdad, y no se puede impedir sin un servidor. El letargo limita el
   // beneficio de intentarlo, porque estando ausente no se acumula nada bueno.
   if (nowMs < state.lastTickMs) {
-    emit("reloj", state.lastTickMs, "El reloj del sistema retrocedió. No se pierde progreso.");
+    emit("reloj", state.lastTickMs, "El reloj del sistema fue para atrás. No perdiste nada.");
     return {
       state: { ...state, stats: { ...state.stats } },
       events,
@@ -230,10 +230,10 @@ export function simulate(state: CreatureState, nowMs: number): SimResult {
     // Ciclo de sueño.
     if (night && !next.durmiendo) {
       next.durmiendo = true;
-      emit("durmio", tickStart, "Se acurrucó a dormir.");
+      emit("durmio", tickStart, "Se hizo un rollito y se durmió.");
     } else if (!night && next.durmiendo) {
       next.durmiendo = false;
-      emit("desperto", tickStart, "Se despertó y estiró las patas.");
+      emit("desperto", tickStart, "Se despertó, estiró las patas y bostezó.");
     }
 
     next.ticksSinCuidado++;
@@ -243,7 +243,7 @@ export function simulate(state: CreatureState, nowMs: number): SimResult {
       emit(
         "letargo",
         tickStart,
-        "Entró en letargo. Su deterioro se detuvo, pero perdió parte del vínculo.",
+        "Se apagó un poco y entró en letargo. Dejó de empeorar, pero el vínculo aflojó.",
       );
     }
 
@@ -271,13 +271,14 @@ export function simulate(state: CreatureState, nowMs: number): SimResult {
       // Eventos por cruce de umbral: se avisa al cruzar, no en cada tick por
       // debajo, para no inundar el registro.
       if (prev.energia >= LOW_ENERGY && next.stats.energia < LOW_ENERGY) {
-        emit("hambre", tickStart, "Empezó a tener hambre.");
+        emit("hambre", tickStart, "Le empezó a sonar la panza.");
       }
       if (prev.animo >= LOW_MOOD && next.stats.animo < LOW_MOOD) {
-        emit("animo", tickStart, "Se está aburriendo.");
+        emit("animo", tickStart, "Se está aburriendo mal.");
       }
       if (prev.salud >= LOW_HEALTH && next.stats.salud < LOW_HEALTH) {
-        emit("salud", tickStart, "No se lo ve bien.");
+        // Femenino, como el resto del juego: "la criatura".
+        emit("salud", tickStart, "No se la ve nada bien.");
       }
 
       // Hallazgos: azar sembrado por índice de tick, nunca por un flujo
@@ -307,18 +308,49 @@ export function simulate(state: CreatureState, nowMs: number): SimResult {
   };
 }
 
+/**
+ * Texto de color de los hallazgos.
+ *
+ * Va en rioplatense, no en español neutro. Un juego hecho acá que habla como
+ * un manual traducido suena a producto de nadie; el voseo y el vocabulario
+ * propio son parte de la identidad, igual que la consola verde fósforo.
+ *
+ * La criatura se trata en femenino en todo el juego ("quedó dura", "llena"):
+ * si se agrega texto nuevo, mantener la concordancia.
+ */
 const FINDINGS: readonly string[] = [
-  "Encontró algo brillante y lo escondió.",
-  "Persiguió una sombra por un rato largo.",
-  "Se quedó mirando la pared. Nadie sabe por qué.",
-  "Descubrió un rincón nuevo.",
-  "Estornudó tres veces seguidas.",
-  "Ordenó sus cosas. A su manera.",
+  "Encontró algo que brillaba y lo escondió al toque.",
+  "Se pasó un rato largo correteando una sombra.",
+  "Se quedó dura mirando la pared. Andá a saber qué vio.",
+  "Chusmeó un rincón nuevo de arriba a abajo.",
+  "Estornudó tres veces seguidas y quedó ofendida.",
+  "Acomodó sus cosas. A su manera, digamos.",
+  "Le agarró la fiaca y no hizo nada por un buen rato.",
+  "Se puso a hablar sola. O eso pareció.",
+  "Se peleó con su propia sombra y salió empatada.",
+  "Se quedó escuchando algo que solo ella escuchaba.",
+  "Movió todo de lugar y después lo dejó igual que antes.",
+  "Se metió en un rincón y no quiso salir por un rato.",
 ];
 
 // ---------------------------------------------------------------------------
 // Resumen de ausencia
 // ---------------------------------------------------------------------------
+
+/**
+ * Cuánto pesa cada tipo de evento en el resumen. Cero significa que no se
+ * muestra nunca: el aviso de reloj es información de sistema, no una anécdota.
+ */
+const EVENT_PRIORITY: Record<SimEventKind, number> = {
+  letargo: 100,
+  salud: 80,
+  hambre: 60,
+  animo: 50,
+  hallazgo: 20,
+  desperto: 10,
+  durmio: 10,
+  reloj: 0,
+};
 
 export interface AbsenceDigest {
   /** Duración de la ausencia en milisegundos. */
@@ -351,22 +383,36 @@ export function buildAbsenceDigest(result: SimResult): AbsenceDigest | null {
   if (result.ticks < 10) return null;
 
   const entroEnLetargo = (result.summary.letargo ?? 0) > 0;
-  // Se incluyen dormir y despertar: en una ausencia de unas horas suelen ser lo
-  // único que pasó, y un registro vacío no le sirve a nadie.
-  const interesting: SimEventKind[] = [
-    "letargo",
-    "hambre",
-    "animo",
-    "salud",
-    "hallazgo",
-    "durmio",
-    "desperto",
-  ];
-  const highlights = result.events.filter((event) => interesting.includes(event.kind)).slice(0, 6);
 
+  // Se selecciona por importancia y recién después se ordena por hora.
+  //
+  // Tomar los primeros seis en orden cronológico parecía razonable y estaba
+  // mal: en una ausencia de varios días, el color del primer día tapaba las
+  // noticias del último. Se volvía con "acomodó sus cosas" y sin enterarte de
+  // que había entrado en letargo.
+  //
+  // Dormir y despertar puntúan bajo pero no en cero: cuando no pasó nada más,
+  // son lo único que hay para contar, y un registro vacío no le sirve a nadie.
+  const seen = new Set<string>();
+  const highlights = result.events
+    .filter((event) => EVENT_PRIORITY[event.kind] > 0)
+    // Los hallazgos salen de una lista corta y se repiten; repetidos en el
+    // mismo resumen parecen un bug aunque no lo sean. Se deduplica acá, en la
+    // presentación, y no en la simulación: recordar el último hallazgo entre
+    // ticks metería estado que rompe la composición por pedazos.
+    .filter((event) => {
+      if (seen.has(event.text)) return false;
+      seen.add(event.text);
+      return true;
+    })
+    .sort((a, b) => EVENT_PRIORITY[b.kind] - EVENT_PRIORITY[a.kind] || a.atMs - b.atMs)
+    .slice(0, 6)
+    .sort((a, b) => a.atMs - b.atMs);
+
+  // Acá se le habla al jugador, así que va con voseo.
   const headline = entroEnLetargo
-    ? `Pasaron ${formatDuration(elapsedMs)}. Te esperó hasta que pudo.`
-    : `Pasaron ${formatDuration(elapsedMs)} desde tu última visita.`;
+    ? `Pasaron ${formatDuration(elapsedMs)}. Te bancó todo lo que pudo.`
+    : `Pasaron ${formatDuration(elapsedMs)} desde que te fuiste.`;
 
   return { elapsedMs, headline, highlights, entroEnLetargo };
 }

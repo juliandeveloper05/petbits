@@ -18,6 +18,8 @@ export type FoodKind = "proteina" | "dulce" | "mineral" | "raro";
 export interface Food {
   id: string;
   name: string;
+  /** Artículo, para poder armar frases sin que se rompa la concordancia. */
+  articulo: "el" | "la";
   energia: number;
   animo: number;
   salud: number;
@@ -26,10 +28,26 @@ export interface Food {
 }
 
 export const FOODS: readonly Food[] = [
-  { id: "baya", name: "Baya", energia: 18, animo: 5, salud: 0, tipo: "dulce" },
-  { id: "raiz", name: "Raíz", energia: 26, animo: 0, salud: 1, tipo: "mineral" },
-  { id: "larva", name: "Larva", energia: 34, animo: -2, salud: 2, tipo: "proteina" },
-  { id: "cristal", name: "Cristal", energia: 12, animo: 12, salud: 3, tipo: "raro" },
+  { id: "baya", name: "Baya", articulo: "la", energia: 18, animo: 5, salud: 0, tipo: "dulce" },
+  { id: "raiz", name: "Raíz", articulo: "la", energia: 26, animo: 0, salud: 1, tipo: "mineral" },
+  {
+    id: "larva",
+    name: "Larva",
+    articulo: "la",
+    energia: 34,
+    animo: -2,
+    salud: 2,
+    tipo: "proteina",
+  },
+  {
+    id: "cristal",
+    name: "Cristal",
+    articulo: "el",
+    energia: 12,
+    animo: 12,
+    salud: 3,
+    tipo: "raro",
+  },
 ];
 
 /** A partir de acá, seguir comiendo rinde poco y empieza a hacer mal. */
@@ -95,7 +113,7 @@ function grantBond(state: CreatureState, amount: number): number {
 }
 
 function withWakeNote(message: string, woke: boolean): string {
-  return woke ? `${message} Volvió del letargo, pero el vínculo se resintió.` : message;
+  return woke ? `${message} Salió del letargo, pero el vínculo quedó golpeado.` : message;
 }
 
 export function alimentar(state: CreatureState, foodId: string, nowMs: number): ActionResult {
@@ -116,16 +134,17 @@ export function alimentar(state: CreatureState, foodId: string, nowMs: number): 
   );
   grantBond(next, BOND_PER_ACTION);
 
+  const comida = `${food.articulo} ${food.name.toLowerCase()}`;
   const message = full
-    ? `Comió ${food.name.toLowerCase()} sin ganas. Ya estaba llena.`
-    : `Comió ${food.name.toLowerCase()} con entusiasmo.`;
+    ? `Picoteó ${comida} sin ganas. Ya estaba llena.`
+    : `Se morfó ${comida} sin respirar.`;
 
   return { ok: true, state: next, message: withWakeNote(message, woke) };
 }
 
 export function jugar(state: CreatureState, nowMs: number): ActionResult {
   if (state.stats.energia < PLAY_MIN_ENERGY) {
-    return { ok: false, reason: "No tiene energía para jugar. Necesita comer primero." };
+    return { ok: false, reason: "No le da la energía para jugar. Primero tiene que comer algo." };
   }
 
   const { next, woke } = touch(state, nowMs);
@@ -137,7 +156,9 @@ export function jugar(state: CreatureState, nowMs: number): ActionResult {
   grantBond(next, BOND_PER_ACTION);
 
   const message =
-    efficiency < 1 ? "Jugó un rato, pero se cansó enseguida." : "Jugó hasta quedar contenta.";
+    efficiency < 1
+      ? "Jugó un rato pero se cansó enseguida, pobre."
+      : "Jugó hasta quedar rendida de contenta.";
 
   return { ok: true, state: next, message: withWakeNote(message, woke) };
 }
@@ -150,7 +171,9 @@ export function acariciar(state: CreatureState, nowMs: number): ActionResult {
 
   // Cuando el tope ya está alcanzado se dice, en vez de fingir que sumó.
   const message =
-    granted > 0 ? "Se dejó acariciar un rato." : "Está a gusto, pero ya tuvo suficiente por hoy.";
+    granted > 0
+      ? "Se dejó hacer mimos un buen rato."
+      : "Está a gusto, pero por hoy ya tuvo lo suyo.";
 
   return { ok: true, state: next, message: withWakeNote(message, woke) };
 }
