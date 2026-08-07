@@ -13,8 +13,8 @@
     "test:watch": "vitest",
     "sheet": "vite-node scripts/contactSheet.ts",
     "simular": "vite-node scripts/simular.ts",
-    "lint": "biome check src test",
-    "format": "biome format --write src test",
+    "lint": "biome check src test scripts",
+    "format": "biome format --write src test scripts",
     "formas": "vite-node scripts/formas.ts",
     "iconos": "vite-node scripts/iconos.ts"
   },
