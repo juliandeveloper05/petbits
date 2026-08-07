@@ -1,14 +1,26 @@
-# Crear .gitignore
-@"
-# PocketBase
+# Dependencias
+node_modules/
+
+# Build
+dist/
+dist-ssr/
+*.local
+
+# PocketBase (legado). El rediseño es local-first: el backend recién vuelve a
+# discutirse en la Fase 6, y probablemente con Supabase en vez de PocketBase.
 backend/pocketbase.exe
 backend/pocketbase
 backend/pb_data/
 backend/*.zip
 
-# Node modules (si usas npm en el futuro)
-node_modules/
-package-lock.json
+# Archivos del propio PocketBase, que vienen dentro de su zip. No son del
+# proyecto: el CHANGELOG es el de PocketBase y la licencia es de su autor.
+backend/CHANGELOG.md
+backend/LICENSE.md
+
+# Migraciones autogeneradas del esquema viejo (profiles, coins). Describen un
+# backend que se retira, así que no se versionan. Siguen en disco.
+backend/pb_migrations/
 
 # IDE
 .vscode/
@@ -23,8 +35,15 @@ desktop.ini
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Env files
+# Entorno
 .env
 .env.local
-"@ | Out-File -FilePath .gitignore -Encoding utf8
+.env.*.local
+
+# Cobertura de tests
+coverage/
+contact-sheet*.png
+formas*.png
