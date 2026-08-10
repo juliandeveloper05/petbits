@@ -12,7 +12,8 @@
  */
 
 import { FOODS, acariciar, alimentar, jugar } from "../core/actions.ts";
-import { registrar } from "../core/codex.ts";
+import { cruzar, describirHerencia, marcarCruzada, puedenCruzar } from "../core/breeding.ts";
+import { progresoCodex, registrar } from "../core/codex.ts";
 import { STAGE_NAMES, formDescription, formName } from "../core/evolution.ts";
 import {
   decodeGenome,
@@ -55,6 +56,7 @@ function el<T extends HTMLElement>(id: string): T {
 const screens = {
   nacer: el<HTMLElement>("screen-nacer"),
   cuidado: el<HTMLElement>("screen-cuidado"),
+  criadero: el<HTMLElement>("screen-criadero"),
 };
 const petCanvas = el<HTMLCanvasElement>("pet-canvas");
 const petSprite = el<HTMLElement>("pet-sprite");
@@ -74,6 +76,15 @@ const hatchInfo = el<HTMLElement>("hatch-info");
 const hatchForm = el<HTMLFormElement>("hatch-form");
 const hatchSeed = el<HTMLInputElement>("hatch-seed");
 const hatchRandom = el<HTMLButtonElement>("hatch-random");
+
+const criaderoBtn = el<HTMLButtonElement>("criadero-btn");
+const criaderoCerrar = el<HTMLButtonElement>("criadero-cerrar");
+const criaderoLista = el<HTMLElement>("criadero-lista");
+const codexProgresoEl = el<HTMLElement>("codex-progreso");
+const cruzarBtn = el<HTMLButtonElement>("cruzar-btn");
+const cruzarMotivo = el<HTMLElement>("cruzar-motivo");
+const nuevaForm = el<HTMLFormElement>("nueva-form");
+const nuevaSeed = el<HTMLInputElement>("nueva-seed");
 
 const foodModal = el<HTMLElement>("food-modal");
 const foodGrid = el<HTMLElement>("food-grid");
@@ -379,6 +390,188 @@ function startBlinking(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Criadero
+// ---------------------------------------------------------------------------
+
+/**
+ * Tope de criaturas.
+ *
+ * No es una limitación técnica sino de diseño: cuidar es el bucle del juego, y
+ * con veinte criaturas ninguna recibe atención de verdad.
+ */
+const MAX_CRIATURAS = 6;
+
+/** Ids elegidos para cruzar. Como mucho dos. */
+let elegidas: string[] = [];
+
+function toggleElegida(id: string): void {
+  if (elegidas.includes(id)) {
+    elegidas = elegidas.filter((x) => x !== id);
+  } else {
+    // Al elegir una tercera se descarta la más vieja, que es menos molesto que
+    // obligar a deseleccionar a mano.
+    elegidas = [...elegidas, id].slice(-2);
+  }
+  renderCriadero();
+}
+
+function renderCriadero(): void {
+  if (!game) return;
+  const partida = game;
+  const now = Date.now();
+
+  const progreso = progresoCodex(partida.codex);
+  codexProgresoEl.textContent =
+    `Codex ${progreso.porcentaje}% · linajes ${progreso.linajes.vistos}/${progreso.linajes.total} · ` +
+    `formas ${progreso.formas.vistos}/${progreso.formas.total} · ` +
+    `rarezas ${progreso.rarezas.vistos}/${progreso.rarezas.total}`;
+
+  criaderoLista.replaceChildren(
+    ...partida.criaturas.map((criatura) => {
+      const genes = decodeGenome(BigInt(criatura.seed));
+      const item = document.createElement("div");
+      item.className = "cria-item";
+
+      const elegir = document.createElement("button");
+      elegir.type = "button";
+      elegir.className = "cria";
+      if (elegidas.includes(criatura.id)) elegir.classList.add("is-elegida");
+      if (criatura.id === partida.activaId) elegir.classList.add("is-activa");
+      elegir.setAttribute("aria-pressed", String(elegidas.includes(criatura.id)));
+
+      const canvas = document.createElement("canvas");
+      drawSprite(canvas, generateSprite(BigInt(criatura.seed), criatura.etapa, criatura.forma), 2);
+
+      const nombre = document.createElement("span");
+      nombre.className = "cria-nombre";
+      nombre.textContent = lineageName(genes);
+
+      const etapa = document.createElement("span");
+      etapa.className = "cria-etapa";
+      etapa.textContent = STAGE_NAMES[criatura.etapa];
+
+      elegir.append(canvas, nombre, etapa);
+      elegir.addEventListener("click", () => {
+        playSfx("click");
+        toggleElegida(criatura.id);
+      });
+
+      const cuidar = document.createElement("button");
+      cuidar.type = "button";
+      cuidar.className = "cria-cuidar";
+      cuidar.textContent = criatura.id === partida.activaId ? "Cuidando" : "Cuidar";
+      cuidar.disabled = criatura.id === partida.activaId;
+      cuidar.addEventListener("click", () => {
+        if (!game) return;
+        game = { ...game, activaId: criatura.id };
+        state = criaturaActiva(game) ?? null;
+        playSfx("click");
+        renderPet();
+        showScreen("cuidado");
+        void persist();
+      });
+
+      item.append(elegir, cuidar);
+      return item;
+    }),
+  );
+
+  // Estado del botón de cruzar, con el motivo a la vista cuando no se puede.
+  const pareja = elegidas
+    .map((id) => partida.criaturas.find((c) => c.id === id))
+    .filter((c): c is CreatureState => c !== undefined);
+
+  if (pareja.length < 2) {
+    cruzarBtn.disabled = true;
+    cruzarMotivo.textContent = "Elegí dos criaturas adultas.";
+    return;
+  }
+
+  const [uno, dos] = pareja as [CreatureState, CreatureState];
+  const veredicto = puedenCruzar(uno, dos, now);
+  cruzarBtn.disabled = !veredicto.puede || partida.criaturas.length >= MAX_CRIATURAS;
+
+  if (!veredicto.puede) {
+    cruzarMotivo.textContent = veredicto.motivo;
+  } else if (partida.criaturas.length >= MAX_CRIATURAS) {
+    cruzarMotivo.textContent = `El criadero está lleno (${MAX_CRIATURAS}).`;
+  } else {
+    cruzarMotivo.textContent = "Listas.";
+  }
+}
+
+/** Suma una criatura a la colección y la deja como activa. */
+async function incorporar(criatura: CreatureState, mensaje: string): Promise<void> {
+  if (!game) return;
+  game = { ...game, criaturas: [...game.criaturas, criatura], activaId: criatura.id };
+  state = criatura;
+  registrarEnCodex();
+  renderPet();
+  renderCriadero();
+  toast(mensaje);
+  await persist();
+}
+
+async function doCruzar(): Promise<void> {
+  if (!game || elegidas.length !== 2) return;
+  const partida = game;
+  const now = Date.now();
+
+  const pareja = elegidas
+    .map((id) => partida.criaturas.find((c) => c.id === id))
+    .filter((c): c is CreatureState => c !== undefined);
+  if (pareja.length !== 2) return;
+
+  const [uno, dos] = pareja as [CreatureState, CreatureState];
+  const veredicto = puedenCruzar(uno, dos, now);
+  if (!veredicto.puede) {
+    playSfx("error");
+    toast(veredicto.motivo, "error");
+    return;
+  }
+
+  // El nonce viene del reloj: es lo que hace que cruzar la misma pareja dos
+  // veces no dé siempre el mismo hijo. `cruzar()` en sí es determinista.
+  const cruza = cruzar(BigInt(uno.seed), BigInt(dos.seed), now);
+  const cria = createCreature(cruza.seed, now, -new Date().getTimezoneOffset());
+
+  // Los padres quedan en descanso.
+  game = {
+    ...partida,
+    criaturas: partida.criaturas.map((c) =>
+      c.id === uno.id || c.id === dos.id ? marcarCruzada(c, now) : c,
+    ),
+  };
+  elegidas = [];
+
+  playSfx("nacer");
+  await incorporar(cria, describirHerencia(cruza));
+}
+
+async function doIncubar(raw: string): Promise<void> {
+  if (!game) return;
+  if (game.criaturas.length >= MAX_CRIATURAS) {
+    playSfx("error");
+    toast(`El criadero está lleno (${MAX_CRIATURAS}).`, "error");
+    return;
+  }
+
+  let seed: bigint;
+  try {
+    seed = parseSeed(raw);
+  } catch {
+    playSfx("error");
+    toast("No pude interpretar esa semilla.", "error");
+    return;
+  }
+
+  const cria = createCreature(seed, Date.now(), -new Date().getTimezoneOffset());
+  playSfx("nacer");
+  nuevaSeed.value = "";
+  await incorporar(cria, "Incubada. Ahora es tuya.");
+}
+
+// ---------------------------------------------------------------------------
 // Nacimiento
 // ---------------------------------------------------------------------------
 
@@ -443,6 +636,32 @@ function wireEvents(): void {
     setMuted(!isMuted());
     muteBtn.setAttribute("aria-pressed", String(isMuted()));
     if (!isMuted()) playSfx("click");
+  });
+
+  criaderoBtn.addEventListener("click", () => {
+    initAudio();
+    playSfx("click");
+    elegidas = [];
+    renderCriadero();
+    showScreen("criadero");
+  });
+
+  criaderoCerrar.addEventListener("click", () => {
+    playSfx("click");
+    showScreen("cuidado");
+  });
+
+  cruzarBtn.addEventListener("click", () => {
+    initAudio();
+    void doCruzar();
+  });
+
+  nuevaForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    initAudio();
+    const raw = nuevaSeed.value.trim();
+    if (raw === "") return;
+    void doIncubar(raw);
   });
 
   hatchRandom.addEventListener("click", () => {

@@ -13,8 +13,9 @@ import { type Migration, type RawSave, SaveVersionError, applyMigrations } from 
 /**
  * v2 agregó crianza, etapa y forma evolutiva.
  * v3 pasó de una criatura suelta a una colección, con codex.
+ * v4 agregó el descanso entre cruzas.
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 const StatsSchema = z.object({
   energia: z.number().min(0).max(100),
@@ -67,6 +68,7 @@ const CreatureStateSchema = z.object({
   etapa: StageSchema,
   forma: FormSchema,
   crianza: CrianzaSchema,
+  ultimaCruzaMs: z.number().int().nullable(),
 });
 
 const CodexSchema = z.object({

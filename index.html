@@ -80,6 +80,38 @@
 
           <dl class="stats" id="stats"></dl>
         </section>
+
+        <!-- ------------------------------------------------------ criadero -->
+        <section id="screen-criadero" class="panel" hidden>
+          <header class="panel-header">
+            <h2 class="panel-title">Criadero</h2>
+            <button class="btn btn-ghost btn-sm" type="button" id="criadero-cerrar">Volver</button>
+          </header>
+
+          <p id="codex-progreso" class="codex-progreso"></p>
+
+          <div id="criadero-lista" class="criadero-lista"></div>
+
+          <div class="criadero-cruza">
+            <button class="btn" type="button" id="cruzar-btn" disabled>Cruzar</button>
+            <p id="cruzar-motivo" class="criadero-motivo"></p>
+          </div>
+
+          <form id="nueva-form" class="nueva-form">
+            <label class="field-label" for="nueva-seed">Incubar otra semilla</label>
+            <div class="nueva-fila">
+              <input
+                id="nueva-seed"
+                class="field"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="pegá una semilla o un texto"
+              />
+              <button class="btn btn-ghost" type="submit">Incubar</button>
+            </div>
+          </form>
+        </section>
       </div>
 
       <div class="controls">
@@ -90,6 +122,7 @@
 
       <footer class="console-foot">
         <span id="seed-label" class="seed-label"></span>
+        <button class="lab-link" type="button" id="criadero-btn">Criadero</button>
         <a class="lab-link" href="./lab.html">Laboratorio →</a>
       </footer>
     </main>

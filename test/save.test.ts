@@ -224,6 +224,41 @@ describe("migración en cadena desde v1", () => {
     if (!outcome.ok) return;
     expect(outcome.save.codex).toEqual(codexInicial());
   });
+
+  it("llega hasta v4 con el descanso de cruza sin usar", () => {
+    // `null` y no 0: nunca haber cruzado no es lo mismo que haber cruzado en
+    // la época Unix.
+    const outcome = parseSave(saveV1(9000));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.save.criaturas[0]?.ultimaCruzaMs).toBeNull();
+  });
+});
+
+describe("migración v3 → v4", () => {
+  /** Un guardado con la forma exacta de la v3: colección y codex, sin cruza. */
+  function saveV3(): unknown {
+    const { ultimaCruzaMs: _sin, ...sinCruza } = creature;
+    return {
+      version: 3,
+      guardadoMs: T0,
+      criaturas: [sinCruza],
+      activaId: creature.id,
+      codex: codexInicial(),
+    };
+  }
+
+  it("agrega el descanso a todas las criaturas", () => {
+    const outcome = parseSave(saveV3());
+    expect(outcome.ok, outcome.ok ? "" : outcome.reason).toBe(true);
+    if (!outcome.ok) return;
+
+    expect(outcome.save.version).toBe(SAVE_VERSION);
+    expect(outcome.save.criaturas[0]?.ultimaCruzaMs).toBeNull();
+    // Y no toca nada de lo que ya estaba.
+    expect(outcome.save.criaturas[0]?.seed).toBe(creature.seed);
+    expect(outcome.save.activaId).toBe(creature.id);
+  });
 });
 
 describe("mecánica de migraciones", () => {

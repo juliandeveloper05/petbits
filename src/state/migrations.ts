@@ -92,7 +92,22 @@ function v2ToV3(save: RawSave): RawSave {
  * Cadena de migraciones. `MIGRATIONS[i]` lleva de la versión `i + 1` a la
  * `i + 2`.
  */
-export const MIGRATIONS: readonly Migration[] = [v1ToV2, v2ToV3];
+/**
+ * v3 → v4: agrega el descanso entre cruzas.
+ *
+ * `null` y no `0`: nunca haber cruzado no es lo mismo que haber cruzado en la
+ * época Unix. Con 0 el cooldown ya estaría vencido, que da el mismo resultado
+ * hoy, pero la distinción importa para poder mostrar "nunca cruzó" en la ficha.
+ */
+function v3ToV4(save: RawSave): RawSave {
+  const criaturas = Array.isArray(save.criaturas) ? save.criaturas : [];
+  return {
+    ...save,
+    criaturas: criaturas.map((c) => ({ ...(c as RawSave), ultimaCruzaMs: null })),
+  };
+}
+
+export const MIGRATIONS: readonly Migration[] = [v1ToV2, v2ToV3, v3ToV4];
 
 export class SaveVersionError extends Error {}
 

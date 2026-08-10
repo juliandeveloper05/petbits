@@ -120,6 +120,8 @@ export interface CreatureState {
   forma: Form;
   /** Memoria de cómo la criaste. Decide en qué se convierte. */
   crianza: Crianza;
+  /** Cuándo cruzó por última vez. `null` si nunca lo hizo. */
+  ultimaCruzaMs: number | null;
 }
 
 export type SimEventKind =
@@ -199,6 +201,7 @@ export function createCreature(seed: bigint, nowMs: number, tzOffsetMin: number)
     etapa: "bebe",
     forma: "indefinida",
     crianza: crianzaInicial(),
+    ultimaCruzaMs: null,
   };
 }
 

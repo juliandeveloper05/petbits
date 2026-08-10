@@ -273,6 +273,150 @@
   font-size: 17px;
 }
 
+/* --------------------------------------------------------------- criadero */
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.panel-title {
+  font-family: var(--pixel);
+  font-size: 13px;
+  color: var(--phosphor-bright);
+  margin: 0;
+}
+
+.btn-sm {
+  font-size: 8px;
+  padding: 8px 10px;
+}
+
+.codex-progreso {
+  margin: 0 0 12px;
+  color: var(--text-dim);
+  font-size: 17px;
+}
+
+.criadero-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-y: auto;
+}
+
+/* Contenedor: elegir y cuidar son dos botones hermanos, porque anidar un
+   botón dentro de otro es HTML inválido. */
+.cria-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.cria {
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  padding: 7px 5px;
+  text-align: center;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  flex: 1;
+}
+
+.cria:hover {
+  border-color: var(--border-bright);
+}
+
+.cria:focus-visible {
+  outline: 2px solid var(--phosphor-bright);
+  outline-offset: 2px;
+}
+
+/* Elegida para cruzar. */
+.cria.is-elegida {
+  border-color: var(--vinculo);
+  box-shadow: 0 0 0 2px rgba(255, 122, 184, 0.25);
+}
+
+/* La que se está cuidando. */
+.cria.is-activa .cria-nombre {
+  color: var(--phosphor-bright);
+}
+
+.cria canvas {
+  display: block;
+  margin: 0 auto 5px;
+}
+
+.cria-nombre {
+  display: block;
+  font-family: var(--pixel);
+  font-size: 7px;
+  color: var(--phosphor);
+  margin-bottom: 4px;
+}
+
+.cria-etapa {
+  display: block;
+  color: var(--text-dim);
+  font-size: 15px;
+}
+
+.cria-cuidar {
+  margin-top: 6px;
+  width: 100%;
+  font-family: var(--pixel);
+  font-size: 7px;
+  padding: 5px 2px;
+  background: transparent;
+  border: 1px solid var(--border-bright);
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.cria-cuidar:hover:not(:disabled) {
+  color: var(--phosphor);
+  border-color: var(--phosphor);
+}
+
+.cria-cuidar:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.criadero-cruza {
+  margin-bottom: 14px;
+}
+
+.criadero-cruza .btn {
+  width: 100%;
+}
+
+.criadero-motivo {
+  margin: 7px 0 0;
+  color: var(--text-dim);
+  font-size: 16px;
+  min-height: 1.3em;
+}
+
+.nueva-form {
+  margin-top: auto;
+}
+
+.nueva-fila {
+  display: flex;
+  gap: 8px;
+}
+
+.nueva-fila .field {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ------------------------------------------------------------------ stats */
 
 .stats {
