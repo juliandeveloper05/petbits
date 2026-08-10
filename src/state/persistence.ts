@@ -10,7 +10,7 @@
  */
 
 import { del, get, set } from "idb-keyval";
-import { type GameState, type SaveData, createSave, parseSave } from "./save.ts";
+import { type GameState, type SaveData, SaveSchema, createSave, parseSave } from "./save.ts";
 
 const SAVE_KEY = "petbits:save";
 const QUARANTINE_KEY = "petbits:save:corrupto";
@@ -55,8 +55,32 @@ export async function loadGame(): Promise<LoadResult> {
   return { status: "ok", save: outcome.save };
 }
 
+/**
+ * Guarda la partida, validando ANTES de escribir.
+ *
+ * Hasta acá solo se validaba al leer, y eso deja pasar el peor caso: escribir
+ * un guardado roto y descubrirlo recién la próxima vez que abrís. Apareció de
+ * verdad durante el desarrollo — el hot-reload actualizó el número de versión
+ * antes que la cadena de migraciones, y el juego escribió un save marcado como
+ * nuevo a partir de un estado viejo al que le faltaban campos.
+ *
+ * TypeScript no puede atrapar eso: el objeto en memoria viene de un guardado
+ * anterior y su forma real no la conoce el compilador. Validar al escribir
+ * convierte un save silenciosamente corrupto en un error inmediato.
+ */
 export async function saveGame(state: GameState, nowMs: number): Promise<void> {
-  await set(SAVE_KEY, createSave(state, nowMs));
+  const save = createSave(state, nowMs);
+
+  const check = SaveSchema.safeParse(save);
+  if (!check.success) {
+    const first = check.error.issues[0];
+    throw new Error(
+      `Se intentó guardar una partida inválida en "${first?.path.join(".") ?? "?"}": ` +
+        `${first?.message ?? "desconocido"}`,
+    );
+  }
+
+  await set(SAVE_KEY, save);
 }
 
 /** Borra la partida. Deja intacta la cuarentena, por si hay algo que rescatar. */

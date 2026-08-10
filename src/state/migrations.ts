@@ -107,7 +107,29 @@ function v3ToV4(save: RawSave): RawSave {
   };
 }
 
-export const MIGRATIONS: readonly Migration[] = [v1ToV2, v2ToV3, v3ToV4];
+/**
+ * v4 → v5: despensa, semillas y expediciones.
+ *
+ * La despensa arranca con lo mismo que una partida nueva. Poner cero sería más
+ * "fiel" al estado anterior, donde no existía, pero dejaría a quien viene de la
+ * versión vieja sin nada que darle de comer hasta volver de una expedición: un
+ * castigo por haber jugado antes.
+ *
+ * Los valores van escritos acá y no importados de `inventarioInicial()`: si
+ * mañana se rebalancea el arranque, el save migrado el año que viene tiene que
+ * dar lo mismo que el migrado hoy.
+ */
+function v4ToV5(save: RawSave): RawSave {
+  const criaturas = Array.isArray(save.criaturas) ? save.criaturas : [];
+  return {
+    ...save,
+    criaturas: criaturas.map((c) => ({ ...(c as RawSave), expedicion: null })),
+    inventario: { baya: 3, raiz: 2, larva: 2, cristal: 0 },
+    semillas: [],
+  };
+}
+
+export const MIGRATIONS: readonly Migration[] = [v1ToV2, v2ToV3, v3ToV4, v4ToV5];
 
 export class SaveVersionError extends Error {}
 

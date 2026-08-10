@@ -83,6 +83,17 @@ function clamp01to100(value: number): number {
   return value < 0 ? 0 : value > 100 ? 100 : value;
 }
 
+/**
+ * ¿Está en casa?
+ *
+ * De expedición no se la puede alimentar ni jugar con ella: no está. Se chequea
+ * en cada acción y no dentro de `touch`, para poder devolver el motivo.
+ */
+function ausente(state: CreatureState): ActionResult | null {
+  if (state.expedicion === null) return null;
+  return { ok: false, reason: "Está de expedición. Volvé cuando regrese." };
+}
+
 /** Copia el estado y aplica lo común a toda interacción. */
 function touch(state: CreatureState, nowMs: number): { next: CreatureState; woke: boolean } {
   // Copia profunda: `crianza.dieta` es un objeto anidado y compartirlo por
@@ -124,6 +135,9 @@ function withWakeNote(message: string, woke: boolean): string {
 }
 
 export function alimentar(state: CreatureState, foodId: string, nowMs: number): ActionResult {
+  const fuera = ausente(state);
+  if (fuera) return fuera;
+
   const food = FOODS.find((item) => item.id === foodId);
   if (!food) return { ok: false, reason: `No existe el alimento "${foodId}"` };
 
@@ -153,6 +167,9 @@ export function alimentar(state: CreatureState, foodId: string, nowMs: number): 
 }
 
 export function jugar(state: CreatureState, nowMs: number): ActionResult {
+  const fuera = ausente(state);
+  if (fuera) return fuera;
+
   if (state.stats.energia < PLAY_MIN_ENERGY) {
     return { ok: false, reason: "No le da la energía para jugar. Primero tiene que comer algo." };
   }
@@ -175,6 +192,9 @@ export function jugar(state: CreatureState, nowMs: number): ActionResult {
 }
 
 export function acariciar(state: CreatureState, nowMs: number): ActionResult {
+  const fuera = ausente(state);
+  if (fuera) return fuera;
+
   const { next, woke } = touch(state, nowMs);
 
   next.stats.animo = clamp01to100(next.stats.animo + PET_MOOD_GAIN);

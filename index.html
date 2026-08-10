@@ -97,6 +97,8 @@
             <p id="cruzar-motivo" class="criadero-motivo"></p>
           </div>
 
+          <div id="semillas-lista" class="semillas-lista"></div>
+
           <form id="nueva-form" class="nueva-form">
             <label class="field-label" for="nueva-seed">Incubar otra semilla</label>
             <div class="nueva-fila">
@@ -118,6 +120,7 @@
         <button class="btn" type="button" data-action="alimentar">Alimentar</button>
         <button class="btn" type="button" data-action="jugar">Jugar</button>
         <button class="btn" type="button" data-action="mimo">Mimo</button>
+        <button class="btn btn-ghost" type="button" id="expedicion-btn">Expedición</button>
       </div>
 
       <footer class="console-foot">
@@ -133,6 +136,14 @@
         <h2 id="food-title" class="modal-title">¿Qué le damos?</h2>
         <div id="food-grid" class="food-grid"></div>
         <button class="btn btn-ghost" type="button" data-close-modal>Mejor no</button>
+      </div>
+    </div>
+
+    <div id="expedicion-modal" class="modal" hidden>
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="exp-title">
+        <h2 id="exp-title" class="modal-title">¿A dónde la mandamos?</h2>
+        <div id="exp-lista" class="exp-lista"></div>
+        <button class="btn btn-ghost" type="button" data-close-modal>Que se quede</button>
       </div>
     </div>
 

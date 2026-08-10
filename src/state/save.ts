@@ -7,6 +7,7 @@
 
 import { z } from "zod";
 import { type Codex, codexInicial } from "../core/codex.ts";
+import { type Inventario, inventarioInicial } from "../core/inventory.ts";
 import type { CreatureState } from "../core/simulation.ts";
 import { type Migration, type RawSave, SaveVersionError, applyMigrations } from "./migrations.ts";
 
@@ -14,8 +15,9 @@ import { type Migration, type RawSave, SaveVersionError, applyMigrations } from 
  * v2 agregó crianza, etapa y forma evolutiva.
  * v3 pasó de una criatura suelta a una colección, con codex.
  * v4 agregó el descanso entre cruzas.
+ * v5 agregó despensa, semillas encontradas y expediciones.
  */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 const StatsSchema = z.object({
   energia: z.number().min(0).max(100),
@@ -69,6 +71,13 @@ const CreatureStateSchema = z.object({
   forma: FormSchema,
   crianza: CrianzaSchema,
   ultimaCruzaMs: z.number().int().nullable(),
+  expedicion: z
+    .object({
+      destinoId: z.string().min(1),
+      salidaMs: z.number().int(),
+      regresoMs: z.number().int(),
+    })
+    .nullable(),
 });
 
 const CodexSchema = z.object({
@@ -85,6 +94,9 @@ export const SaveSchema = z
     criaturas: z.array(CreatureStateSchema).min(1),
     activaId: z.string().min(1),
     codex: CodexSchema,
+    inventario: z.record(z.string(), z.number().int().min(0)),
+    /** Genomas encontrados en expediciones, en decimal y sin incubar. */
+    semillas: z.array(z.string().regex(/^\d+$/)),
   })
   // Que `activaId` apunte a una criatura que no existe dejaría la partida sin
   // nada que mostrar. Se valida acá y no en el juego, donde ya sería tarde.
@@ -100,6 +112,10 @@ export interface GameState {
   criaturas: CreatureState[];
   activaId: string;
   codex: Codex;
+  /** La despensa. Es del jugador, no de una criatura. */
+  inventario: Inventario;
+  /** Genomas encontrados en expediciones, todavía sin incubar. */
+  semillas: string[];
 }
 
 export function createSave(state: GameState, nowMs: number): SaveData {
@@ -109,12 +125,20 @@ export function createSave(state: GameState, nowMs: number): SaveData {
     criaturas: state.criaturas,
     activaId: state.activaId,
     codex: state.codex,
+    inventario: state.inventario,
+    semillas: state.semillas,
   };
 }
 
 /** Arranca una partida nueva con una sola criatura. */
 export function partidaInicial(criatura: CreatureState): GameState {
-  return { criaturas: [criatura], activaId: criatura.id, codex: codexInicial() };
+  return {
+    criaturas: [criatura],
+    activaId: criatura.id,
+    codex: codexInicial(),
+    inventario: inventarioInicial(),
+    semillas: [],
+  };
 }
 
 /** La criatura que se está cuidando. */

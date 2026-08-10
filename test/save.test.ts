@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { codexInicial } from "../src/core/codex.ts";
+import { total } from "../src/core/inventory.ts";
 import { createCreature } from "../src/core/simulation.ts";
 import {
   type Migration,
@@ -247,6 +248,18 @@ describe("migración v3 → v4", () => {
       codex: codexInicial(),
     };
   }
+
+  it("llega hasta v5 con despensa y sin expedición", () => {
+    const outcome = parseSave(saveV3());
+    expect(outcome.ok, outcome.ok ? "" : outcome.reason).toBe(true);
+    if (!outcome.ok) return;
+
+    // La despensa no arranca vacía: dejar sin comida a quien viene de una
+    // versión anterior sería castigarlo por haber jugado antes.
+    expect(total(outcome.save.inventario)).toBeGreaterThan(0);
+    expect(outcome.save.semillas).toEqual([]);
+    expect(outcome.save.criaturas[0]?.expedicion).toBeNull();
+  });
 
   it("agrega el descanso a todas las criaturas", () => {
     const outcome = parseSave(saveV3());

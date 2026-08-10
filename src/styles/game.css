@@ -403,6 +403,34 @@
   min-height: 1.3em;
 }
 
+.semillas-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.semilla-chip {
+  background: transparent;
+  border: 2px dashed var(--border-bright);
+  color: var(--phosphor);
+  font-family: var(--body);
+  font-size: 16px;
+  padding: 5px 9px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+
+.semilla-chip:hover {
+  border-style: solid;
+  color: var(--phosphor-bright);
+}
+
+.semilla-chip:focus-visible {
+  outline: 2px solid var(--phosphor-bright);
+  outline-offset: 2px;
+}
+
 .nueva-form {
   margin-top: auto;
 }
@@ -463,10 +491,88 @@
 
 /* --------------------------------------------------------------- controles */
 
+/* Dos columnas y no cuatro: con cuatro botones en fila, en un celular quedan
+   demasiado angostos para tocarlos sin errarle. */
 .controls {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+}
+
+/* ------------------------------------------------------------ expediciones */
+
+.exp-lista {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+
+.exp-item {
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  padding: 11px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.exp-item:hover:not(:disabled) {
+  border-color: var(--phosphor);
+}
+
+.exp-item:focus-visible {
+  outline: 2px solid var(--phosphor-bright);
+  outline-offset: 2px;
+}
+
+.exp-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.exp-nombre {
+  display: block;
+  font-family: var(--pixel);
+  font-size: 9px;
+  color: var(--phosphor);
+  margin-bottom: 6px;
+}
+
+.exp-desc {
+  display: block;
+  color: var(--text-dim);
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+
+.exp-datos {
+  display: block;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.exp-motivo {
+  display: block;
+  color: #ff6b6b;
+  font-size: 16px;
+  margin-top: 4px;
+}
+
+/* Cartel de "está afuera" sobre la escena. */
+.fuera {
+  position: absolute;
+  inset: auto 0 34px;
+  text-align: center;
+  color: var(--phosphor);
+  font-size: 18px;
+}
+
+.food-qty {
+  display: block;
+  color: var(--phosphor);
+  font-size: 15px;
+  margin-top: 4px;
 }
 
 .console-foot {

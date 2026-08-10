@@ -16,6 +16,15 @@ import { cruzar, describirHerencia, marcarCruzada, puedenCruzar } from "../core/
 import { progresoCodex, registrar } from "../core/codex.ts";
 import { STAGE_NAMES, formDescription, formName } from "../core/evolution.ts";
 import {
+  DESTINOS,
+  describirBotin,
+  enviar,
+  estaFuera,
+  faltaParaVolver,
+  puedeSalir,
+  recibir,
+} from "../core/expeditions.ts";
+import {
   decodeGenome,
   formatSeed,
   lineageName,
@@ -23,6 +32,7 @@ import {
   randomSeed,
   temperamentName,
 } from "../core/genome.ts";
+import { type Inventario, agregarVarios, consumir, cuanto } from "../core/inventory.ts";
 import {
   type CreatureState,
   buildAbsenceDigest,
@@ -85,6 +95,11 @@ const cruzarBtn = el<HTMLButtonElement>("cruzar-btn");
 const cruzarMotivo = el<HTMLElement>("cruzar-motivo");
 const nuevaForm = el<HTMLFormElement>("nueva-form");
 const nuevaSeed = el<HTMLInputElement>("nueva-seed");
+const semillasLista = el<HTMLElement>("semillas-lista");
+
+const expedicionBtn = el<HTMLButtonElement>("expedicion-btn");
+const expedicionModal = el<HTMLElement>("expedicion-modal");
+const expLista = el<HTMLElement>("exp-lista");
 
 const foodModal = el<HTMLElement>("food-modal");
 const foodGrid = el<HTMLElement>("food-grid");
@@ -212,9 +227,18 @@ function renderPet(): void {
   petForm.textContent =
     state.forma === "indefinida" ? formDescription("indefinida") : formName(state.forma);
   petStage.textContent = STAGE_NAMES[state.etapa];
-  petMood.textContent = moodText(state);
-  petSprite.classList.toggle("is-lethargic", state.letargico);
+  const fuera = estaFuera(state);
+  petMood.textContent = fuera
+    ? `Está afuera. Vuelve en ${formatearEspera(faltaParaVolver(state, Date.now()))}.`
+    : moodText(state);
+  petSprite.classList.toggle("is-lethargic", state.letargico || fuera);
   seedLabel.textContent = formatSeed(seed);
+
+  // De expedición no se la puede atender: no está.
+  for (const boton of document.querySelectorAll<HTMLButtonElement>("[data-action]")) {
+    boton.disabled = fuera;
+  }
+  expedicionBtn.disabled = fuera;
 
   renderStats(state);
 }
@@ -226,6 +250,115 @@ function renderPet(): void {
 function closeModals(): void {
   foodModal.hidden = true;
   digestModal.hidden = true;
+  expedicionModal.hidden = true;
+}
+
+/** Formatea una espera en algo legible. */
+function formatearEspera(ms: number): string {
+  const minutos = Math.ceil(ms / 60_000);
+  if (minutos < 60) return `${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  const resto = minutos % 60;
+  return resto === 0 ? `${horas} h` : `${horas} h ${resto} min`;
+}
+
+function openExpedicionModal(): void {
+  if (!state) return;
+  const criatura = state;
+  const now = Date.now();
+
+  expLista.replaceChildren(
+    ...DESTINOS.map((destino) => {
+      const veredicto = puedeSalir(criatura, destino, now);
+
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "exp-item";
+      item.disabled = !veredicto.puede;
+
+      const nombre = document.createElement("span");
+      nombre.className = "exp-nombre";
+      nombre.textContent = destino.nombre;
+
+      const desc = document.createElement("span");
+      desc.className = "exp-desc";
+      desc.textContent = destino.descripcion;
+
+      const datos = document.createElement("span");
+      datos.className = "exp-datos";
+      const costo = destino.costoEnergia === 0 ? "sin gasto" : `−${destino.costoEnergia} energía`;
+      datos.textContent = `${formatearEspera(destino.duracionMs)} · ${costo}`;
+
+      item.append(nombre, desc, datos);
+
+      if (!veredicto.puede) {
+        const motivo = document.createElement("span");
+        motivo.className = "exp-motivo";
+        motivo.textContent = veredicto.motivo;
+        item.append(motivo);
+      } else {
+        item.addEventListener("click", () => {
+          closeModals();
+          void doEnviar(destino.id);
+        });
+      }
+
+      return item;
+    }),
+  );
+
+  expedicionModal.hidden = false;
+  expLista.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+}
+
+async function doEnviar(destinoId: string): Promise<void> {
+  if (!state) return;
+  catchUp();
+  if (!state) return;
+
+  const destino = DESTINOS.find((d) => d.id === destinoId);
+  if (!destino) return;
+
+  const now = Date.now();
+  const veredicto = puedeSalir(state, destino, now);
+  if (!veredicto.puede) {
+    playSfx("error");
+    toast(veredicto.motivo, "error");
+    return;
+  }
+
+  setState(enviar(state, destino, now));
+  playSfx("click");
+  renderPet();
+  toast(`Salió para ${destino.nombre.toLowerCase()}.`);
+  await persist();
+}
+
+/**
+ * Recibe a la criatura si ya volvió.
+ *
+ * Se llama en cada tick y al cargar, así que una expedición que terminó
+ * mientras no estabas se resuelve sola apenas abrís.
+ */
+function recibirSiVolvio(): boolean {
+  if (!game || !state) return false;
+  const regreso = recibir(state, Date.now());
+  if (!regreso) return false;
+
+  const nombres = Object.fromEntries(FOODS.map((f) => [f.id, f.name]));
+  game = {
+    ...game,
+    inventario: agregarVarios(game.inventario, regreso.botin.alimentos),
+    semillas: regreso.botin.semilla
+      ? [...game.semillas, regreso.botin.semilla.toString()]
+      : game.semillas,
+  };
+  setState(regreso.criatura);
+
+  playSfx("nacer");
+  reaction("🎒");
+  toast(`Volvió ${regreso.destino.desde}. ${describirBotin(regreso.botin, nombres)}`);
+  return true;
 }
 
 function openFoodModal(): void {
@@ -246,16 +379,26 @@ function openFoodModal(): void {
       if (food.salud !== 0) parts.push(`+${food.salud} salud`);
       stats.textContent = parts.join(" · ");
 
-      button.append(name, stats);
-      button.addEventListener("click", () => {
-        closeModals();
-        void act("alimentar", food.id);
-      });
+      // Cuánto queda en la despensa. Sin esto habría que abrir el menú y
+      // fallar para enterarse de que no hay.
+      const disponible = game ? cuanto(game.inventario, food.id) : 0;
+      const qty = document.createElement("span");
+      qty.className = "food-qty";
+      qty.textContent = disponible > 0 ? `Quedan ${disponible}` : "No te queda";
+
+      button.append(name, stats, qty);
+      button.disabled = disponible === 0;
+      if (disponible > 0) {
+        button.addEventListener("click", () => {
+          closeModals();
+          void act("alimentar", food.id);
+        });
+      }
       return button;
     }),
   );
   foodModal.hidden = false;
-  foodGrid.querySelector("button")?.focus();
+  foodGrid.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
 }
 
 function showDigest(
@@ -336,7 +479,15 @@ function announce(result: ReturnType<typeof simulate>): void {
 
 function tick(): void {
   const result = catchUp();
-  if (!result || result.ticks === 0) return;
+  const volvio = recibirSiVolvio();
+
+  // Se redibuja también sin ticks nuevos: el cartel de "vuelve en X" cambia
+  // cada minuto aunque el estado de la criatura no se mueva.
+  if (!result || (result.ticks === 0 && !volvio)) {
+    if (state && estaFuera(state)) renderPet();
+    return;
+  }
+
   renderPet();
   announce(result);
   void persist();
@@ -352,6 +503,21 @@ async function act(kind: "alimentar" | "jugar" | "mimo", foodId?: string): Promi
   if (!state) return;
 
   const now = Date.now();
+
+  // La comida se aparta pero NO se descuenta todavía: si la acción falla, el
+  // inventario tiene que quedar como estaba. Para eso `consumir` devuelve uno
+  // nuevo en vez de mutar el que recibe.
+  let despensaPendiente: Inventario | null = null;
+  if (kind === "alimentar") {
+    const restante = game ? consumir(game.inventario, foodId ?? "") : null;
+    if (!restante) {
+      playSfx("error");
+      toast("No te queda de eso. Mandala a buscar.", "error");
+      return;
+    }
+    despensaPendiente = restante;
+  }
+
   const result =
     kind === "alimentar"
       ? alimentar(state, foodId ?? "", now)
@@ -365,6 +531,7 @@ async function act(kind: "alimentar" | "jugar" | "mimo", foodId?: string): Promi
     return;
   }
 
+  if (despensaPendiente && game) game = { ...game, inventario: despensaPendiente };
   setState(result.state);
   playSfx(kind === "alimentar" ? "comer" : kind === "jugar" ? "jugar" : "mimo");
   reaction(kind === "alimentar" ? "🍖" : kind === "jugar" ? "🎾" : "💚");
@@ -473,6 +640,24 @@ function renderCriadero(): void {
 
       item.append(elegir, cuidar);
       return item;
+    }),
+  );
+
+  // Semillas traídas de expedición, todavía sin incubar.
+  semillasLista.replaceChildren(
+    ...partida.semillas.map((decimal) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "semilla-chip";
+      chip.textContent = formatSeed(BigInt(decimal));
+      chip.title = "Incubar esta semilla encontrada";
+      chip.addEventListener("click", () => {
+        if (!game) return;
+        // Se saca de la bolsa antes de incubar: si no, quedaría para siempre.
+        game = { ...game, semillas: game.semillas.filter((s) => s !== decimal) };
+        void doIncubar(decimal);
+      });
+      return chip;
     }),
   );
 
@@ -638,6 +823,12 @@ function wireEvents(): void {
     if (!isMuted()) playSfx("click");
   });
 
+  expedicionBtn.addEventListener("click", () => {
+    initAudio();
+    playSfx("click");
+    openExpedicionModal();
+  });
+
   criaderoBtn.addEventListener("click", () => {
     initAudio();
     playSfx("click");
@@ -714,8 +905,8 @@ async function boot(): Promise<void> {
     return;
   }
 
-  const { criaturas, activaId, codex } = loaded.save;
-  game = { criaturas, activaId, codex };
+  const { criaturas, activaId, codex, inventario, semillas } = loaded.save;
+  game = { criaturas, activaId, codex, inventario, semillas };
   state = criaturaActiva(game) ?? null;
   if (!state) {
     // El esquema ya garantiza que activaId apunta a algo, así que llegar acá
@@ -728,6 +919,8 @@ async function boot(): Promise<void> {
   }
 
   const result = catchUp();
+  // Si la expedición terminó mientras no estabas, se resuelve al abrir.
+  recibirSiVolvio();
   // Las partidas migradas desde v2 llegan con el codex vacío: se completa acá.
   registrarEnCodex();
   showScreen("cuidado");

@@ -76,6 +76,13 @@ export interface Stats {
   vinculo: number;
 }
 
+/** Una salida en curso. Se declara acá porque forma parte del estado. */
+export interface Expedicion {
+  destinoId: string;
+  salidaMs: number;
+  regresoMs: number;
+}
+
 export interface CreatureState {
   /**
    * Identificador único dentro de la partida.
@@ -122,6 +129,8 @@ export interface CreatureState {
   crianza: Crianza;
   /** Cuándo cruzó por última vez. `null` si nunca lo hizo. */
   ultimaCruzaMs: number | null;
+  /** Salida en curso. `null` si está en casa. */
+  expedicion: Expedicion | null;
 }
 
 export type SimEventKind =
@@ -202,6 +211,7 @@ export function createCreature(seed: bigint, nowMs: number, tzOffsetMin: number)
     forma: "indefinida",
     crianza: crianzaInicial(),
     ultimaCruzaMs: null,
+    expedicion: null,
   };
 }
 
