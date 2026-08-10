@@ -176,5 +176,13 @@ export const STAGE_NAMES: Record<Stage, string> = {
   adulto: "Adulto",
 };
 
-/** Las cuatro formas adultas posibles, para el codex de la Fase 5. */
+/** Las cuatro formas adultas posibles. */
 export const ADULT_FORMS: readonly Form[] = ["coloso", "guardian", "errante", "oraculo"];
+
+/**
+ * Formas que cuentan para el codex: las dos juveniles y las cuatro adultas.
+ *
+ * "indefinida" queda afuera a propósito: no es una forma alcanzada, es la
+ * ausencia de una. Registrarla haría que el codex arrancara con algo hecho.
+ */
+export const COLLECTIBLE_FORMS: readonly Form[] = ["petreo", "vaporoso", ...ADULT_FORMS];

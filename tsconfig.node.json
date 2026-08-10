@@ -1,0 +1,16 @@
+{
+  // Configuración para el código que corre en Node: las herramientas de
+  // `scripts/` y la config de Vite.
+  //
+  // Existe porque `tsconfig.json` declara `types: ["vite/client"]`, que excluye
+  // los tipos de Node. Con `scripts/` metido ahí, `node:fs`, `process` y
+  // `__dirname` quedaban sin declarar. Localmente el typecheck pasaba igual
+  // porque `@types/node` entraba de rebote como dependencia transitiva de otro
+  // paquete; en una instalación limpia (por ejemplo, la de un deploy) esa
+  // casualidad no se da y el build falla.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["scripts", "vite.config.ts"]
+}

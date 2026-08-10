@@ -5,6 +5,10 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+
+    // Solo los tipos del navegador. Que el código del juego NO vea los tipos de
+    // Node es deliberado: si los viera, usar `process.env` o `fs` en `src/`
+    // pasaría el typecheck y explotaría recién en el navegador.
     "types": ["vite/client"],
 
     "strict": true,
@@ -21,5 +25,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "test", "scripts", "vite.config.ts"]
+  "include": ["src", "test"]
 }
