@@ -47,3 +47,5 @@ yarn-error.log*
 coverage/
 contact-sheet*.png
 formas*.png
+.vercel
+.env*
