@@ -68,5 +68,19 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
+    /**
+     * 30 s en vez de los 5 por defecto.
+     *
+     * Varios tests no son unitarios sino de propiedad: generan 1200 sprites y
+     * los comparan píxel a píxel, o miden la distribución de rarezas sobre
+     * 60.000 genomas con un Miller-Rabin cada uno. Eso son segundos de cómputo
+     * real, no una espera.
+     *
+     * Con el límite por defecto pasaban en una máquina descargada y fallaban en
+     * la misma máquina con otras cosas corriendo, que es exactamente el
+     * comportamiento intermitente que vuelve inútil una suite. Sigue siendo un
+     * techo que atrapa un bucle infinito.
+     */
+    testTimeout: 30_000,
   },
 });

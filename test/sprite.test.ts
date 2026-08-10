@@ -65,22 +65,34 @@ describe("variedad", () => {
 
 describe("integridad del sprite", () => {
   it("ninguna criatura sale vacía ni desbordada", () => {
+    // Se acumulan los casos malos y se afirma una vez, igual que en los demás
+    // tests de este archivo: miles de expect() hacen que solo este tarde
+    // varios segundos.
+    const total = SPRITE_SIZE * SPRITE_SIZE;
+    const malos: string[] = [];
+
     for (const seed of sample(400)) {
       for (const stage of STAGES) {
         const sprite = generateSprite(seed, stage);
-        expect(sprite.width).toBe(SPRITE_SIZE);
-        expect(sprite.height).toBe(SPRITE_SIZE);
-        expect(sprite.data.length).toBe(SPRITE_SIZE * SPRITE_SIZE * 4);
+        const donde = `${seed.toString(16)} ${stage}`;
 
-        const opaque = opaqueCount(sprite.data);
-        const total = SPRITE_SIZE * SPRITE_SIZE;
+        if (
+          sprite.width !== SPRITE_SIZE ||
+          sprite.height !== SPRITE_SIZE ||
+          sprite.data.length !== total * 4
+        ) {
+          malos.push(`${donde}: dimensiones incorrectas`);
+          continue;
+        }
+
         // Un cuerpo tiene que ocupar algo, pero no puede tapar todo el lienzo.
-        expect(opaque, `seed ${seed.toString(16)} ${stage} quedó casi vacía`).toBeGreaterThan(
-          total * 0.06,
-        );
-        expect(opaque, `seed ${seed.toString(16)} ${stage} desbordó`).toBeLessThan(total * 0.92);
+        const opaque = opaqueCount(sprite.data);
+        if (opaque <= total * 0.06) malos.push(`${donde}: casi vacía (${opaque}px)`);
+        if (opaque >= total * 0.92) malos.push(`${donde}: desbordada (${opaque}px)`);
       }
     }
+
+    expect(malos.slice(0, 5), `${malos.length} sprites fuera de rango`).toEqual([]);
   });
 
   /**

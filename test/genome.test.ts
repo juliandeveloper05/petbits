@@ -85,24 +85,38 @@ describe("serialización de semillas", () => {
 
 describe("decodificación", () => {
   it("es determinista y respeta los rangos de cada gen", () => {
+    // Se acumulan los problemas y se afirma una sola vez. Con un expect() por
+    // gen por semilla son más de diez mil llamadas, y una de ellas es una
+    // comparación profunda: el test solo tardaba más de cinco segundos.
+    const problemas: string[] = [];
+
+    const dentro = (nombre: string, valor: number, tope: number, seed: bigint) => {
+      if (!Number.isInteger(valor) || valor < 0 || valor >= tope) {
+        problemas.push(`${seed.toString(16)}: ${nombre}=${valor} fuera de [0,${tope})`);
+      }
+    };
+
     for (const seed of sample(1000)) {
       const genes = decodeGenome(seed);
-      expect(decodeGenome(seed)).toEqual(genes);
 
-      expect(genes.lineage).toBeGreaterThanOrEqual(0);
-      expect(genes.lineage).toBeLessThan(16);
-      expect(genes.hue).toBeLessThan(256);
-      expect(genes.paletteMode).toBeLessThan(8);
-      expect(genes.temperament).toBeLessThan(8);
-      expect(genes.affinity).toBeLessThan(8);
-      expect(genes.metabolism).toBeLessThan(8);
-      expect(genes.mutation).toBeLessThan(256);
+      if (JSON.stringify(decodeGenome(seed)) !== JSON.stringify(genes)) {
+        problemas.push(`${seed.toString(16)}: decodificar dos veces dio distinto`);
+      }
 
-      for (const value of Object.values(genes.statBias)) {
-        expect(value).toBeGreaterThanOrEqual(0);
-        expect(value).toBeLessThan(4);
+      dentro("lineage", genes.lineage, 16, seed);
+      dentro("hue", genes.hue, 256, seed);
+      dentro("paletteMode", genes.paletteMode, 8, seed);
+      dentro("temperament", genes.temperament, 8, seed);
+      dentro("affinity", genes.affinity, 8, seed);
+      dentro("metabolism", genes.metabolism, 8, seed);
+      dentro("mutation", genes.mutation, 256, seed);
+
+      for (const [nombre, valor] of Object.entries(genes.statBias)) {
+        dentro(nombre, valor, 4, seed);
       }
     }
+
+    expect(problemas.slice(0, 5), `${problemas.length} genomas con problemas`).toEqual([]);
   });
 
   it("cada gen lee sus propios bits", () => {
