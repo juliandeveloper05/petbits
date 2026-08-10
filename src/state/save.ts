@@ -6,11 +6,15 @@
  */
 
 import { z } from "zod";
+import { type Codex, codexInicial } from "../core/codex.ts";
 import type { CreatureState } from "../core/simulation.ts";
 import { type Migration, type RawSave, SaveVersionError, applyMigrations } from "./migrations.ts";
 
-/** v2 agregó crianza, etapa y forma evolutiva. */
-export const SAVE_VERSION = 2;
+/**
+ * v2 agregó crianza, etapa y forma evolutiva.
+ * v3 pasó de una criatura suelta a una colección, con codex.
+ */
+export const SAVE_VERSION = 3;
 
 const StatsSchema = z.object({
   energia: z.number().min(0).max(100),
@@ -46,6 +50,7 @@ const FormSchema = z.enum([
 ]);
 
 const CreatureStateSchema = z.object({
+  id: z.string().min(1),
   // El genoma viaja como decimal en texto: JSON no sabe representar un bigint.
   seed: z.string().regex(/^\d+$/, "El genoma tiene que ser un entero en texto"),
   nacimientoMs: z.number().int(),
@@ -64,16 +69,63 @@ const CreatureStateSchema = z.object({
   crianza: CrianzaSchema,
 });
 
-export const SaveSchema = z.object({
-  version: z.number().int(),
-  guardadoMs: z.number().int(),
-  criatura: CreatureStateSchema,
+const CodexSchema = z.object({
+  linajes: z.array(z.number().int().min(0)),
+  formas: z.array(FormSchema),
+  rarezas: z.array(z.string()),
+  totalRegistradas: z.number().int().min(0),
 });
+
+export const SaveSchema = z
+  .object({
+    version: z.number().int(),
+    guardadoMs: z.number().int(),
+    criaturas: z.array(CreatureStateSchema).min(1),
+    activaId: z.string().min(1),
+    codex: CodexSchema,
+  })
+  // Que `activaId` apunte a una criatura que no existe dejaría la partida sin
+  // nada que mostrar. Se valida acá y no en el juego, donde ya sería tarde.
+  .refine((save) => save.criaturas.some((c) => c.id === save.activaId), {
+    message: "activaId no corresponde a ninguna criatura",
+    path: ["activaId"],
+  });
 
 export type SaveData = z.infer<typeof SaveSchema>;
 
-export function createSave(criatura: CreatureState, nowMs: number): SaveData {
-  return { version: SAVE_VERSION, guardadoMs: nowMs, criatura };
+/** El estado completo de una partida. */
+export interface GameState {
+  criaturas: CreatureState[];
+  activaId: string;
+  codex: Codex;
+}
+
+export function createSave(state: GameState, nowMs: number): SaveData {
+  return {
+    version: SAVE_VERSION,
+    guardadoMs: nowMs,
+    criaturas: state.criaturas,
+    activaId: state.activaId,
+    codex: state.codex,
+  };
+}
+
+/** Arranca una partida nueva con una sola criatura. */
+export function partidaInicial(criatura: CreatureState): GameState {
+  return { criaturas: [criatura], activaId: criatura.id, codex: codexInicial() };
+}
+
+/** La criatura que se está cuidando. */
+export function criaturaActiva(state: GameState): CreatureState | undefined {
+  return state.criaturas.find((c) => c.id === state.activaId);
+}
+
+/** Reemplaza una criatura por su versión actualizada, sin mutar el estado. */
+export function reemplazarCriatura(state: GameState, criatura: CreatureState): GameState {
+  return {
+    ...state,
+    criaturas: state.criaturas.map((c) => (c.id === criatura.id ? criatura : c)),
+  };
 }
 
 export type LoadOutcome =

@@ -62,10 +62,37 @@ function v1ToV2(save: RawSave): RawSave {
 }
 
 /**
+ * v2 → v3: de una criatura suelta a una colección, con codex.
+ *
+ * El identificador se arma igual que en `creatureId()`, pero replicado acá en
+ * vez de importado: si mañana cambia el formato del id, los saves migrados el
+ * año que viene tienen que seguir generando el mismo que los migrados hoy, o
+ * `activaId` dejaría de apuntar a nada.
+ *
+ * El codex arranca vacío. Se podría reconstruir del genoma de la criatura, pero
+ * eso obligaría a que la migración importara `detectTraits` y `decodeGenome`,
+ * es decir a atar el pasado a lógica que va a seguir cambiando. Como el juego
+ * registra la criatura activa en cada carga, el codex se completa solo en la
+ * primera partida después de migrar.
+ */
+function v2ToV3(save: RawSave): RawSave {
+  const criatura = (save.criatura ?? {}) as RawSave;
+  const id = `${String(criatura.seed)}-${String(criatura.nacimientoMs)}`;
+
+  return {
+    version: 3,
+    guardadoMs: save.guardadoMs,
+    criaturas: [{ ...criatura, id }],
+    activaId: id,
+    codex: { linajes: [], formas: [], rarezas: [], totalRegistradas: 0 },
+  };
+}
+
+/**
  * Cadena de migraciones. `MIGRATIONS[i]` lleva de la versión `i + 1` a la
  * `i + 2`.
  */
-export const MIGRATIONS: readonly Migration[] = [v1ToV2];
+export const MIGRATIONS: readonly Migration[] = [v1ToV2, v2ToV3];
 
 export class SaveVersionError extends Error {}
 

@@ -77,6 +77,17 @@ export interface Stats {
 }
 
 export interface CreatureState {
+  /**
+   * Identificador único dentro de la partida.
+   *
+   * La semilla no alcanza: dos criaturas pueden compartir genoma —al cruzar
+   * puede repetirse, o podés adoptar la misma semilla dos veces— y con una
+   * colección hay que poder distinguirlas.
+   *
+   * Se deriva de semilla + momento de nacimiento en vez de sortearse, para que
+   * `createCreature` siga siendo pura respecto de sus argumentos.
+   */
+  id: string;
   /** Genoma serializado en decimal: JSON no sabe representar un bigint. */
   seed: string;
   nacimientoMs: number;
@@ -164,9 +175,15 @@ function isNight(hour: number): boolean {
   return hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR;
 }
 
+/** Arma el identificador de una criatura. Estable para los mismos argumentos. */
+export function creatureId(seed: string, nacimientoMs: number): string {
+  return `${seed}-${nacimientoMs}`;
+}
+
 /** Crea el estado inicial de una criatura recién nacida. */
 export function createCreature(seed: bigint, nowMs: number, tzOffsetMin: number): CreatureState {
   return {
+    id: creatureId(seed.toString(), nowMs),
     seed: seed.toString(),
     nacimientoMs: nowMs,
     lastTickMs: nowMs,

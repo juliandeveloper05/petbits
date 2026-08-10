@@ -12,6 +12,7 @@
  */
 
 import { FOODS, acariciar, alimentar, jugar } from "../core/actions.ts";
+import { registrar } from "../core/codex.ts";
 import { STAGE_NAMES, formDescription, formName } from "../core/evolution.ts";
 import {
   decodeGenome,
@@ -31,6 +32,12 @@ import {
 import { drawSprite } from "../render/canvas.ts";
 import { generateSprite } from "../render/spriteGen.ts";
 import { loadGame, saveGame } from "../state/persistence.ts";
+import {
+  type GameState,
+  criaturaActiva,
+  partidaInicial,
+  reemplazarCriatura,
+} from "../state/save.ts";
 import { initAudio, isMuted, playSfx, setMuted } from "./audio.ts";
 
 const SPRITE_SCALE = 6;
@@ -74,7 +81,23 @@ const digestModal = el<HTMLElement>("digest-modal");
 const digestHeadline = el<HTMLElement>("digest-headline");
 const digestList = el<HTMLElement>("digest-list");
 
+/**
+ * La partida entera: la colección de criaturas y el codex.
+ *
+ * `state` es una vista de la criatura que se está cuidando. Se mantiene aparte
+ * porque casi todo el archivo trabaja sobre ella, pero la fuente de verdad es
+ * `game`: escribir en `state` sin pasar por `setState` dejaría la colección
+ * desincronizada y el guardado perdería lo último que hiciste.
+ */
+let game: GameState | null = null;
 let state: CreatureState | null = null;
+
+/** Actualiza la criatura activa y la refleja en la colección. */
+function setState(next: CreatureState): void {
+  state = next;
+  if (game) game = reemplazarCriatura(game, next);
+}
+
 let hatchCandidate = randomSeed();
 let blinking = false;
 // `ReturnType` y no `number`: con los tipos de Node en el proyecto (los trae
@@ -254,9 +277,9 @@ function showDigest(
 // ---------------------------------------------------------------------------
 
 async function persist(): Promise<void> {
-  if (!state) return;
+  if (!game) return;
   try {
-    await saveGame(state, Date.now());
+    await saveGame(game, Date.now());
   } catch (error) {
     toast("No se pudo guardar la partida.", "error");
     console.error("Fallo al guardar", error);
@@ -267,8 +290,24 @@ async function persist(): Promise<void> {
 function catchUp(): ReturnType<typeof simulate> | null {
   if (!state) return null;
   const result = simulate(state, Date.now());
-  state = result.state;
+  setState(result.state);
   return result;
+}
+
+/**
+ * Anota la criatura activa en el codex y avisa si hubo algo nuevo.
+ *
+ * Se llama al nacer, al cargar y al evolucionar. Es idempotente, así que
+ * repetirla no cuesta nada: el codex solo suma lo que todavía no tenía.
+ */
+function registrarEnCodex(): void {
+  if (!game || !state) return;
+  const { codex, nuevos } = registrar(game.codex, BigInt(state.seed), state.forma);
+  game = { ...game, codex };
+
+  for (const novedad of nuevos) {
+    toast(`Codex: ${novedad.nombre}`);
+  }
 }
 
 function announce(result: ReturnType<typeof simulate>): void {
@@ -277,6 +316,8 @@ function announce(result: ReturnType<typeof simulate>): void {
       playSfx("evolucion");
       reaction("✨");
       toast(event.text);
+      // Evolucionar puede estrenar una forma que el codex no tenía.
+      registrarEnCodex();
     }
   }
   if ((result.summary.letargo ?? 0) > 0) playSfx("letargo");
@@ -313,7 +354,7 @@ async function act(kind: "alimentar" | "jugar" | "mimo", foodId?: string): Promi
     return;
   }
 
-  state = result.state;
+  setState(result.state);
   playSfx(kind === "alimentar" ? "comer" : kind === "jugar" ? "jugar" : "mimo");
   reaction(kind === "alimentar" ? "🍖" : kind === "jugar" ? "🎾" : "💚");
   petSprite.classList.remove("is-acting");
@@ -354,7 +395,11 @@ function setHatchSeed(seed: bigint): void {
 
 async function hatch(): Promise<void> {
   initAudio();
-  state = createCreature(hatchCandidate, Date.now(), -new Date().getTimezoneOffset());
+  const criatura = createCreature(hatchCandidate, Date.now(), -new Date().getTimezoneOffset());
+  game = partidaInicial(criatura);
+  state = criatura;
+  registrarEnCodex();
+
   await persist();
   playSfx("nacer");
   showScreen("cuidado");
@@ -450,8 +495,22 @@ async function boot(): Promise<void> {
     return;
   }
 
-  state = loaded.save.criatura;
+  const { criaturas, activaId, codex } = loaded.save;
+  game = { criaturas, activaId, codex };
+  state = criaturaActiva(game) ?? null;
+  if (!state) {
+    // El esquema ya garantiza que activaId apunta a algo, así que llegar acá
+    // significa que algo se rompió más abajo. Mejor empezar de nuevo que
+    // seguir con media partida.
+    toast("La partida quedó inconsistente. Empezá una nueva.", "error");
+    setHatchSeed(randomSeed());
+    showScreen("nacer");
+    return;
+  }
+
   const result = catchUp();
+  // Las partidas migradas desde v2 llegan con el codex vacío: se completa acá.
+  registrarEnCodex();
   showScreen("cuidado");
   renderPet();
 
@@ -459,8 +518,14 @@ async function boot(): Promise<void> {
     const digest = buildAbsenceDigest(result);
     if (digest && state) showDigest(state, digest);
     announce(result);
-    if (result.ticks > 0) void persist();
   }
+
+  // Se guarda siempre al terminar de cargar, aunque no haya pasado ningún tick.
+  // Al arrancar pueden haber cambiado dos cosas que no dependen del tiempo: el
+  // save recién migrado a la versión nueva, y el codex, que se completa acá.
+  // Guardando solo cuando el reloj avanzó, quien abriera y cerrara enseguida
+  // perdía el linaje que acababa de descubrir.
+  void persist();
 }
 
 void boot();

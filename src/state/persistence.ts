@@ -10,8 +10,7 @@
  */
 
 import { del, get, set } from "idb-keyval";
-import type { CreatureState } from "../core/simulation.ts";
-import { type SaveData, createSave, parseSave } from "./save.ts";
+import { type GameState, type SaveData, createSave, parseSave } from "./save.ts";
 
 const SAVE_KEY = "petbits:save";
 const QUARANTINE_KEY = "petbits:save:corrupto";
@@ -56,8 +55,8 @@ export async function loadGame(): Promise<LoadResult> {
   return { status: "ok", save: outcome.save };
 }
 
-export async function saveGame(criatura: CreatureState, nowMs: number): Promise<void> {
-  await set(SAVE_KEY, createSave(criatura, nowMs));
+export async function saveGame(state: GameState, nowMs: number): Promise<void> {
+  await set(SAVE_KEY, createSave(state, nowMs));
 }
 
 /** Borra la partida. Deja intacta la cuarentena, por si hay algo que rescatar. */

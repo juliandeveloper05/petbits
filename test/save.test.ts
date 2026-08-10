@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { codexInicial } from "../src/core/codex.ts";
 import { createCreature } from "../src/core/simulation.ts";
 import {
   type Migration,
@@ -6,29 +7,83 @@ import {
   SaveVersionError,
   applyMigrations,
 } from "../src/state/migrations.ts";
-import { SAVE_VERSION, createSave, parseSave } from "../src/state/save.ts";
+import {
+  SAVE_VERSION,
+  createSave,
+  criaturaActiva,
+  parseSave,
+  partidaInicial,
+  reemplazarCriatura,
+} from "../src/state/save.ts";
 
 const T0 = Date.UTC(2026, 2, 2, 9, 0, 0);
 const creature = createCreature(0xa3f091c477be2d08n, T0, -180);
+const partida = partidaInicial(creature);
 
 describe("ida y vuelta del guardado", () => {
   it("un save válido sobrevive a JSON", () => {
-    const save = createSave(creature, T0);
+    const save = createSave(partida, T0);
     // El viaje real: IndexedDB estructura el objeto, pero JSON es el caso
     // más hostil y si pasa por acá pasa por cualquier lado.
     const outcome = parseSave(JSON.parse(JSON.stringify(save)));
 
-    expect(outcome.ok).toBe(true);
+    expect(outcome.ok, outcome.ok ? "" : outcome.reason).toBe(true);
     if (!outcome.ok) return;
-    expect(outcome.save.criatura).toEqual(creature);
+    expect(outcome.save.criaturas).toHaveLength(1);
+    expect(outcome.save.criaturas[0]).toEqual(creature);
+    expect(outcome.save.activaId).toBe(creature.id);
     expect(outcome.save.version).toBe(SAVE_VERSION);
   });
 
   it("el genoma viaja como texto porque JSON no sabe de bigint", () => {
-    const save = createSave(creature, T0);
-    expect(typeof save.criatura.seed).toBe("string");
-    // Y se puede reconstruir sin pérdida, que es el punto.
-    expect(BigInt(save.criatura.seed)).toBe(0xa3f091c477be2d08n);
+    const save = createSave(partida, T0);
+    expect(typeof save.criaturas[0]?.seed).toBe("string");
+    expect(BigInt(save.criaturas[0]?.seed ?? "0")).toBe(0xa3f091c477be2d08n);
+  });
+
+  it("el id distingue criaturas que comparten genoma", () => {
+    // Al cruzar puede repetirse el genoma, así que la semilla no alcanza
+    // como identificador.
+    const gemela = createCreature(0xa3f091c477be2d08n, T0 + 1000, -180);
+    expect(gemela.seed).toBe(creature.seed);
+    expect(gemela.id).not.toBe(creature.id);
+  });
+});
+
+describe("manejo de la colección", () => {
+  it("criaturaActiva devuelve la que corresponde", () => {
+    expect(criaturaActiva(partida)).toEqual(creature);
+  });
+
+  it("reemplazarCriatura no muta el estado anterior", () => {
+    const antes = JSON.stringify(partida);
+    const crecida = { ...creature, etapa: "adulto" as const };
+    const despues = reemplazarCriatura(partida, crecida);
+
+    expect(JSON.stringify(partida)).toBe(antes);
+    expect(criaturaActiva(despues)?.etapa).toBe("adulto");
+  });
+
+  it("rechaza un save cuya criatura activa no existe", () => {
+    // Sin esta validación la partida cargaría sin nada que mostrar.
+    const save = createSave(partida, T0);
+    const roto = { ...save, activaId: "no-existe" };
+    const outcome = parseSave(JSON.parse(JSON.stringify(roto)));
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.reason).toContain("activaId");
+  });
+
+  it("rechaza una colección vacía", () => {
+    const roto = {
+      version: SAVE_VERSION,
+      guardadoMs: T0,
+      criaturas: [],
+      activaId: "x",
+      codex: codexInicial(),
+    };
+    expect(parseSave(roto).ok).toBe(false);
   });
 });
 
@@ -45,17 +100,31 @@ describe("guardados rotos", () => {
     ["número", 42],
     ["array", []],
     ["objeto vacío", {}],
-    ["sin versión", { criatura: creature, guardadoMs: T0 }],
-    ["versión en texto", { version: "1", criatura: creature, guardadoMs: T0 }],
-    ["sin criatura", { version: 1, guardadoMs: T0 }],
-    ["criatura incompleta", { version: 1, guardadoMs: T0, criatura: { seed: "1" } }],
-    ["genoma no numérico", { version: 1, guardadoMs: T0, criatura: { ...creature, seed: "abc" } }],
+    ["sin versión", { criaturas: [creature], activaId: creature.id }],
+    ["versión en texto", { version: "3", criaturas: [creature] }],
+    ["sin criaturas", { version: SAVE_VERSION, guardadoMs: T0 }],
+    [
+      "criatura incompleta",
+      { version: SAVE_VERSION, guardadoMs: T0, criaturas: [{ id: "a", seed: "1" }], activaId: "a" },
+    ],
+    [
+      "genoma no numérico",
+      {
+        version: SAVE_VERSION,
+        guardadoMs: T0,
+        criaturas: [{ ...creature, seed: "abc" }],
+        activaId: creature.id,
+        codex: codexInicial(),
+      },
+    ],
     [
       "estadística fuera de rango",
       {
-        version: 1,
+        version: SAVE_VERSION,
         guardadoMs: T0,
-        criatura: { ...creature, stats: { ...creature.stats, energia: 9999 } },
+        criaturas: [{ ...creature, stats: { ...creature.stats, energia: 9999 } }],
+        activaId: creature.id,
+        codex: codexInicial(),
       },
     ],
   ];
@@ -75,9 +144,11 @@ describe("guardados rotos", () => {
 
   it("el motivo del rechazo dice dónde estaba el problema", () => {
     const outcome = parseSave({
-      version: 1,
+      version: SAVE_VERSION,
       guardadoMs: T0,
-      criatura: { ...creature, stats: { ...creature.stats, salud: -5 } },
+      criaturas: [{ ...creature, stats: { ...creature.stats, salud: -5 } }],
+      activaId: creature.id,
+      codex: codexInicial(),
     });
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -85,10 +156,10 @@ describe("guardados rotos", () => {
   });
 });
 
-describe("migración real v1 → v2", () => {
+describe("migración en cadena desde v1", () => {
   /**
    * Un guardado con la forma exacta que tenía la versión 1: sin crianza, sin
-   * etapa y sin forma evolutiva.
+   * etapa, sin forma evolutiva, sin id y con una sola criatura suelta.
    *
    * Se escribe a mano en vez de derivarlo del estado actual a propósito. Si se
    * construyera quitándole campos a `createCreature`, el día que cambie el
@@ -115,57 +186,51 @@ describe("migración real v1 → v2", () => {
     };
   }
 
-  it("migra y valida contra el esquema nuevo", () => {
+  it("un save v1 atraviesa las dos migraciones y valida", () => {
     const outcome = parseSave(saveV1(100));
     expect(outcome.ok, outcome.ok ? "" : outcome.reason).toBe(true);
     if (!outcome.ok) return;
 
     expect(outcome.save.version).toBe(SAVE_VERSION);
-    // Lo que ya existía se conserva intacto.
-    expect(outcome.save.criatura.stats.vinculo).toBe(14);
-    expect(outcome.save.criatura.ticksVividos).toBe(100);
+    expect(outcome.save.criaturas).toHaveLength(1);
+    // Lo que ya existía se conserva intacto a través de toda la cadena.
+    expect(outcome.save.criaturas[0]?.stats.vinculo).toBe(14);
+    expect(outcome.save.criaturas[0]?.ticksVividos).toBe(100);
   });
 
   it("reconstruye la etapa a partir de los ticks vividos", () => {
-    const bebe = parseSave(saveV1(100));
-    const juvenil = parseSave(saveV1(2000));
-    const adulto = parseSave(saveV1(9000));
+    const etapaDe = (ticks: number) => {
+      const outcome = parseSave(saveV1(ticks));
+      return outcome.ok ? outcome.save.criaturas[0]?.etapa : "?";
+    };
 
-    expect(bebe.ok && bebe.save.criatura.etapa).toBe("bebe");
-    expect(juvenil.ok && juvenil.save.criatura.etapa).toBe("juvenil");
-    expect(adulto.ok && adulto.save.criatura.etapa).toBe("adulto");
+    expect(etapaDe(100)).toBe("bebe");
+    expect(etapaDe(2000)).toBe("juvenil");
+    expect(etapaDe(9000)).toBe("adulto");
   });
 
-  it("la crianza arranca vacía porque la v1 no la registraba", () => {
-    // Ese historial se perdió y no hay forma honesta de inventarlo. La forma
-    // queda indefinida por lo mismo.
+  it("el id que inventa la migración apunta a la criatura activa", () => {
+    // Si no coincidieran, el esquema rechazaría el save y se perdería la
+    // partida de quien viniera de una versión vieja.
+    const outcome = parseSave(saveV1(500));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.save.criaturas[0]?.id).toBe(outcome.save.activaId);
+  });
+
+  it("el codex arranca vacío: la v1 no registraba nada de eso", () => {
     const outcome = parseSave(saveV1(9000));
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
-
-    expect(outcome.save.criatura.crianza.ticksMedidos).toBe(0);
-    expect(outcome.save.criatura.crianza.dieta).toEqual({
-      proteina: 0,
-      dulce: 0,
-      mineral: 0,
-      raro: 0,
-    });
-    expect(outcome.save.criatura.forma).toBe("indefinida");
-  });
-
-  it("usa los ticks vividos como aproximación de los activos", () => {
-    // No hay registro de cuánto estuvo en letargo, así que se asume que nunca:
-    // es la estimación más favorable para el jugador.
-    const outcome = parseSave(saveV1(5000));
-    expect(outcome.ok && outcome.save.criatura.ticksActivos).toBe(5000);
+    expect(outcome.save.codex).toEqual(codexInicial());
   });
 });
 
-describe("migraciones", () => {
+describe("mecánica de migraciones", () => {
   it("un save de una versión futura se rechaza en vez de degradarse", () => {
     // Pasa si alguien abrió una versión más nueva del juego y volvió a una
     // vieja. Interpretarlo a ciegas rompería datos.
-    const outcome = parseSave({ version: 99, guardadoMs: T0, criatura: creature });
+    const outcome = parseSave({ version: 99, guardadoMs: T0, criaturas: [] });
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.reason).toContain("más nueva");
@@ -181,11 +246,6 @@ describe("migraciones", () => {
     expect(() => applyMigrations({ version: 1 }, 1, 3, [])).toThrow(/Falta la migración/);
   });
 
-  /**
-   * La cadena se inyecta en vez de importarse para poder verificar el mecanismo
-   * de verdad. Hoy `MIGRATIONS` está vacía porque la versión actual es la 1;
-   * testear contra la constante real no probaría nada.
-   */
   it("aplica la cadena en orden, una versión por vez", () => {
     const trace: number[] = [];
     const chain: Migration[] = [
