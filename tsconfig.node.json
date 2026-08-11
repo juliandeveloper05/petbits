@@ -12,5 +12,5 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["scripts", "vite.config.ts"]
+  "include": ["scripts", "tools", "vite.config.ts"]
 }

@@ -37,7 +37,18 @@ double ejeSomatico(const Crianza& c, const Genes& g) {
 }
 
 double ejeActividad(const Crianza& c) {
-    return static_cast<double>(c.juego - c.calma) + (animoPromedio(c) - 50.0) / 12.0;
+    // Los dos contadores se convierten a double ANTES de restarse.
+    //
+    // `juego` y `calma` son uint32_t. Restarlos entre sí es aritmética sin
+    // signo: una criatura solo acariciada (juego=0, calma=20) daba 0u - 20u =
+    // 4.294.967.276, y recién ese número se convertía a double. El eje quedaba
+    // enormemente positivo justo en el caso en que tiene que ser negativo, así
+    // que toda criatura calma evolucionaba a la forma activa.
+    //
+    // En TS no pasa porque no hay enteros sin signo. Es el modo de fallar
+    // típico de un port: la línea es idéntica y el resultado no.
+    const double actividad = static_cast<double>(c.juego) - static_cast<double>(c.calma);
+    return actividad + (animoPromedio(c) - 50.0) / 12.0;
 }
 
 // ---------------------------------------------------------------------------

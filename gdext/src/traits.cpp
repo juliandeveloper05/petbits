@@ -9,6 +9,10 @@
 #include <cassert>
 #include <stdexcept>
 
+#if defined(_MSC_VER) && defined(_M_X64)
+#   include <intrin.h>  // _umul128, _udiv128
+#endif
+
 namespace petbits {
 
 // ---------------------------------------------------------------------------
@@ -65,22 +69,51 @@ bool nibblesAllDistinct(uint64_t value) {
 // Miller-Rabin determinista
 // ---------------------------------------------------------------------------
 
+/**
+ * (a · b) mod m, exacto para los 64 bits enteros.
+ *
+ * El producto de dos números de 64 bits necesita 128, así que no alcanza con
+ * multiplicar y tomar el resto: hay que hacerlo en doble ancho o no hacerlo.
+ *
+ * Acá importa más que en otros lados. El seed llega hasta 2^64-1, y de esto
+ * depende `isPrime`, o sea la rareza Primordial. Un modmul que desborda no
+ * "pierde precisión": dice que un primo no lo es. La web y el nativo mostrarían
+ * rarezas distintas para la misma criatura, que es exactamente lo que el
+ * proyecto promete que no pasa.
+ */
 static uint64_t modmul(uint64_t a, uint64_t b, uint64_t mod) {
-    // Usa __uint128_t cuando está disponible para evitar overflow
-#if defined(__GNUC__) || defined(__clang__)
-    return static_cast<uint64_t>(
-        (static_cast<unsigned __int128>(a) * b) % mod
-    );
-#else
-    // Fallback: multiplicación por doblado de bits
-    uint64_t result = 0;
     a %= mod;
+    b %= mod;
+
+#if defined(__SIZEOF_INT128__)
+    // GCC y Clang: el entero de 128 bits es nativo.
+    return static_cast<uint64_t>((static_cast<unsigned __int128>(a) * b) % mod);
+
+#elif defined(_MSC_VER) && defined(_M_X64)
+    // MSVC no tiene __int128, pero sí las instrucciones de 128 bits sueltas.
+    // _udiv128 exige que la parte alta sea menor que el divisor: se cumple
+    // porque con a,b < mod el producto es < mod², y entonces su parte alta
+    // (producto / 2^64) queda por debajo de mod.
+    uint64_t alta;
+    const uint64_t baja = _umul128(a, b, &alta);
+    uint64_t resto;
+    _udiv128(alta, baja, mod, &resto);
+    return resto;
+
+#else
+    // Cualquier otro compilador (MSVC en ARM64, por ejemplo): duplicación con
+    // sumas modulares que no desbordan.
+    //
+    // `x + y` se escribe como `x - (mod - y)` cuando x ≥ mod - y. Da lo mismo
+    // módulo mod y nunca pasa de 64 bits, que es todo el punto: la versión
+    // ingenua `(x + y) % mod` desborda cuando mod supera 2^63.
+    uint64_t resultado = 0;
     while (b > 0) {
-        if (b & 1) result = (result + a) % mod;  // podría desbordar para mod grande
-        a = (a * 2) % mod;
+        if (b & 1) resultado = (resultado >= mod - a) ? resultado - (mod - a) : resultado + a;
+        a = (a >= mod - a) ? a - (mod - a) : a + a;
         b >>= 1;
     }
-    return result;
+    return resultado;
 #endif
 }
 

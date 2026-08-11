@@ -13,10 +13,11 @@
     "test:watch": "vitest",
     "sheet": "vite-node scripts/contactSheet.ts",
     "simular": "vite-node scripts/simular.ts",
-    "lint": "biome check src test scripts",
-    "format": "biome format --write src test scripts",
+    "lint": "biome check src test scripts tools",
+    "format": "biome format --write src test scripts tools",
     "formas": "vite-node scripts/formas.ts",
-    "iconos": "vite-node scripts/iconos.ts"
+    "iconos": "vite-node scripts/iconos.ts",
+    "parity": "vite-node tools/verify_parity.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
