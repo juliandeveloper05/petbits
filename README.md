@@ -131,17 +131,40 @@ se instaló.
 > ⚠️ Ese *Developer Command Prompt* no es la consola común. Es una consola con
 > las variables de entorno de MSVC ya puestas. Los comandos de C++ de acá abajo
 > van ahí, no en PowerShell.
+>
+> Hay una razón práctica además de las variables: el *Developer Command Prompt*
+> es `cmd`, donde `&&` encadena comandos. **Windows PowerShell 5.1 —el que trae
+> Windows por defecto— no soporta `&&`** y responde *"El token '&&' no es un
+> separador de instrucciones válido en esta versión"*. Si te aparece ese error,
+> no es que el comando esté mal: estás en la consola equivocada. En PowerShell 5
+> los comandos van de a uno, en líneas separadas.
 
 ### 2. Python y SCons
 
-Python ya lo tenés (3.11). Falta SCons, que es el sistema de build que usa
-godot-cpp:
+SCons es el sistema de build que usa godot-cpp.
 
 ```bash
-pip install scons
+pip install --user scons
 ```
 
-**Verificá:** `scons --version` tiene que responder 4.x.
+El `--user` no es opcional en una instalación de Python hecha para todos los
+usuarios. Ahí `C:\PythonXX\Scripts\` pertenece al sistema y hace falta ser
+administrador para escribir en esa carpeta. Sin `--user`, pip instala el módulo
+—que sí va a otro lado— pero no puede crear el `scons.exe`, y el resultado es
+desconcertante: `pip list` muestra SCons instalado y el comando `scons` no
+existe. Con `--user` el ejecutable va a tu carpeta personal, que ya está en el
+PATH.
+
+**Verificá:** `scons --version` tiene que responder 4.x. Si el comando no
+aparece, abrí una terminal nueva — el PATH se lee al arrancar la consola, así
+que una que ya estaba abierta no ve el ejecutable recién instalado.
+
+Si por lo que sea el comando sigue sin estar, esto es equivalente y siempre
+funciona:
+
+```bash
+python -m SCons
+```
 
 ### 3. Godot 4.3 o posterior
 
@@ -152,21 +175,34 @@ No tiene instalador: es un `.exe` suelto. Ponelo donde te quede cómodo.
 
 ### 4. Compilar la GDExtension
 
-Desde el *Developer Command Prompt*, en la raíz del repo:
+Todo esto va desde el *Developer Command Prompt*, **parado en la carpeta del
+repo**. Vale la pena decirlo porque es el error más fácil de cometer y el que
+peor se diagnostica: los comandos corren igual desde otro repo, no se quejan de
+nada, y simplemente no hacen lo que esperabas.
+
+```bash
+cd C:\Users\julia\Desktop\code-26\petBits-25
+```
+
+Bajar `godot-cpp`, los bindings de C++ para Godot. Son unos 100 MB y se hace una
+sola vez; si clonaste con `--recurse-submodules` ya está y este comando no hace
+nada:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-Eso baja `godot-cpp`, los bindings de C++ para Godot. Son unos 100 MB y se hace
-una sola vez.
+```bash
+cd gdext
+```
 
 ```bash
-cd gdext && scons
+scons -j4
 ```
 
 La primera vez tarda bastante —diez o quince minutos— porque compila godot-cpp
-entero. Las siguientes son segundos: solo recompila lo que tocaste.
+entero. Las siguientes son segundos: solo recompila lo que tocaste. El `-j4`
+usa cuatro núcleos en paralelo.
 
 **Verificá:** tiene que aparecer un archivo en `godot/bin/` llamado
 `libpetbits_core.windows.template_debug.x86_64.dll`. El nombre importa: es
@@ -195,7 +231,7 @@ seed. Tiene que dar igual.
 | [Node.js](https://nodejs.org/) | 20+ | — | La web (ya lo tenés) |
 | [Visual Studio 2022](https://visualstudio.microsoft.com/es/downloads/) | 2022 | ☑ Desarrollo para el escritorio con C++ | Compilar el C++ |
 | [Python](https://www.python.org/) | 3.10+ | — | SCons (ya lo tenés) |
-| SCons | 4+ | `pip install scons` | Build de la GDExtension |
+| SCons | 4+ | `pip install --user scons` — el `--user` importa, ver arriba | Build de la GDExtension |
 | [Godot](https://godotengine.org/download/windows/) | 4.3+ | Versión **estándar**, no .NET | El motor |
 
 Para exportar a Android hacen falta además el SDK y el NDK de Android y un JDK
@@ -215,11 +251,13 @@ npm run parity
 
 Ese comando **ejecuta el TypeScript** de `src/core/` y vuelca lo que devuelve —
 2010 genomas, 80 crianzas, 21 entradas de parseo, 12 hashes— en un header de
-C++. Después:
+C++. Después, desde el *Developer Command Prompt* en `gdext/tests`:
 
 ```bash
-cd gdext/tests && cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp && run_tests.exe
+cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp && run_tests.exe
 ```
+
+Estado actual: **40.416 comprobaciones, 0 fallas.**
 
 No hacen falta Godot ni SCons ni godot-cpp: los módulos portados son C++ puro.
 Con un compilador alcanza, así que la paridad se puede comprobar antes de
@@ -339,9 +377,10 @@ contenido de otra. Un save que no valida se pone en cuarentena, nunca se borra.
 El detalle completo está en el **[roadmap](ROADMAP.md)**. En dos líneas:
 
 - La web está terminada y desplegada.
-- Del nativo hay tres módulos portados con paridad verificada, el puente a
-  GDScript escrito, y el proyecto de Godot abriendo. **Lo próximo es
-  compilarlo**: el C++ está escrito pero todavía no pasó por un compilador.
+- Del nativo hay tres módulos portados y compilando, con paridad verificada
+  (40.416 comprobaciones, 0 fallas), y la GDExtension linkeada exportando el
+  símbolo que Godot busca. **Lo próximo es abrirla en Godot** — es el único
+  eslabón de la cadena que todavía no se comprobó.
 
 ---
 

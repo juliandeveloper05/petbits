@@ -50,10 +50,10 @@ vectores generados ejecutando el TypeScript.
 
 | Módulo | Estado |
 |---|---|
-| `genome.cpp` — decodificación, formato, parseo, hash | ✅ portado y verificado |
-| `traits.cpp` — las 8 rarezas, Miller-Rabin | ✅ portado y verificado |
-| `evolution.cpp` — ejes de crianza, resolución de forma | ✅ portado y verificado |
-| `petbits_core.cpp` — puente a GDScript | ✅ escrito, **sin compilar todavía** |
+| `genome.cpp` — decodificación, formato, parseo, hash | ✅ portado, compilado y verificado |
+| `traits.cpp` — las 8 rarezas, Miller-Rabin | ✅ portado, compilado y verificado |
+| `evolution.cpp` — ejes de crianza, resolución de forma | ✅ portado, compilado y verificado |
+| `petbits_core.cpp` — puente a GDScript | ✅ compila y linkea |
 | `simulation.cpp` — tick, letargo, eventos | ⬜ solo el header |
 | `breeding.cpp` — cruza por gen | ⬜ ni empezado |
 | `actions.cpp` — alimentar, jugar, acariciar | ⬜ ni empezado |
@@ -64,14 +64,24 @@ vectores generados ejecutando el TypeScript.
 entradas de parseo y 12 hashes contra lo que devuelve el TypeScript. No hacen
 falta Godot ni SCons: un compilador y un comando.
 
+Estado medido con MSVC 2022 sobre Windows: **40.416 comprobaciones, 0 fallas.**
+
 Encontraron tres bugs de corrección que no se ven leyendo el código —
 desbordamiento de enteros sin signo, hash sobre bytes en vez de unidades
 UTF-16, y excepciones en un build que las tiene deshabilitadas. Están en
 `gdext/tests/README.md`.
 
-**Próximo paso concreto:** compilar. El C++ está escrito pero nunca pasó por un
-compilador, así que puede tener errores de sintaxis. Es el primer trabajo de la
-próxima sesión y necesita MSVC instalado.
+La biblioteca compila y linkea:
+`godot/bin/libpetbits_core.windows.template_debug.x86_64.dll`, exportando
+`petbits_gdextension_init` — el mismo nombre de archivo y el mismo símbolo que
+declara el `.gdextension`.
+
+**Lo único sin verificar de la cadena** es el último eslabón: que Godot cargue
+esa biblioteca al abrir el proyecto. No se pudo comprobar porque todavía no hay
+Godot instalado en la máquina de desarrollo. La pantalla de arranque
+(`scenes/Arranque.tscn`) existe justamente para responder eso de un vistazo.
+
+**Próximo paso concreto:** instalar Godot 4.3+, abrir `godot/` y apretar F5.
 
 ### Fase 2 — Criatura en pantalla ⬜
 

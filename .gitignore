@@ -62,6 +62,14 @@ godot/bin/*.dll
 godot/bin/*.so
 godot/bin/*.dylib
 godot/bin/*.framework/
+# MSVC deja estos dos al lado de cada .dll con símbolos exportados. No son la
+# biblioteca —son la tabla de exportación y la de importación— pero se
+# regeneran en cada build igual que ella.
+godot/bin/*.exp
+godot/bin/*.lib
+# Lo único de godot/bin/ que sí se versiona es el .gdextension, que declara
+# dónde buscar la biblioteca en cada plataforma.
+!godot/bin/*.gdextension
 
 # -----------------------------------------------------------------------
 # GDExtension C++ (gdext/)
