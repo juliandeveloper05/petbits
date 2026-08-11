@@ -2,18 +2,34 @@
 """
 tools/sprite_gen.py
 ===================
-Port de src/render/spriteGen.ts para uso en pipeline de build.
+BOCETO. Todavía NO es un port de src/render/spriteGen.ts.
 
-Genera sprite sheets PNG a partir de un seed de genoma de 64 bits.
-Usa la misma lógica de paleta y forma que spriteGen.ts para garantizar
-que los sprites Godot se vean idénticos a los de la web.
+Genera PNGs a partir de un seed y sirve para probar el circuito
+seed → archivo → carpeta de assets de Godot. Pero los sprites que produce NO
+son los de la web, y la diferencia no es de detalle:
+
+  - Las paletas son HSL. El TS usa OKLCH a propósito, porque HSL no tiene
+    luminancia perceptual pareja: dos colores con la misma L se ven uno mucho
+    más oscuro que el otro según el tono. Por eso el TS además resuelve el
+    fuera-de-gamut bajando croma por búsqueda binaria en vez de recortar
+    canales. Nada de eso está acá.
+  - Las siluetas son formas simples. El TS arma superelipses en media grilla y
+    espeja, con ocho arquetipos y modificadores por forma evolutiva.
+  - No hay sombreado direccional, ni ojos, ni apéndices, ni patrones.
+
+Cuando llegue la Fase 2 hay que decidir entre portarlo de verdad —con los
+mismos vectores de paridad que gdext/tests, comparando píxel a píxel— o
+directamente generar los sprites llamando al C++ ya portado. La segunda opción
+evita mantener una tercera implementación del mismo algoritmo.
+
+Mientras tanto: no lo uses para generar assets definitivos.
 
 Uso:
     python tools/sprite_gen.py --seed A3F0-91C4-77BE-2D08 --out godot/assets/sprites/
     python tools/sprite_gen.py --seed-file seeds.txt --out godot/assets/sprites/
 
 Requiere:
-    pip install pillow numpy
+    pip install pillow
 """
 
 import argparse

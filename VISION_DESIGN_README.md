@@ -399,17 +399,29 @@ Genes decodeGenome(Seed seed) {
 }
 ```
 
+Son dos pasos. El primero ejecuta el TypeScript y guarda lo que devuelve; el
+segundo compila el C++ contra esos valores y compara.
+
 ```bash
-# Test de paridad: dado el mismo seed, ambos producen exactamente lo mismo
-npx vite-node tools/verify_parity.ts --seeds=10000
-# Expected output: 10.000/10.000 seeds ✓ PASS
+npm run parity
 ```
 
-Esto garantiza que un save web se puede cargar en Godot y viceversa — son el mismo juego con distinta presentación.
+```bash
+cd gdext/tests && cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp && run_tests.exe
+```
+
+Lo importante es que los valores esperados **salen de correr el TypeScript, no
+de leerlo**. Escribirlos a mano sería pedirle al mismo criterio que hizo el port
+que se corrija solo. El detalle está en [`gdext/tests/README.md`](gdext/tests/README.md).
+
+Esto es lo que garantiza que un save de la web se pueda cargar en Godot y al
+revés: son el mismo juego con distinta presentación.
 
 ---
 
-*Este documento es el mapa del proyecto. Se actualiza a medida que avanzamos.*
+> **Este documento describe hacia dónde va el proyecto, no dónde está.**
+> Para el estado real de cada pieza —qué está portado, qué compila, qué
+> todavía es un header vacío— el archivo es [ROADMAP.md](ROADMAP.md).
 
-**Developer**: [Julián](https://github.com/juliandeveloper05) — [@juliandeveloper05](https://github.com/juliandeveloper05)  
+**Developer**: Julian Soto — [@juliandeveloper05](https://github.com/juliandeveloper05) · [juliansoto.dev@gmail.com](mailto:juliansoto.dev@gmail.com)
 **Repo**: [github.com/juliandeveloper05/petbits](https://github.com/juliandeveloper05/petbits)
