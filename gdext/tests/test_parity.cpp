@@ -113,6 +113,26 @@ static void probarGenomas() {
     }
 }
 
+static void probarParseo() {
+    bloque("parseSeed");
+
+    for (const auto& v : vectores::PARSEOS) {
+        char ctx[160];
+        std::snprintf(ctx, sizeof(ctx), "entrada \"%s\"", v.entrada);
+
+        Seed obtenido = 0;
+        const bool ok = parseSeed(v.entrada, obtenido);
+        revisar(ok, ctx, "parseSeed dijo que la entrada estaba vacía y no lo está");
+        if (ok) revisarEnteros(obtenido, v.seed, ctx, "seed");
+    }
+
+    // La entrada vacía es el único caso en que devuelve false. En el TS tira una
+    // excepción; acá no puede, porque godot-cpp compila sin excepciones.
+    Seed descartado = 0;
+    revisar(!parseSeed("", descartado), "entrada vacía", "tendría que devolver false");
+    revisar(!parseSeed("   ", descartado), "solo espacios", "tendría que devolver false");
+}
+
 static void probarHashes() {
     bloque("hashString (FNV-1a 64)");
 
@@ -222,12 +242,14 @@ static void probarEvolucion() {
 
 int main() {
     std::printf("\nPetBits — paridad TypeScript <-> C++\n");
-    std::printf("%zu genomas, %zu crianzas, %zu hashes\n\n",
+    std::printf("%zu genomas, %zu crianzas, %zu parseos, %zu hashes\n\n",
                 sizeof(vectores::GENOMAS) / sizeof(vectores::GENOMAS[0]),
                 sizeof(vectores::EVOLUCIONES) / sizeof(vectores::EVOLUCIONES[0]),
+                sizeof(vectores::PARSEOS) / sizeof(vectores::PARSEOS[0]),
                 sizeof(vectores::HASHES) / sizeof(vectores::HASHES[0]));
 
     probarGenomas();
+    probarParseo();
     probarHashes();
     probarRarezas();
     probarEvolucion();

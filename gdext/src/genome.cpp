@@ -94,13 +94,96 @@ std::string formatSeed(Seed seed) {
 // hashString — FNV-1a 64 bits (mismo que hashString en genome.ts)
 // ---------------------------------------------------------------------------
 
+/**
+ * FNV-1a de 64 bits sobre unidades UTF-16, no sobre bytes.
+ *
+ * ---
+ *
+ * Esta es la parte que un port hace mal sin darse cuenta.
+ *
+ * El TS recorre el texto con `charCodeAt`, que devuelve unidades UTF-16. En C++
+ * un std::string_view son bytes UTF-8. Para todo el ASCII da igual y por eso
+ * pasa desapercibido: "hello" son cinco bytes y cinco unidades, mismo hash.
+ *
+ * Pero "Nébula" son seis unidades en JS —la é es U+00E9, una sola— y siete
+ * bytes en UTF-8, porque la é se codifica como C3 A9. Hasheando bytes da otro
+ * número, o sea otra criatura.
+ *
+ * Y no es un caso rebuscado: el juego está en castellano, los linajes se llaman
+ * "Nébula" y "Raíz", y escribir tu nombre como seed es una de las cosas que la
+ * interfaz invita a hacer. Bastaba una tilde para que la web y el nativo
+ * incubaran bichos distintos con el mismo texto.
+ *
+ * Así que acá se decodifica UTF-8 a punto de código y se emiten las unidades
+ * UTF-16 que emitiría JavaScript, con el par suplente incluido para todo lo que
+ * está arriba del plano básico (emojis, por ejemplo).
+ */
 Seed hashString(std::string_view text) {
     uint64_t hash = 0xcbf29ce484222325ULL;
     constexpr uint64_t prime = 0x100000001b3ULL;
-    for (unsigned char c : text) {
-        hash ^= static_cast<uint64_t>(c);
+
+    const auto mezclar = [&](uint32_t unidad) {
+        hash ^= static_cast<uint64_t>(unidad);
         hash *= prime;
+    };
+
+    const size_t largoTexto = text.size();
+    size_t i = 0;
+
+    while (i < largoTexto) {
+        const unsigned char b0 = static_cast<unsigned char>(text[i]);
+        uint32_t punto = 0;
+        size_t largo = 0;
+
+        if (b0 < 0x80) {
+            punto = b0;
+            largo = 1;
+        } else if ((b0 & 0xE0) == 0xC0) {
+            punto = b0 & 0x1Fu;
+            largo = 2;
+        } else if ((b0 & 0xF0) == 0xE0) {
+            punto = b0 & 0x0Fu;
+            largo = 3;
+        } else if ((b0 & 0xF8) == 0xF0) {
+            punto = b0 & 0x07u;
+            largo = 4;
+        } else {
+            // Byte suelto que no puede empezar una secuencia. Un string de JS
+            // nunca llega así; se mezcla tal cual y se sigue, que es preferible
+            // a quedarse en el lugar.
+            mezclar(b0);
+            ++i;
+            continue;
+        }
+
+        bool completa = (i + largo <= largoTexto);
+        for (size_t k = 1; completa && k < largo; ++k) {
+            const unsigned char bk = static_cast<unsigned char>(text[i + k]);
+            if ((bk & 0xC0) != 0x80) {
+                completa = false;
+                break;
+            }
+            punto = (punto << 6) | (bk & 0x3Fu);
+        }
+        if (!completa) {
+            mezclar(b0);
+            ++i;
+            continue;
+        }
+
+        i += largo;
+
+        if (punto <= 0xFFFF) {
+            mezclar(punto);
+        } else {
+            // Fuera del plano básico: JavaScript lo guarda como dos unidades, y
+            // charCodeAt las devuelve por separado.
+            const uint32_t resto = punto - 0x10000u;
+            mezclar(0xD800u + (resto >> 10));
+            mezclar(0xDC00u + (resto & 0x3FFu));
+        }
     }
+
     return hash;
 }
 
@@ -108,45 +191,122 @@ Seed hashString(std::string_view text) {
 // parseSeed — replica exacta de parseSeed() en genome.ts
 // ---------------------------------------------------------------------------
 
-Seed parseSeed(std::string_view input) {
-    // Eliminar espacios y guiones
-    std::string compact;
-    for (char c : input) {
-        if (c != ' ' && c != '-') compact += c;
+// Los ctype de <cctype> reciben un int que tiene que valer como unsigned char.
+// Pasarles un `char` directo es comportamiento indefinido cuando es negativo, y
+// en este proyecto eso pasa todo el tiempo: "Nébula", "Raíz", "Tímido" traen
+// bytes UTF-8 por encima de 0x7F, que en un char con signo son negativos.
+static bool esDigito(char c) { return c >= '0' && c <= '9'; }
+
+static bool esHex(char c) {
+    return esDigito(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+static bool esLetraHex(char c) { return (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
+
+static bool esEspacio(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+}
+
+static int valorHex(char c) {
+    if (esDigito(c)) return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return c - 'A' + 10;
+}
+
+/**
+ * Acumula dígitos dejando que el valor dé la vuelta a los 64 bits.
+ *
+ * En TS esto es `BigInt(texto) & MASK64`: el número se construye completo, con
+ * la precisión que haga falta, y recién al final se recorta. Un uint64_t hace
+ * lo mismo solo, porque el desborde de enteros sin signo está definido como
+ * aritmética módulo 2^64 — que es exactamente lo que significa `& MASK64`.
+ *
+ * Lo que NO servía era std::stoull: con un decimal más largo de lo que entra,
+ * lanza out_of_range en vez de recortar. Distinto resultado que el TS, y encima
+ * un throw en un build sin excepciones.
+ */
+static Seed acumular(std::string_view texto, unsigned base) {
+    Seed valor = 0;
+    for (char c : texto) {
+        valor = valor * base + static_cast<Seed>(base == 16 ? valorHex(c) : c - '0');
+    }
+    return valor;
+}
+
+bool parseSeed(std::string_view input, Seed& salida) {
+    // El TS hace .trim() ANTES de todo, y después hashea el texto ya recortado.
+    // Saltearse eso hacía que " hola " y "hola" dieran criaturas distintas en la
+    // web y en el nativo.
+    size_t inicio = 0;
+    size_t fin = input.size();
+    while (inicio < fin && esEspacio(input[inicio])) ++inicio;
+    while (fin > inicio && esEspacio(input[fin - 1])) --fin;
+    const std::string_view recortado = input.substr(inicio, fin - inicio);
+
+    if (recortado.empty()) return false;
+
+    // Se sacan espacios interiores y guiones: "A3F0-91C4-77BE-2D08".
+    std::string compacto;
+    compacto.reserve(recortado.size());
+    for (char c : recortado) {
+        if (!esEspacio(c) && c != '-') compacto += c;
     }
 
-    if (compact.empty()) {
-        throw std::invalid_argument("El seed no puede estar vacío");
+    // Entradas como "-" o "---": queda vacío después de limpiar, pero el texto
+    // original no lo estaba. En el TS ninguna de las cuatro expresiones regulares
+    // matchea la cadena vacía, así que termina cayendo al hash. Devolver "seed
+    // inválido" acá sería razonable y sería otra cosa que lo que hace el TS.
+    if (compacto.empty()) {
+        salida = hashString(recortado);
+        return true;
     }
 
-    // 0x... → hex explícito
-    if (compact.size() > 2 && compact[0] == '0' && (compact[1] == 'x' || compact[1] == 'X')) {
-        return std::stoull(compact, nullptr, 16);
+    const std::string_view vista(compacto);
+
+    // 0x… explícito
+    if (vista.size() > 2 && vista[0] == '0' && (vista[1] == 'x' || vista[1] == 'X')) {
+        const std::string_view cuerpo = vista.substr(2);
+        bool todoHex = true;
+        for (char c : cuerpo) {
+            if (!esHex(c)) { todoHex = false; break; }
+        }
+        if (todoHex) {
+            salida = acumular(cuerpo, 16);
+            return true;
+        }
     }
 
-    // Todo dígito decimal
-    bool allDigits = true;
-    for (char c : compact) { if (!std::isdigit(c)) { allDigits = false; break; } }
-    if (allDigits) {
-        return std::stoull(compact, nullptr, 10);
+    // El orden de los tres casos que siguen es el del TS y no da lo mismo:
+    // "1234" es hex y decimal a la vez, y tiene que leerse como decimal.
+    bool todoHex = vista.size() <= 16;
+    bool tieneLetra = false;
+    for (char c : vista) {
+        if (!esHex(c)) { todoHex = false; break; }
+        if (esLetraHex(c)) tieneLetra = true;
+    }
+    if (todoHex && tieneLetra) {
+        salida = acumular(vista, 16);
+        return true;
     }
 
-    // 1-16 caracteres hex (con letras a-f)
-    bool allHex = (compact.size() >= 1 && compact.size() <= 16);
-    bool hasLetter = false;
-    for (char c : compact) {
-        if (!std::isxdigit(c)) { allHex = false; break; }
-        if (std::isalpha(c)) hasLetter = true;
+    bool todoDigito = true;
+    for (char c : vista) {
+        if (!esDigito(c)) { todoDigito = false; break; }
     }
-    if (allHex && hasLetter) {
-        return std::stoull(compact, nullptr, 16);
-    }
-    if (allHex) {
-        return std::stoull(compact, nullptr, 16);
+    if (todoDigito) {
+        salida = acumular(vista, 10);
+        return true;
     }
 
-    // Texto arbitrario → hash FNV-1a (misma lógica que el TS)
-    return hashString(input);  // con input original, no compact
+    if (todoHex) {
+        salida = acumular(vista, 16);
+        return true;
+    }
+
+    // Cualquier otra cosa: el nombre de alguien, una frase. Se hashea el texto
+    // recortado —no el original— para coincidir con el TS.
+    salida = hashString(recortado);
+    return true;
 }
 
 // ---------------------------------------------------------------------------

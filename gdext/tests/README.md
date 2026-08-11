@@ -41,8 +41,13 @@ Desde una consola *Developer Command Prompt for VS 2022* (la común no tiene `cl
 en el PATH):
 
 ```bash
-cl /std:c++17 /EHsc /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp && run_tests.exe
+cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp && run_tests.exe
 ```
+
+`/utf-8` no es adorno: los catálogos están llenos de acentos y sin esa opción
+MSVC lee los archivos con la codificación regional de Windows. Los nombres
+llegan con la acentuación rota y algún vector de `parseSeed` falla sin motivo
+aparente.
 
 ### Windows — MinGW, Linux o macOS
 

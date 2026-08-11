@@ -48,7 +48,11 @@ env = SConscript("godot-cpp/SConstruct")
 
 # Warnings. MSVC no entiende la familia -W de GCC; su equivalente es /W4.
 if env.get("is_msvc", False):
-    env.Append(CXXFLAGS=["/W4"])
+    # /utf-8 no es opcional acá. Los catálogos del juego están llenos de
+    # acentos ("Nébula", "Raíz", "Plácido") y MSVC, si no se le dice nada,
+    # interpreta el archivo con la codificación regional de Windows en vez de
+    # UTF-8. Los nombres llegan al juego con la acentuación rota.
+    env.Append(CXXFLAGS=["/W4", "/utf-8"])
 else:
     env.Append(CXXFLAGS=["-Wall", "-Wextra", "-Wpedantic", "-Wno-unused-parameter"])
 

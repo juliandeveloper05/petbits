@@ -1,16 +1,14 @@
 /**
  * register_types.cpp — Entry point de la GDExtension de PetBits
  *
- * En Fase 1 se irán registrando aquí todos los nodos C++ a medida que
- * se implementen: PetCore, GenomeResource, TraitDetector, BattleManager, etc.
+ * Acá se registran las clases C++ que GDScript puede instanciar. Van sumándose
+ * a medida que se portan módulos: PetCore con la simulación, BattleManager con
+ * el combate.
  */
 
 #include "register_types.h"
 
-// Headers de los nodos Godot (se añadirán en Fase 1 y 2)
-// #include "pet_core.h"
-// #include "genome_resource.h"
-// #include "battle_manager.h"
+#include "petbits_core.h"
 
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
@@ -20,10 +18,7 @@ using namespace godot;
 void initialize_petbits_module(ModuleInitializationLevel p_level) {
     if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) return;
 
-    // Fase 1: registrar nodos C++ aquí
-    // ClassDB::register_class<PetCore>();
-    // ClassDB::register_class<GenomeResource>();
-    // ClassDB::register_class<BattleManager>();
+    GDREGISTER_CLASS(PetBitsCore);
 }
 
 void uninitialize_petbits_module(ModuleInitializationLevel p_level) {

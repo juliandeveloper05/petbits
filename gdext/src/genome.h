@@ -95,10 +95,20 @@ std::string formatSeed(Seed seed);
 
 /**
  * Interpreta la entrada del usuario como seed.
+ *
  * Acepta hex con o sin guiones, decimal, o texto arbitrario (hash FNV-1a).
  * Replica exactamente la lógica de parseSeed() del TS.
+ *
+ * Devuelve false —sin tocar `salida`— solo si la entrada queda vacía después
+ * de sacarle los espacios. Cualquier otra cosa es un seed válido.
+ *
+ * NO LANZA, y por eso la forma de la firma. El TS tira una excepción con la
+ * entrada vacía, pero godot-cpp compila con las excepciones deshabilitadas
+ * (`disable_exceptions` viene en true): un throw acá no se propaga, termina el
+ * proceso. Es un detalle del entorno que no se ve leyendo el TS, y es la razón
+ * por la que un port "línea por línea" del original no serviría.
  */
-Seed parseSeed(std::string_view input);
+bool parseSeed(std::string_view input, Seed& salida);
 
 /** Hash FNV-1a de 64 bits. Reproduce hashString() del TS. */
 Seed hashString(std::string_view text);

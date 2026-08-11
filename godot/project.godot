@@ -14,14 +14,17 @@ config/name="PetBits"
 config/description="Criaturas de datos. Cada mascota nace de una semilla de 64 bits."
 config/version="3.0.0"
 config/tags=["tamagotchi", "pokemon", "rpg", "petbits"]
-config/icon="res://assets/icon.png"
-run/main_scene="res://scenes/world/World.tscn"
+; La escena de arranque es una pantalla de diagnóstico, no el juego. Apunta acá
+; y no a World.tscn porque esa escena todavía no existe: Godot no puede
+; arrancar un proyecto cuya escena principal falta, y el error que da manda a
+; buscar el problema para cualquier lado. Cuando el mundo exista, se cambia.
+run/main_scene="res://scenes/Arranque.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="PetBits"
 
-[audio]
-
-default_bus_layout="res://assets/audio/default_bus_layout.tres"
+; Sin config/icon ni [audio]/default_bus_layout hasta que existan esos archivos.
+; Declararlos apuntando a la nada hace que el editor tire un error de recurso
+; faltante en cada arranque, y ese ruido tapa los errores que sí importan.
 
 [display]
 

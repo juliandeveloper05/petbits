@@ -31,7 +31,7 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { type Crianza, resolverAdulto, resolverJuvenil } from "../src/core/evolution.ts";
-import { type Genes, decodeGenome, formatSeed, hashString } from "../src/core/genome.ts";
+import { type Genes, decodeGenome, formatSeed, hashString, parseSeed } from "../src/core/genome.ts";
 import { splitmix64 } from "../src/core/rng.ts";
 import { TRAIT_CATALOG, detectTraits, rarityTier } from "../src/core/traits.ts";
 
@@ -278,8 +278,67 @@ lineas.push("    uint64_t    hash;");
 lineas.push("};");
 lineas.push("");
 lineas.push("inline constexpr VectorHash HASHES[] = {");
-for (const texto of ["", "hello", "petbits", "criatura", "0", "Nébula", "a".repeat(64)]) {
+// Los acentos y el emoji están a propósito. En ASCII un byte es una unidad
+// UTF-16 y hashear bytes o unidades da lo mismo, así que solo con "hello" el
+// test pasa aunque el port esté mal. La é ocupa dos bytes y una unidad; el
+// emoji, cuatro bytes y dos unidades (par suplente).
+for (const texto of [
+  "",
+  "hello",
+  "petbits",
+  "criatura",
+  "0",
+  "Nébula",
+  "Raíz",
+  "Plácido",
+  "ñandú",
+  "🧬",
+  "petbits 🧬 Raíz",
+  "a".repeat(64),
+]) {
   lineas.push(`    {${JSON.stringify(texto)}, ${hex(hashString(texto))}},`);
+}
+lineas.push("};");
+lineas.push("");
+
+// --- parseSeed ---
+//
+// Es la función que corre cuando alguien escribe un seed en la pantalla, así
+// que una diferencia acá se ve enseguida: el mismo texto da otra criatura.
+// Las entradas están elegidas para pegarle a cada rama y a los bordes entre
+// ramas, que es donde el orden de los `if` importa.
+const ENTRADAS: readonly string[] = [
+  "A3F0-91C4-77BE-2D08", // el formato que muestra la interfaz
+  "a3f091c477be2d08", // el mismo, en minúscula y sin guiones
+  "0xA3F091C477BE2D08", // con prefijo explícito
+  "  A3F0 91C4 77BE 2D08  ", // con espacios de sobra alrededor y adentro
+  "1234", // hex y decimal a la vez: manda decimal
+  "999", // decimal corto
+  "0", // el borde de abajo
+  "18446744073709551615", // 2^64-1 exacto
+  "18446744073709551616", // uno más: tiene que dar la vuelta, no reventar
+  "999999999999999999999999999999", // muy pasado de rosca
+  "FFFFFFFFFFFFFFFFFF", // 18 hex: pasa los 16 del patrón, así que se hashea
+  "deadbeef", // hex con letras
+  "julian", // texto: se hashea
+  "Nébula", // texto con acento — dos bytes UTF-8, una unidad UTF-16
+  "  julian  ", // el mismo texto con espacios: tiene que dar igual que "julian"
+  "0x", // parece prefijo y no lo es
+  "0xZZ", // prefijo con basura atrás
+  "petbits 2026", // frase con espacio interior
+  "-", // queda vacío al limpiar, pero el original no lo estaba: se hashea
+  "---", // lo mismo, más largo
+  "1-2-3-4", // los guiones se van y queda un decimal
+];
+
+lineas.push("struct VectorParseo {");
+lineas.push("    const char* entrada;");
+lineas.push("    uint64_t    seed;");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline constexpr VectorParseo PARSEOS[] = {");
+for (const entrada of ENTRADAS) {
+  lineas.push(`    {${JSON.stringify(entrada)}, ${hex(parseSeed(entrada))}},`);
 }
 lineas.push("};");
 lineas.push("");
@@ -291,4 +350,5 @@ writeFileSync(SALIDA, lineas.join("\n"), "utf8");
 console.log(`Vectores escritos en ${SALIDA}`);
 console.log(`  ${seeds.length} genomas`);
 console.log(`  ${CRIANZAS.length * 8} crianzas`);
+console.log(`  ${ENTRADAS.length} entradas de parseSeed`);
 console.log("\nAhora compilá y corré los tests de C++ — ver gdext/tests/README.md");
