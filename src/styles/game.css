@@ -484,11 +484,22 @@ body {
   gap: 7px;
 }
 
+/* El navegador le pone `margin-inline-start: 40px` a todo <dd>. La columna del
+   número mide 42px, así que ese margen se la comía entera: quedaba en cero de
+   ancho y el número solo se veía porque desbordaba, pegado al marco. */
+.stats dt,
+.stats dd {
+  margin: 0;
+}
+
 .stat {
   display: grid;
-  grid-template-columns: 62px 1fr 38px;
+  /* La última columna es un poco más ancha que "100" para que el número nunca
+     toque el borde, y la fila lleva el mismo aire a los dos lados. */
+  grid-template-columns: 62px 1fr 42px;
   align-items: center;
   gap: 8px;
+  padding-inline: 2px;
 }
 
 .stat-name {
