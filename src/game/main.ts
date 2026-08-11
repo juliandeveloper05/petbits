@@ -41,6 +41,7 @@ import {
   simulate,
 } from "../core/simulation.ts";
 import { drawSprite } from "../render/canvas.ts";
+import { petCardFile, renderPetCard } from "../render/petCard.ts";
 import { generateSprite } from "../render/spriteGen.ts";
 import { loadGame, saveGame } from "../state/persistence.ts";
 import {
@@ -51,7 +52,16 @@ import {
 } from "../state/save.ts";
 import { initAudio, isMuted, playSfx, setMuted } from "./audio.ts";
 
-const SPRITE_SCALE = 6;
+/**
+ * Cuánto se agranda el sprite de 32×32.
+ *
+ * Depende del ancho porque en un monitor el sprite a 6× queda perdido dentro
+ * de la consola. Siempre entero: un factor fraccionario deja filas de píxeles
+ * de distinto grosor y arruina el pixel art.
+ */
+function spriteScale(): number {
+  return globalThis.innerWidth >= 860 ? 9 : 6;
+}
 /** Cada cuánto se le pregunta al reloj si pasó un minuto nuevo. */
 const POLL_MS = 5000;
 const BLINK_EVERY_MS = 4200;
@@ -100,6 +110,12 @@ const semillasLista = el<HTMLElement>("semillas-lista");
 const expedicionBtn = el<HTMLButtonElement>("expedicion-btn");
 const expedicionModal = el<HTMLElement>("expedicion-modal");
 const expLista = el<HTMLElement>("exp-lista");
+
+const tarjetaBtn = el<HTMLButtonElement>("tarjeta-btn");
+const tarjetaModal = el<HTMLElement>("tarjeta-modal");
+const tarjetaHolder = el<HTMLElement>("tarjeta-holder");
+const tarjetaCompartir = el<HTMLButtonElement>("tarjeta-compartir");
+const tarjetaBajar = el<HTMLButtonElement>("tarjeta-bajar");
 
 const foodModal = el<HTMLElement>("food-modal");
 const foodGrid = el<HTMLElement>("food-grid");
@@ -220,7 +236,7 @@ function renderPet(): void {
   drawSprite(
     petCanvas,
     generateSprite(seed, state.etapa, state.forma, blinking ? "parpadeo" : "normal"),
-    SPRITE_SCALE,
+    spriteScale(),
   );
 
   petLineage.textContent = `${lineageName(genes)} · ${temperamentName(genes)}`;
@@ -251,6 +267,79 @@ function closeModals(): void {
   foodModal.hidden = true;
   digestModal.hidden = true;
   expedicionModal.hidden = true;
+  tarjetaModal.hidden = true;
+}
+
+// ---------------------------------------------------------------------------
+// Tarjeta
+// ---------------------------------------------------------------------------
+
+async function abrirTarjeta(): Promise<void> {
+  if (!state) return;
+  const criatura = state;
+
+  try {
+    const canvas = await renderPetCard(criatura);
+    tarjetaHolder.replaceChildren(canvas);
+  } catch (error) {
+    playSfx("error");
+    toast("No se pudo armar la tarjeta.", "error");
+    console.error("Fallo al dibujar la tarjeta", error);
+    return;
+  }
+
+  // El botón de compartir solo aparece si el navegador puede compartir
+  // archivos. En desktop casi nunca puede, y ofrecerlo para que falle es peor
+  // que no ofrecerlo.
+  const puedeCompartir =
+    typeof navigator.canShare === "function" &&
+    navigator.canShare({ files: [new File([], "x.png", { type: "image/png" })] });
+  tarjetaCompartir.hidden = !puedeCompartir;
+
+  tarjetaModal.hidden = false;
+  tarjetaBajar.focus();
+}
+
+async function bajarTarjeta(): Promise<void> {
+  if (!state) return;
+  const archivo = await petCardFile(state);
+
+  const url = URL.createObjectURL(archivo);
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = archivo.name;
+  // Algunos navegadores ignoran el click de un enlace que no está en el
+  // documento.
+  enlace.style.display = "none";
+  document.body.append(enlace);
+  enlace.click();
+
+  // El revoke va diferido a propósito. Hacerlo justo después del click cancela
+  // la descarga: el navegador todavía no terminó de leer el blob y se queda con
+  // un archivo .tmp vacío.
+  globalThis.setTimeout(() => {
+    URL.revokeObjectURL(url);
+    enlace.remove();
+  }, 5000);
+
+  playSfx("click");
+  toast("Tarjeta descargada.");
+}
+
+async function compartirTarjeta(): Promise<void> {
+  if (!state) return;
+  const archivo = await petCardFile(state);
+
+  try {
+    await navigator.share({
+      files: [archivo],
+      title: "Mi criatura de PetBits",
+      text: `${formatSeed(BigInt(state.seed))} — incubá esta semilla y te sale la misma.`,
+    });
+  } catch {
+    // Cancelar el diálogo de compartir lanza. No es un error que valga
+    // molestar al jugador.
+  }
 }
 
 /** Formatea una espera en algo legible. */
@@ -762,7 +851,7 @@ async function doIncubar(raw: string): Promise<void> {
 
 function renderHatchPreview(): void {
   const genes = decodeGenome(hatchCandidate);
-  drawSprite(hatchCanvas, generateSprite(hatchCandidate, "bebe"), SPRITE_SCALE);
+  drawSprite(hatchCanvas, generateSprite(hatchCandidate, "bebe"), spriteScale());
   hatchInfo.textContent = `${lineageName(genes)} · ${temperamentName(genes)} · ${formatSeed(hatchCandidate)}`;
 }
 
@@ -823,6 +912,14 @@ function wireEvents(): void {
     if (!isMuted()) playSfx("click");
   });
 
+  tarjetaBtn.addEventListener("click", () => {
+    initAudio();
+    playSfx("click");
+    void abrirTarjeta();
+  });
+  tarjetaBajar.addEventListener("click", () => void bajarTarjeta());
+  tarjetaCompartir.addEventListener("click", () => void compartirTarjeta());
+
   expedicionBtn.addEventListener("click", () => {
     initAudio();
     playSfx("click");
@@ -876,6 +973,17 @@ function wireEvents(): void {
   hatchForm.addEventListener("submit", (event) => {
     event.preventDefault();
     void hatch();
+  });
+
+  // El sprite se dibuja a un factor distinto según el ancho, así que al cruzar
+  // el punto de quiebre hay que volver a dibujarlo o queda al tamaño viejo.
+  let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+  globalThis.addEventListener("resize", () => {
+    globalThis.clearTimeout(resizeTimer);
+    resizeTimer = globalThis.setTimeout(() => {
+      if (state) renderPet();
+      if (!screens.nacer.hidden) renderHatchPreview();
+    }, 150);
   });
 
   // Al volver a la pestaña se pone al día en el acto, sin esperar al intervalo.

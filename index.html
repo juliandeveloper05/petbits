@@ -125,6 +125,7 @@
 
       <footer class="console-foot">
         <span id="seed-label" class="seed-label"></span>
+        <button class="lab-link" type="button" id="tarjeta-btn">Tarjeta</button>
         <button class="lab-link" type="button" id="criadero-btn">Criadero</button>
         <a class="lab-link" href="./lab.html">Laboratorio →</a>
       </footer>
@@ -136,6 +137,21 @@
         <h2 id="food-title" class="modal-title">¿Qué le damos?</h2>
         <div id="food-grid" class="food-grid"></div>
         <button class="btn btn-ghost" type="button" data-close-modal>Mejor no</button>
+      </div>
+    </div>
+
+    <div id="tarjeta-modal" class="modal" hidden>
+      <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="tarjeta-title">
+        <h2 id="tarjeta-title" class="modal-title">Su tarjeta</h2>
+        <div id="tarjeta-holder" class="tarjeta-holder"></div>
+        <p class="tarjeta-nota">
+          La semilla va impresa: quien la reciba puede incubar la misma criatura.
+        </p>
+        <div class="tarjeta-acciones">
+          <button class="btn" type="button" id="tarjeta-compartir" hidden>Compartir</button>
+          <button class="btn btn-ghost" type="button" id="tarjeta-bajar">Descargar</button>
+          <button class="btn btn-ghost" type="button" data-close-modal>Cerrar</button>
+        </div>
       </div>
     </div>
 

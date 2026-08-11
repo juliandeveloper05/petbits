@@ -98,6 +98,26 @@ body {
   font-size: 15px;
 }
 
+/* El laboratorio es una página aparte: sin esto se entra y no se sale más que
+   con el botón del navegador. */
+.volver {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--phosphor);
+  text-decoration: none;
+  font-size: 17px;
+  border-bottom: 1px solid transparent;
+}
+
+.volver:hover {
+  border-bottom-color: var(--phosphor);
+}
+
+.volver:focus-visible {
+  outline: 2px solid var(--phosphor-bright);
+  outline-offset: 3px;
+}
+
 .seed-form {
   display: flex;
   flex-wrap: wrap;

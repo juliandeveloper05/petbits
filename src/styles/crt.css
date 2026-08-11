@@ -103,9 +103,17 @@ body {
   outline-offset: 3px;
 }
 
+/* Un botón deshabilitado tiene que leerse como apagado.
+   Con solo bajar la opacidad, el verde fósforo sobre fondo oscuro sigue
+   pareciendo encendido y el jugador cree que la acción está disponible. Se le
+   saca el color, no solo la intensidad. */
 .btn:disabled {
-  opacity: 0.4;
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-dim);
+  opacity: 0.55;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-ghost {
