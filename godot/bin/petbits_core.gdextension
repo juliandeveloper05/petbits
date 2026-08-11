@@ -1,0 +1,21 @@
+[configuration]
+entry_symbol = "petbits_gdextension_init"
+compatibility_minimum = "4.3"
+reloadable = true
+
+[libraries]
+; Desktop
+windows.debug.x86_64 = "res://bin/libpetbits_core.windows.debug.x86_64.dll"
+windows.release.x86_64 = "res://bin/libpetbits_core.windows.release.x86_64.dll"
+linux.debug.x86_64 = "res://bin/libpetbits_core.linux.debug.x86_64.so"
+linux.release.x86_64 = "res://bin/libpetbits_core.linux.release.x86_64.so"
+macos.debug = "res://bin/libpetbits_core.macos.debug.framework"
+macos.release = "res://bin/libpetbits_core.macos.release.framework"
+
+; Android
+android.debug.arm64 = "res://bin/libpetbits_core.android.debug.arm64-v8a.so"
+android.release.arm64 = "res://bin/libpetbits_core.android.release.arm64-v8a.so"
+
+[icons]
+PetCore = "res://assets/icon_gdext.png"
+GenomeResource = "res://assets/icon_gdext.png"

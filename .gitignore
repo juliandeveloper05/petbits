@@ -49,3 +49,52 @@ contact-sheet*.png
 formas*.png
 .vercel
 .env*
+
+# -----------------------------------------------------------------------
+# Godot Engine
+# -----------------------------------------------------------------------
+# Caché generada por el editor (no es código fuente)
+godot/.godot/
+# Exports de Godot (se distribuyen como Releases en GitHub, no en el repo)
+godot/exports/
+# Binarios de GDExtension compilados localmente
+godot/bin/*.dll
+godot/bin/*.so
+godot/bin/*.dylib
+godot/bin/*.framework/
+
+# -----------------------------------------------------------------------
+# GDExtension C++ (gdext/)
+# -----------------------------------------------------------------------
+# Artefactos de SCons
+gdext/.sconsign.dblite
+gdext/.sconsign*
+gdext/.cache/
+# Objetos compilados
+gdext/**/*.o
+gdext/**/*.obj
+gdext/**/*.d
+# Binarios de tests
+gdext/tests/run_tests
+gdext/tests/run_tests.exe
+# godot-cpp se incluye como submódulo — sus builds van aquí:
+gdext/godot-cpp/.sconsign*
+
+# -----------------------------------------------------------------------
+# Python (tools/)
+# -----------------------------------------------------------------------
+__pycache__/
+*.pyc
+*.pyo
+tools/__pycache__/
+
+# -----------------------------------------------------------------------
+# Android build
+# -----------------------------------------------------------------------
+android/.gradle/
+android/build/
+
+# -----------------------------------------------------------------------
+# Sprites generados (se regeneran desde seeds, no se versionan)
+# -----------------------------------------------------------------------
+godot/assets/sprites/*.png

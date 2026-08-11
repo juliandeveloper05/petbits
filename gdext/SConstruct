@@ -1,0 +1,85 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+SConstruct — Build system de PetBits GDExtension
+=================================================
+
+Uso rápido:
+  scons                          # debug, plataforma local
+  scons target=template_release  # release
+  scons platform=android arch=arm64  # Android
+
+Requiere:
+  - Python 3.x
+  - SCons  (pip install scons)
+  - godot-cpp inicializado como submódulo (ver README)
+  - Compilador C++17:
+      Windows → MSVC 2022 o MinGW-w64
+      Linux   → GCC 12+ o Clang 14+
+      Android → NDK r25+
+"""
+
+import os
+import sys
+
+# ---------------------------------------------------------------------------
+# Entorno base
+# ---------------------------------------------------------------------------
+env = SConscript("godot-cpp/SConstruct")
+
+# Estándar C++17 obligatorio (usamos std::optional, if constexpr, etc.)
+env.Append(CXXFLAGS=["-std=c++17"])
+
+# Warnings útiles
+if env["platform"] != "windows":
+    env.Append(CXXFLAGS=[
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Wno-unused-parameter",  # GDExtension genera muchos de estos
+    ])
+
+# ---------------------------------------------------------------------------
+# Fuentes de la extensión
+# ---------------------------------------------------------------------------
+sources = Glob("src/*.cpp")
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+# El archivo de salida debe coincidir con lo declarado en petbits_core.gdextension
+library_name = "petbits_core"
+
+# Godot 4 espera el formato: lib{name}.{platform}.{target}.{arch}.{ext}
+if env["platform"] == "macos":
+    library = env.SharedLibrary(
+        "{}../godot/bin/lib{}.{}.{}.framework/lib{}".format(
+            "", library_name, env["platform"], env["target"], library_name
+        ),
+        source=sources,
+    )
+else:
+    library = env.SharedLibrary(
+        "{}../godot/bin/lib{}.{}.{}.{}{}".format(
+            "",
+            library_name,
+            env["platform"],
+            env["target"],
+            env["arch"],
+            env["SHLIBSUFFIX"],
+        ),
+        source=sources,
+    )
+
+Default(library)
+
+# ---------------------------------------------------------------------------
+# Tests (solo en debug local)
+# ---------------------------------------------------------------------------
+if env["target"] == "template_debug" and env["platform"] in ("linux", "windows", "macos"):
+    test_env = env.Clone()
+    test_env.Append(CPPPATH=["tests/catch2"])
+    test_sources = Glob("tests/*.cpp") + Glob("src/*.cpp")
+    # Excluir register_types.cpp de los tests (entry point de GDExtension)
+    test_sources = [s for s in test_sources if "register_types" not in str(s)]
+    test_env.Program("tests/run_tests", test_sources)
