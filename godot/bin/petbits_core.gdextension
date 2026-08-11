@@ -1,21 +1,32 @@
+; Declaración de la GDExtension de PetBits.
+;
+; A la IZQUIERDA van los feature tags de Godot; a la DERECHA, el nombre EXACTO
+; del archivo que produce `scons` en gdext/. No son lo mismo y es la confusión
+; habitual: Godot dice "debug", pero godot-cpp nombra el binario con el valor
+; de `target`, que es "template_debug". Si los dos lados no coinciden, la
+; extensión no carga y el editor solo avisa que no encontró la biblioteca.
+;
+; Estos archivos no están versionados (ver .gitignore): se compilan en cada
+; máquina. Sin correr `scons` esta carpeta está vacía, y eso es lo esperado.
+
 [configuration]
 entry_symbol = "petbits_gdextension_init"
 compatibility_minimum = "4.3"
 reloadable = true
 
 [libraries]
-; Desktop
-windows.debug.x86_64 = "res://bin/libpetbits_core.windows.debug.x86_64.dll"
-windows.release.x86_64 = "res://bin/libpetbits_core.windows.release.x86_64.dll"
-linux.debug.x86_64 = "res://bin/libpetbits_core.linux.debug.x86_64.so"
-linux.release.x86_64 = "res://bin/libpetbits_core.linux.release.x86_64.so"
-macos.debug = "res://bin/libpetbits_core.macos.debug.framework"
-macos.release = "res://bin/libpetbits_core.macos.release.framework"
+; Escritorio
+windows.debug.x86_64 = "res://bin/libpetbits_core.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://bin/libpetbits_core.windows.template_release.x86_64.dll"
+linux.debug.x86_64 = "res://bin/libpetbits_core.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://bin/libpetbits_core.linux.template_release.x86_64.so"
+macos.debug = "res://bin/libpetbits_core.macos.template_debug.framework"
+macos.release = "res://bin/libpetbits_core.macos.template_release.framework"
 
-; Android
-android.debug.arm64 = "res://bin/libpetbits_core.android.debug.arm64-v8a.so"
-android.release.arm64 = "res://bin/libpetbits_core.android.release.arm64-v8a.so"
+; Android — godot-cpp nombra la arquitectura "arm64", no "arm64-v8a".
+android.debug.arm64 = "res://bin/libpetbits_core.android.template_debug.arm64.so"
+android.release.arm64 = "res://bin/libpetbits_core.android.template_release.arm64.so"
 
-[icons]
-PetCore = "res://assets/icon_gdext.png"
-GenomeResource = "res://assets/icon_gdext.png"
+; Sin sección [icons] hasta que haya clases registradas: apuntar a un PNG que
+; no existe hace que el editor tire un error de recurso faltante en cada
+; arranque.

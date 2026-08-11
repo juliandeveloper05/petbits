@@ -1,85 +1,77 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-SConstruct — Build system de PetBits GDExtension
-=================================================
+SConstruct — build de la GDExtension de PetBits.
 
-Uso rápido:
-  scons                          # debug, plataforma local
+Uso:
+  scons                          # template_debug, plataforma local
   scons target=template_release  # release
-  scons platform=android arch=arm64  # Android
+  scons platform=android arch=arm64
 
-Requiere:
-  - Python 3.x
-  - SCons  (pip install scons)
-  - godot-cpp inicializado como submódulo (ver README)
-  - Compilador C++17:
-      Windows → MSVC 2022 o MinGW-w64
-      Linux   → GCC 12+ o Clang 14+
-      Android → NDK r25+
+Requiere SCons, un compilador C++17 y el submódulo godot-cpp inicializado.
+El README tiene el paso a paso de instalación.
+
+---
+
+NOTA SOBRE LOS TESTS DE PARIDAD: no se construyen desde acá.
+
+Los módulos portados (genome, traits, evolution) son C++ puro: no incluyen un
+solo header de Godot. Atarlos a este build obligaría a tener toda la cadena
+—SCons, godot-cpp compilado, el editor— instalada antes de poder correr un
+test que no la necesita.
+
+Se compilan con un solo comando, sin dependencias. Ver gdext/tests/README.md.
 """
 
 import os
 import sys
 
 # ---------------------------------------------------------------------------
-# Entorno base
+# godot-cpp
 # ---------------------------------------------------------------------------
+# Vale la pena chequearlo a mano: sin esto SCons tira un stack trace de Python
+# sobre un archivo que no existe, y el error real —"faltó clonar el submódulo"—
+# no aparece por ningún lado.
+if not os.path.isfile(os.path.join("godot-cpp", "SConstruct")):
+    print("\n  ERROR: falta godot-cpp.\n")
+    print("  Es un submódulo de git y todavía no está clonado. Desde la raíz")
+    print("  del repo:\n")
+    print("      git submodule update --init --recursive\n")
+    Exit(1)
+
 env = SConscript("godot-cpp/SConstruct")
 
-# Estándar C++17 obligatorio (usamos std::optional, if constexpr, etc.)
-env.Append(CXXFLAGS=["-std=c++17"])
+# El estándar C++17 NO se declara acá: godot-cpp ya lo hace en
+# tools/common_compiler_flags.py, y encima con la sintaxis correcta de cada
+# compilador (`/std:c++17` en MSVC, `-std=c++17` en GCC y Clang). Ponerlo a
+# mano en formato GNU hacía que MSVC lo descartara con un warning D9002.
 
-# Warnings útiles
-if env["platform"] != "windows":
-    env.Append(CXXFLAGS=[
-        "-Wall",
-        "-Wextra",
-        "-Wpedantic",
-        "-Wno-unused-parameter",  # GDExtension genera muchos de estos
-    ])
-
-# ---------------------------------------------------------------------------
-# Fuentes de la extensión
-# ---------------------------------------------------------------------------
-sources = Glob("src/*.cpp")
+# Warnings. MSVC no entiende la familia -W de GCC; su equivalente es /W4.
+if env.get("is_msvc", False):
+    env.Append(CXXFLAGS=["/W4"])
+else:
+    env.Append(CXXFLAGS=["-Wall", "-Wextra", "-Wpedantic", "-Wno-unused-parameter"])
 
 # ---------------------------------------------------------------------------
-# Output
+# Salida
 # ---------------------------------------------------------------------------
-# El archivo de salida debe coincidir con lo declarado en petbits_core.gdextension
+# `env["suffix"]` lo expone godot-cpp justamente para esto: vale
+# ".windows.template_debug.x86_64" y ya contempla las variantes (.dev, .double,
+# .simulator) que armar el nombre a mano se olvidaría.
+#
+# El nombre resultante tiene que coincidir EXACTO con el lado derecho de las
+# entradas de godot/bin/petbits_core.gdextension. Si no, Godot no encuentra la
+# biblioteca y la extensión simplemente no carga.
 library_name = "petbits_core"
+salida = "../godot/bin/lib{}{}".format(library_name, env["suffix"])
 
-# Godot 4 espera el formato: lib{name}.{platform}.{target}.{arch}.{ext}
 if env["platform"] == "macos":
+    # En macOS Godot espera un bundle .framework, no un .dylib suelto.
     library = env.SharedLibrary(
-        "{}../godot/bin/lib{}.{}.{}.framework/lib{}".format(
-            "", library_name, env["platform"], env["target"], library_name
-        ),
-        source=sources,
+        "{}.framework/lib{}{}".format(salida, library_name, env["suffix"]),
+        source=Glob("src/*.cpp"),
     )
 else:
-    library = env.SharedLibrary(
-        "{}../godot/bin/lib{}.{}.{}.{}{}".format(
-            "",
-            library_name,
-            env["platform"],
-            env["target"],
-            env["arch"],
-            env["SHLIBSUFFIX"],
-        ),
-        source=sources,
-    )
+    library = env.SharedLibrary(salida + env["SHLIBSUFFIX"], source=Glob("src/*.cpp"))
 
 Default(library)
-
-# ---------------------------------------------------------------------------
-# Tests (solo en debug local)
-# ---------------------------------------------------------------------------
-if env["target"] == "template_debug" and env["platform"] in ("linux", "windows", "macos"):
-    test_env = env.Clone()
-    test_env.Append(CPPPATH=["tests/catch2"])
-    test_sources = Glob("tests/*.cpp") + Glob("src/*.cpp")
-    # Excluir register_types.cpp de los tests (entry point de GDExtension)
-    test_sources = [s for s in test_sources if "register_types" not in str(s)]
-    test_env.Program("tests/run_tests", test_sources)
