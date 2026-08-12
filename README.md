@@ -48,13 +48,13 @@ Semilla   A3F0-91C4-77BE-2D08
 La web está terminada y desplegada. El nativo está en construcción y **no la
 reemplaza**: comparte los algoritmos, no el código de presentación.
 
-| | Web | Nativo |
-|---|---|---|
-| **Estado** | ✅ v2.0 estable | 🚧 v3.0 en curso |
-| **Stack** | TypeScript + Vite | Godot 4 + C++17 (GDExtension) |
-| **Cómo se abre** | [petbits.vercel.app](https://petbits.vercel.app) | ejecutable (todavía no) |
-| **Guardado** | IndexedDB | archivo, compatible con el de la web |
-| **Sprites** | canvas 32×32 procedural | pendiente |
+|                  | Web                                              | Nativo                               |
+| ---------------- | ------------------------------------------------ | ------------------------------------ |
+| **Estado**       | ✅ v2.0 estable                                  | 🚧 v3.0 en curso                     |
+| **Stack**        | TypeScript + Vite                                | Godot 4 + C++17 (GDExtension)        |
+| **Cómo se abre** | [petbits.vercel.app](https://petbits.vercel.app) | ejecutable (todavía no)              |
+| **Guardado**     | IndexedDB                                        | archivo, compatible con el de la web |
+| **Sprites**      | canvas 32×32 procedural                          | pendiente                            |
 
 Los algoritmos en C++ son un port del TypeScript, con tests que comparan los dos
 lado a lado. El detalle de qué está portado y qué no está en el
@@ -64,19 +64,19 @@ lado a lado. El detalle de qué está portado y qué no está en el
 
 ## Sistemas del juego
 
-| | |
-|---|---|
-| 🧬 **Genoma de 64 bits** | 14 genes empaquetados en un entero. Mismo número, misma criatura |
-| ✨ **8 rarezas emergentes** | Del 10% al 0,0001%. Propiedades matemáticas del seed, comprobables a mano |
-| 🎨 **Sprites procedurales** | Superelipses espejadas, paletas OKLCH, luz direccional. Ninguno está dibujado |
-| ⏱ **Simulación por timestamp** | La criatura vive con la pestaña cerrada. Al volver, un log de qué pasó |
-| 💤 **Letargo, no muerte** | A las 48 horas sin atención se congela. Se pierde vínculo, nunca la criatura |
-| 🌿 **Evolución ramificada** | Bebé → 2 juveniles → 4 adultos, según cómo la criaste. El azar entra en el seed; después decidís vos |
-| ⚖️ **Acciones con costo** | Comer de más hace mal, jugar gasta energía, el vínculo tiene tope diario |
-| 🧪 **Cruza genética** | Por gen entero, no por bit. El hijo tiene los ojos de uno y el color del otro, y se ve |
-| 🗺 **Expediciones** | Sale sola y vuelve con comida. El botín lo decide el seed, no un dado |
-| 📚 **Codex** | Lo que descubriste. Diseñado para no completarse nunca |
-| 🖼 **Pet Card** | Tu criatura como PNG, con el seed impreso: quien la reciba puede incubar la misma |
+|                                |                                                                                                      |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| 🧬 **Genoma de 64 bits**       | 14 genes empaquetados en un entero. Mismo número, misma criatura                                     |
+| ✨ **8 rarezas emergentes**    | Del 10% al 0,0001%. Propiedades matemáticas del seed, comprobables a mano                            |
+| 🎨 **Sprites procedurales**    | Superelipses espejadas, paletas OKLCH, luz direccional. Ninguno está dibujado                        |
+| ⏱ **Simulación por timestamp** | La criatura vive con la pestaña cerrada. Al volver, un log de qué pasó                               |
+| 💤 **Letargo, no muerte**      | A las 48 horas sin atención se congela. Se pierde vínculo, nunca la criatura                         |
+| 🌿 **Evolución ramificada**    | Bebé → 2 juveniles → 4 adultos, según cómo la criaste. El azar entra en el seed; después decidís vos |
+| ⚖️ **Acciones con costo**      | Comer de más hace mal, jugar gasta energía, el vínculo tiene tope diario                             |
+| 🧪 **Cruza genética**          | Por gen entero, no por bit. El hijo tiene los ojos de uno y el color del otro, y se ve               |
+| 🗺 **Expediciones**            | Sale sola y vuelve con comida. El botín lo decide el seed, no un dado                                |
+| 📚 **Codex**                   | Lo que descubriste. Diseñado para no completarse nunca                                               |
+| 🖼 **Pet Card**                | Tu criatura como PNG, con el seed impreso: quien la reciba puede incubar la misma                    |
 
 ---
 
@@ -123,19 +123,19 @@ Si preferís no instalar el IDE entero, en la misma página, más abajo, están 
 **Herramientas de compilación para Visual Studio 2022**: solo el compilador, sin
 editor. Marcá la misma carga de trabajo.
 
-**Verificá que quedó:** buscá en el menú Inicio *"Developer Command Prompt for
-VS 2022"* y abrilo. Escribí `cl` y tiene que responder con la versión del
+**Verificá que quedó:** buscá en el menú Inicio _"Developer Command Prompt for
+VS 2022"_ y abrilo. Escribí `cl` y tiene que responder con la versión del
 compilador. Si dice que no se reconoce el comando, la carga de trabajo de C++ no
 se instaló.
 
-> ⚠️ Ese *Developer Command Prompt* no es la consola común. Es una consola con
+> ⚠️ Ese _Developer Command Prompt_ no es la consola común. Es una consola con
 > las variables de entorno de MSVC ya puestas. Los comandos de C++ de acá abajo
 > van ahí, no en PowerShell.
 >
-> Hay una razón práctica además de las variables: el *Developer Command Prompt*
+> Hay una razón práctica además de las variables: el _Developer Command Prompt_
 > es `cmd`, donde `&&` encadena comandos. **Windows PowerShell 5.1 —el que trae
-> Windows por defecto— no soporta `&&`** y responde *"El token '&&' no es un
-> separador de instrucciones válido en esta versión"*. Si te aparece ese error,
+> Windows por defecto— no soporta `&&`** y responde _"El token '&&' no es un
+> separador de instrucciones válido en esta versión"_. Si te aparece ese error,
 > no es que el comando esté mal: estás en la consola equivocada. En PowerShell 5
 > los comandos van de a uno, en líneas separadas.
 
@@ -186,7 +186,7 @@ con una anterior va a dar aviso.
 
 ### 4. Compilar la GDExtension
 
-Todo esto va desde el *Developer Command Prompt*, **parado en la carpeta del
+Todo esto va desde el _Developer Command Prompt_, **parado en la carpeta del
 repo**. Vale la pena decirlo porque es el error más fácil de cometer y el que
 peor se diagnostica: los comandos corren igual desde otro repo, no se quejan de
 nada, y simplemente no hacen lo que esperabas.
@@ -222,7 +222,7 @@ Godot no carga nada y no explica bien por qué.
 
 ### 5. Abrir el proyecto
 
-Abrí Godot, *Importar*, y elegí la carpeta **`godot/`** del repo (no la raíz).
+Abrí Godot, _Importar_, y elegí la carpeta **`godot/`** del repo (no la raíz).
 
 Apretá **F5**: nace una criatura al azar, con su sprite, sus cuatro barras y su
 registro de eventos.
@@ -252,13 +252,13 @@ GDScript. Devuelve 0 si está bien y 1 si algo no coincide.
 
 ### Resumen de qué instalar
 
-| Programa | Versión | Qué marcar / elegir | Para qué |
-|---|---|---|---|
-| [Node.js](https://nodejs.org/) | 20+ | — | La web (ya lo tenés) |
-| [Visual Studio 2022](https://visualstudio.microsoft.com/es/downloads/) | 2022 | ☑ Desarrollo para el escritorio con C++ | Compilar el C++ |
-| [Python](https://www.python.org/) | 3.10+ | — | SCons (ya lo tenés) |
-| SCons | 4+ | `pip install --user scons` — el `--user` importa, ver arriba | Build de la GDExtension |
-| [Godot](https://godotengine.org/download/windows/) | 4.3+ | Versión **estándar**, no .NET | El motor |
+| Programa                                                               | Versión | Qué marcar / elegir                                          | Para qué                |
+| ---------------------------------------------------------------------- | ------- | ------------------------------------------------------------ | ----------------------- |
+| [Node.js](https://nodejs.org/)                                         | 20+     | —                                                            | La web (ya lo tenés)    |
+| [Visual Studio 2022](https://visualstudio.microsoft.com/es/downloads/) | 2022    | ☑ Desarrollo para el escritorio con C++                      | Compilar el C++         |
+| [Python](https://www.python.org/)                                      | 3.10+   | —                                                            | SCons (ya lo tenés)     |
+| SCons                                                                  | 4+      | `pip install --user scons` — el `--user` importa, ver arriba | Build de la GDExtension |
+| [Godot](https://godotengine.org/download/windows/)                     | 4.3+    | Versión **estándar**, no .NET                                | El motor                |
 
 Para exportar a Android hacen falta además el SDK y el NDK de Android y un JDK
 17, pero eso es de la Fase 6 y no sirve de nada tenerlo ahora.
@@ -278,7 +278,7 @@ npm run parity
 Ese comando **ejecuta el TypeScript** de `src/` y vuelca lo que devuelve —2010
 genomas, 80 crianzas, 21 entradas de parseo, 12 hashes, 14 escenarios de
 simulación, 780 rampas de color y 2560 sprites— en un header de C++. Después,
-desde el *Developer Command Prompt* en `gdext/tests`:
+desde el _Developer Command Prompt_ en `gdext/tests`:
 
 ```bash
 cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp && run_tests.exe
@@ -425,7 +425,18 @@ MIT.
 [![GitHub](https://img.shields.io/badge/GitHub-juliandeveloper05-181717?style=for-the-badge&logo=github)](https://github.com/juliandeveloper05)
 [![Email](https://img.shields.io/badge/Email-juliansoto.dev@gmail.com-EA4335?style=for-the-badge&logo=gmail&logoColor=white)](mailto:juliansoto.dev@gmail.com)
 
-*"La rareza no es una tabla de botín ni un tiro de dados escondido.
-Es una propiedad matemática del propio número."*
+"La identidad digital no nace del azar, sino del código. La rareza no debería ser una tabla de botín ni un dado oculto, sino una propiedad matemática inmutable de su propio ADN determinista."
+
+👨‍💻 Sobre Mí
+Soy Full-Stack Software Engineer especializado en construir sistemas deterministas, arquitecturas local-first y plataformas interactivas complejas. Me apasiona explorar la intersección entre la matemática pura, la generación procedural y el audio digital para crear experiencias únicas, robustas y de alto rendimiento.
+
+🛠️ Stack Tecnológico
+Frontend & Core: React, React Native, Next.js, TypeScript, Vite.
+
+Backend & Datos: Node.js, Python (FastAPI), PHP, MySQL, Supabase.
+
+Infraestructura & Ops: Git, Vercel, Render, Railway, Sentry.
+
+Creative Coding & Ecosistema: Web Audio API, C++ (Godot / GDExtension), integración de herramientas de IA.
 
 </div>
