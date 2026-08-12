@@ -110,7 +110,8 @@ accesible desde GDScript. Lo que falta portar (`breeding`, `actions`,
 |---|---|
 | Sprites generados desde el C++ | ✅ 2560 comparados contra el TypeScript |
 | `PetBitsCore.sprite()` devuelve una `Image` de 32×32 | ✅ |
-| `PetView.tscn` — sprite, barras, registro de eventos, parpadeo | ✅ escrita, **falta verla corriendo** |
+| `PetView.tscn` — sprite, barras, registro de eventos, parpadeo | ✅ corre; es la escena principal del proyecto |
+| `hoja_de_contacto.gd` — muchas criaturas de una, como `npm run sheet` | ✅ |
 | Acciones: alimentar, jugar, acariciar | ⬜ necesita portar `actions.cpp` |
 | Tipografía y caja de diálogo estilo Game Boy | ⬜ |
 

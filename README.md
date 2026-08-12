@@ -224,13 +224,19 @@ Godot no carga nada y no explica bien por qué.
 
 Abrí Godot, *Importar*, y elegí la carpeta **`godot/`** del repo (no la raíz).
 
-Apretá **F5**. Vas a ver una pantalla de diagnóstico que dice si la extensión
-cargó. Si cargó, decodifica un seed conocido y muestra su linaje y sus rarezas —
-que es la prueba de que no solo se cargó la biblioteca, sino que los algoritmos
-portados están respondiendo.
+Apretá **F5**: nace una criatura al azar, con su sprite, sus cuatro barras y su
+registro de eventos.
 
-Comparalo con lo que muestra [la web](https://petbits.vercel.app) para el mismo
-seed. Tiene que dar igual.
+Si algo no anda, la escena `scenes/Arranque.tscn` es el diagnóstico: dice si la
+GDExtension cargó, y si cargó decodifica un seed conocido y muestra su linaje y
+sus rarezas. Comparalo con lo que muestra [la web](https://petbits.vercel.app)
+para el mismo seed — tiene que dar igual.
+
+Para ver muchas criaturas de una, la hoja de contacto:
+
+```bash
+godot --headless --path godot --script res://scripts/hoja_de_contacto.gd
+```
 
 > Las GDExtensions se cargan cuando arranca el editor. Si recompilás con
 > `scons`, cerrá y volvé a abrir Godot.

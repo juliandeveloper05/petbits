@@ -59,6 +59,7 @@ func _init() -> void:
 	_probar_seeds_grandes(core)
 	_probar_simulacion(core)
 	_probar_particion(core)
+	_probar_sprite(core)
 
 	if _fallas == 0:
 		print("\nPuente OK: los valores llegan intactos hasta GDScript.")
@@ -248,3 +249,45 @@ func _probar_particion(core: RefCounted) -> void:
 	_igual(b["salud"], a["salud"], "salud partida")
 
 	print("  2000 ticks de una vez == 733 + 768 + 499")
+
+
+func _probar_sprite(core: RefCounted) -> void:
+	# El sprite cruza el puente como Image de 32×32 RGBA8. Se rehace el mismo
+	# hash FNV que usan los tests de C++ sobre los bytes que llegaron a GDScript:
+	# si el buffer se copiara mal, o Image reordenara los canales, el número
+	# cambia. Comparar "se ve bien" a ojo no serviría para esto.
+	print("sprite_actual — 32x32 RGBA8")
+
+	var img: Image = core.sprite(SEED_EJEMPLO, "adulto", "indefinida", false)
+	if img == null:
+		_fallas += 1
+		print("  FALLA: sprite() devolvió null")
+		return
+
+	_igual(img.get_width(), 32, "ancho")
+	_igual(img.get_height(), 32, "alto")
+	_igual(img.get_format(), Image.FORMAT_RGBA8, "formato")
+
+	var datos: PackedByteArray = img.get_data()
+	_igual(datos.size(), 32 * 32 * 4, "bytes del buffer")
+
+	# FNV-1a de 32 bits, el mismo de gdext/src/pixel_buffer.h.
+	var hash: int = 0x811C9DC5
+	var opacos := 0
+	for i in range(datos.size()):
+		hash = (hash ^ datos[i]) & 0xFFFFFFFF
+		hash = (hash * 0x01000193) & 0xFFFFFFFF
+		if i % 4 == 3 and datos[i] > 0:
+			opacos += 1
+
+	_igual(opacos, 510, "píxeles opacos")
+	_igual(hash, 0x83b6c114, "hash del buffer")
+
+	print("  %d píxeles opacos, hash %08x" % [opacos, hash])
+
+	# El parpadeo cambia la cara sin tocar la silueta: mismo conteo de opacos,
+	# distinto dibujo. Es la comprobación de que la expresión llega de verdad y
+	# no se ignora en el camino.
+	var parpadeo: Image = core.sprite(SEED_EJEMPLO, "adulto", "indefinida", true)
+	var distintos := parpadeo.get_data() != datos
+	_igual(distintos, true, "el parpadeo cambia el dibujo")

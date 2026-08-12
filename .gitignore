@@ -112,3 +112,6 @@ android/build/
 # Sprites generados (se regeneran desde seeds, no se versionan)
 # -----------------------------------------------------------------------
 godot/assets/sprites/*.png
+
+# La hoja de contacto se regenera con un comando; no tiene sentido versionarla.
+godot/hoja_de_contacto.png
