@@ -115,3 +115,14 @@ godot/assets/sprites/*.png
 
 # La hoja de contacto se regenera con un comando; no tiene sentido versionarla.
 godot/hoja_de_contacto.png
+
+# -----------------------------------------------------------------------
+# CMake — el proyecto para trabajar el núcleo en Visual Studio 2022
+# -----------------------------------------------------------------------
+# CMakeLists.txt y CMakePresets.json SÍ se versionan: son la configuración.
+# Lo que sigue es lo que se genera al compilar.
+gdext/build/
+gdext/out/
+gdext/.vs/
+gdext/CMakeUserPresets.json
+gdext/tests/*.manifest

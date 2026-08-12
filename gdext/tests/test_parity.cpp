@@ -180,17 +180,22 @@ static uint8_t mascaraRarezas(Seed seed) {
     return mascara;
 }
 
-static void describirRarezas(uint8_t mascara, char* salida, size_t capacidad) {
-    salida[0] = '\0';
-    bool primera = true;
+/**
+ * Los nombres de las rarezas de una máscara, separados por coma.
+ *
+ * Con std::string y no con buffers de char: la versión anterior encadenaba
+ * strncat calculando el espacio restante a mano en cada llamada, que es
+ * exactamente el patrón por el que MSVC avisa. Acá no hay capacidad que
+ * calcular ni terminador que recordar.
+ */
+static std::string describirRarezas(uint8_t mascara) {
+    std::string salida;
     for (size_t i = 0; i < TRAIT_CATALOG.size(); ++i) {
         if (!(mascara & (1u << i))) continue;
-        if (!primera) std::strncat(salida, ", ", capacidad - std::strlen(salida) - 1);
-        const std::string id(TRAIT_CATALOG[i].id);
-        std::strncat(salida, id.c_str(), capacidad - std::strlen(salida) - 1);
-        primera = false;
+        if (!salida.empty()) salida += ", ";
+        salida += std::string(TRAIT_CATALOG[i].id);
     }
-    if (primera) std::strncat(salida, "(ninguna)", capacidad - 1);
+    return salida.empty() ? "(ninguna)" : salida;
 }
 
 static void probarRarezas() {
@@ -203,14 +208,9 @@ static void probarRarezas() {
 
         const uint8_t obtenida = mascaraRarezas(v.seed);
         if (obtenida != v.rarezas) {
-            char mias[256];
-            char suyas[256];
-            describirRarezas(obtenida, mias, sizeof(mias));
-            describirRarezas(v.rarezas, suyas, sizeof(suyas));
-            char detalle[600];
-            std::snprintf(detalle, sizeof(detalle), "rarezas: C++ dio [%s], el TS da [%s]", mias,
-                          suyas);
-            revisar(false, ctx, detalle);
+            const std::string detalle = "rarezas: C++ dio [" + describirRarezas(obtenida) +
+                                        "], el TS da [" + describirRarezas(v.rarezas) + "]";
+            revisar(false, ctx, detalle.c_str());
         } else {
             revisar(true, ctx, "");
         }
