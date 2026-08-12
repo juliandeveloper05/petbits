@@ -52,6 +52,10 @@ int64_t Rng::intMenorQue(int64_t maxExclusive) {
     return static_cast<int64_t>(std::floor(next() * static_cast<double>(maxExclusive)));
 }
 
+int64_t Rng::rango(int64_t min, int64_t max) {
+    return min + static_cast<int64_t>(std::floor(next() * static_cast<double>(max - min + 1)));
+}
+
 bool Rng::boolCon(double p) {
     return next() < p;
 }

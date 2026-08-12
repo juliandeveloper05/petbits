@@ -5,10 +5,13 @@
 #include "petbits_core.h"
 
 #include "genome.h"
+#include "sprite_gen.h"
 #include "traits.h"
 
 #include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/variant/packed_byte_array.hpp>
 
+#include <cstring>
 #include <string>
 
 using namespace godot;
@@ -54,6 +57,11 @@ void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("tiene_criatura"), &PetBitsCore::tiene_criatura);
     ClassDB::bind_method(D_METHOD("simular", "ahora_ms"), &PetBitsCore::simular);
     ClassDB::bind_method(D_METHOD("estado"), &PetBitsCore::estado);
+
+    ClassDB::bind_method(D_METHOD("sprite", "seed", "etapa", "forma", "parpadeo"),
+                         &PetBitsCore::sprite, DEFVAL(false));
+    ClassDB::bind_method(D_METHOD("sprite_actual", "parpadeo"), &PetBitsCore::sprite_actual,
+                         DEFVAL(false));
 }
 
 String PetBitsCore::formatear_seed(const String& entrada) const {
@@ -203,6 +211,61 @@ Dictionary PetBitsCore::estado() const {
     d["stats"] = stats;
 
     return d;
+}
+
+// ---------------------------------------------------------------------------
+// Sprite
+// ---------------------------------------------------------------------------
+
+/** Traduce el texto de etapa. Cualquier cosa desconocida cae en adulto. */
+static petbits::Stage etapaDesde(const String& texto) {
+    if (texto == "bebe") return petbits::Stage::Bebe;
+    if (texto == "juvenil") return petbits::Stage::Juvenil;
+    return petbits::Stage::Adulto;
+}
+
+/** Acepta tanto el id ("petreo") como el nombre mostrado ("Pétreo"). */
+static petbits::Form formaDesde(const String& texto) {
+    if (texto == "petreo" || texto == "Pétreo") return petbits::Form::Petreo;
+    if (texto == "vaporoso" || texto == "Vaporoso") return petbits::Form::Vaporoso;
+    if (texto == "coloso" || texto == "Coloso") return petbits::Form::Coloso;
+    if (texto == "guardian" || texto == "Guardián") return petbits::Form::Guardian;
+    if (texto == "errante" || texto == "Errante") return petbits::Form::Errante;
+    if (texto == "oraculo" || texto == "Oráculo") return petbits::Form::Oraculo;
+    return petbits::Form::Indefinida;
+}
+
+static Ref<Image> aImagen(const petbits::Sprite& s) {
+    PackedByteArray bytes;
+    bytes.resize(static_cast<int64_t>(s.data.size()));
+    // El layout del generador ya es RGBA8 de arriba a abajo, que es exactamente
+    // lo que espera Image::create_from_data. No hay conversión: se copia.
+    std::memcpy(bytes.ptrw(), s.data.data(), s.data.size());
+
+    return Image::create_from_data(s.width, s.height, /*mipmaps*/ false, Image::FORMAT_RGBA8,
+                                   bytes);
+}
+
+Ref<Image> PetBitsCore::sprite(const String& seed, const String& etapa, const String& forma,
+                               bool parpadeo) const {
+    petbits::Seed valor = 0;
+    if (!leerSeed(seed, valor)) return Ref<Image>();
+
+    const petbits::Sprite s = petbits::generateSprite(
+        valor, etapaDesde(etapa), formaDesde(forma),
+        parpadeo ? petbits::Expression::Parpadeo : petbits::Expression::Normal);
+
+    return aImagen(s);
+}
+
+Ref<Image> PetBitsCore::sprite_actual(bool parpadeo) const {
+    if (!criatura.has_value()) return Ref<Image>();
+
+    const petbits::Sprite s = petbits::generateSprite(
+        criatura->seed, criatura->etapa, criatura->forma,
+        parpadeo ? petbits::Expression::Parpadeo : petbits::Expression::Normal);
+
+    return aImagen(s);
 }
 
 String PetBitsCore::version() const {

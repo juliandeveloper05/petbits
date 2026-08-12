@@ -32,9 +32,12 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { type Crianza, resolverAdulto, resolverJuvenil } from "../src/core/evolution.ts";
 import { type Genes, decodeGenome, formatSeed, hashString, parseSeed } from "../src/core/genome.ts";
+import { buildRamp } from "../src/core/palette.ts";
 import { deriveSeed, mulberry32, splitmix64 } from "../src/core/rng.ts";
 import { TICK_MS, createCreature, simulate } from "../src/core/simulation.ts";
 import { TRAIT_CATALOG, detectTraits, rarityTier } from "../src/core/traits.ts";
+import { hashPixels } from "../src/render/pixelBuffer.ts";
+import { type Expression, generateSprite } from "../src/render/spriteGen.ts";
 
 function arg(name: string, fallback: number): number {
   const index = process.argv.indexOf(`--${name}`);
@@ -579,6 +582,105 @@ for (const e of ESCENARIOS) {
 
 lineas.push("};");
 lineas.push("");
+
+// --- paletas ---
+//
+// Va antes que los sprites porque toda diferencia de color se ve primero acá,
+// y con menos ruido: si la rampa coincide y el sprite no, el problema es de
+// geometría; si no coincide la rampa, no tiene sentido mirar la geometría.
+//
+// La conversión OKLCH→RGB tiene una búsqueda binaria de 16 pasos para bajar el
+// croma cuando el color se sale del gamut, y tres exponenciaciones por color.
+// Es el lugar del proyecto donde más fácil se cuela una diferencia de último
+// bit — y como el resultado final se redondea a 8 bits, la mayoría de las veces
+// no se notaría. Estos vectores son para que se note.
+lineas.push("struct VectorRampa {");
+lineas.push("    uint64_t seed;");
+lineas.push("    uint8_t  forma;");
+lineas.push(
+  "    uint8_t  rgb[15];   ///< 5 colores x 3 canales: contorno, sombra, base, luz, acento",
+);
+lineas.push("};");
+lineas.push("");
+lineas.push("inline constexpr VectorRampa RAMPAS[] = {");
+
+const FORMAS_MUESTRA = ["indefinida", "coloso", "oraculo"] as const;
+const SEEDS_COLOR = seeds.slice(0, 260);
+
+for (const seed of SEEDS_COLOR) {
+  const genes = decodeGenome(seed);
+  const traits = detectTraits(seed);
+  for (const forma of FORMAS_MUESTRA) {
+    const rampa = buildRamp(genes, traits, forma);
+    const canales = rampa.flatMap((c) => [c.r, c.g, c.b]);
+    lineas.push(`    {${hex(seed)}, ${indiceForma(forma)}, {${canales.join(", ")}}},`);
+  }
+}
+lineas.push("};");
+lineas.push("");
+
+// --- sprites ---
+//
+// El buffer entero son 4096 bytes por criatura; comparar eso píxel por píxel en
+// el header serían megabytes. Se compara el hash FNV del buffer, que cambia con
+// cualquier píxel distinto, más la cantidad de píxeles opacos.
+//
+// Los dos juntos, y no solo el hash, porque distinguen el tipo de falla: si
+// cambió el hash pero el conteo de opacos coincide, la silueta está bien y el
+// problema es de color; si cambió el conteo, se movió la geometría. Con el hash
+// solo, un fallo dice "algo cambió" y nada más.
+lineas.push("struct VectorSprite {");
+lineas.push("    uint64_t seed;");
+lineas.push("    uint8_t  etapa;");
+lineas.push("    uint8_t  forma;");
+lineas.push("    uint8_t  expresion;  ///< 0 normal, 1 parpadeo");
+lineas.push("    uint32_t hash;       ///< FNV-1a del buffer RGBA completo");
+lineas.push("    uint32_t opacos;     ///< píxeles con alfa > 0");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline constexpr VectorSprite SPRITES[] = {");
+
+function contarOpacos(datos: Uint8ClampedArray): number {
+  let total = 0;
+  for (let i = 3; i < datos.length; i += 4) {
+    if ((datos[i] ?? 0) > 0) total++;
+  }
+  return total;
+}
+
+const ETAPAS_MUESTRA = ["bebe", "juvenil", "adulto"] as const;
+// Las siete formas, para que ninguna quede sin cubrir: cada una deforma el
+// cuerpo y corre la paleta de manera distinta.
+const FORMAS_TODAS = FORMAS.slice() as string[];
+const SEEDS_SPRITE = seeds.slice(0, 120);
+
+for (const seed of SEEDS_SPRITE) {
+  for (const etapa of ETAPAS_MUESTRA) {
+    for (const forma of FORMAS_TODAS) {
+      const sprite = generateSprite(
+        seed,
+        etapa,
+        forma as Parameters<typeof generateSprite>[2],
+        "normal",
+      );
+      lineas.push(
+        `    {${hex(seed)}, ${ETAPAS.indexOf(etapa)}, ${indiceForma(forma)}, 0, 0x${hashPixels(sprite.data)}u, ${contarOpacos(sprite.data)}u},`,
+      );
+    }
+  }
+}
+
+// El parpadeo fuerza el estilo de ojo cerrado por encima del del genoma, así
+// que es la única variante que cambia la cara sin tocar la silueta.
+for (const seed of seeds.slice(0, 40)) {
+  const sprite = generateSprite(seed, "adulto", "indefinida", "parpadeo" as Expression);
+  lineas.push(
+    `    {${hex(seed)}, 2, 0, 1, 0x${hashPixels(sprite.data)}u, ${contarOpacos(sprite.data)}u},`,
+  );
+}
+
+lineas.push("};");
+lineas.push("");
 lineas.push("} // namespace petbits::vectores");
 lineas.push("");
 
@@ -589,4 +691,6 @@ console.log(`  ${seeds.length} genomas`);
 console.log(`  ${CRIANZAS.length * 8} crianzas`);
 console.log(`  ${ENTRADAS.length} entradas de parseSeed`);
 console.log(`  ${ESCENARIOS.length} escenarios de simulación`);
+console.log(`  ${SEEDS_COLOR.length * FORMAS_MUESTRA.length} rampas de color`);
+console.log(`  ${SEEDS_SPRITE.length * 3 * FORMAS_TODAS.length + 40} sprites`);
 console.log("\nAhora compilá y corré los tests de C++ — ver gdext/tests/README.md");

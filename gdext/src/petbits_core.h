@@ -24,6 +24,7 @@
 
 #include "simulation.h"
 
+#include <godot_cpp/classes/image.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
@@ -98,6 +99,28 @@ public:
 
     /** El estado actual, listo para pintar en pantalla. */
     Dictionary estado() const;
+
+    // -----------------------------------------------------------------------
+    // Sprite
+    // -----------------------------------------------------------------------
+
+    /**
+     * Dibuja la criatura y la devuelve como Image de 32×32 RGBA8.
+     *
+     * `etapa` y `forma` van como texto ("bebe"/"juvenil"/"adulto",
+     * "indefinida"/"petreo"/…) porque es lo que ya devuelve `estado()`: así la
+     * escena pasa lo que leyó, sin traducir a números por el camino.
+     *
+     * Devuelve una Image y no una Texture porque la Image es un recurso de
+     * datos, no de video: se puede guardar, comparar píxel a píxel en un test, y
+     * convertir a textura de un renglón cuando haga falta mostrarla. Al revés no
+     * se puede sin volver a bajar los datos de la placa.
+     */
+    Ref<Image> sprite(const String& seed, const String& etapa, const String& forma,
+                      bool parpadeo = false) const;
+
+    /** El sprite de la criatura viva, con su etapa y su forma actuales. */
+    Ref<Image> sprite_actual(bool parpadeo = false) const;
 };
 
 } // namespace godot

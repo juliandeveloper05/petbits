@@ -65,6 +65,9 @@ struct Rng {
     /** Entero en [0, maxExclusive). */
     int64_t intMenorQue(int64_t maxExclusive);
 
+    /** Entero en [min, max], los dos incluidos. */
+    int64_t rango(int64_t min, int64_t max);
+
     /** true con probabilidad p. */
     bool boolCon(double p = 0.5);
 };

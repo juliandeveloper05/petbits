@@ -269,16 +269,16 @@ compatibles y las rarezas que muestra cada uno no coinciden.
 npm run parity
 ```
 
-Ese comando **ejecuta el TypeScript** de `src/core/` y vuelca lo que devuelve —
-2010 genomas, 80 crianzas, 21 entradas de parseo, 12 hashes y 14 escenarios de
-simulación— en un header de C++. Después, desde el *Developer Command Prompt* en
-`gdext/tests`:
+Ese comando **ejecuta el TypeScript** de `src/` y vuelca lo que devuelve —2010
+genomas, 80 crianzas, 21 entradas de parseo, 12 hashes, 14 escenarios de
+simulación, 780 rampas de color y 2560 sprites— en un header de C++. Después,
+desde el *Developer Command Prompt* en `gdext/tests`:
 
 ```bash
-cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp && run_tests.exe
+cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp && run_tests.exe
 ```
 
-Estado actual: **41.051 comprobaciones, 0 fallas.**
+Estado actual: **50.071 comprobaciones, 0 fallas.**
 
 No hacen falta Godot ni SCons ni godot-cpp: los módulos portados son C++ puro.
 Con un compilador alcanza, así que la paridad se puede comprobar antes de

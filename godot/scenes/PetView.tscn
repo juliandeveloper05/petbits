@@ -1,0 +1,16 @@
+; La criatura en pantalla. Igual que Arranque.tscn, la interfaz la arma el
+; script en _ready(): mientras el diseño visual se siga moviendo, tenerlo en
+; código es más fácil de cambiar y de revisar en un diff que un .tscn.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/PetView.gd" id="1_petview"]
+
+[node name="PetView" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_petview")

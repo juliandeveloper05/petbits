@@ -55,6 +55,8 @@ vectores generados ejecutando el TypeScript.
 | `evolution.cpp` — ejes de crianza, resolución de forma | ✅ portado, compilado y verificado |
 | `rng.cpp` — splitmix64, mulberry32, deriveSeed | ✅ portado, compilado y verificado |
 | `simulation.cpp` — tick, letargo, eventos, evolución | ✅ portado, compilado y verificado |
+| `palette.cpp` — paletas OKLCH, 8 modos, sesgo por forma | ✅ portado, compilado y verificado |
+| `sprite_gen.cpp` — el pixel art de 32×32 | ✅ portado, compilado y verificado |
 | `petbits_core.cpp` — puente a GDScript | ✅ carga en Godot 4.7.1 |
 | `breeding.cpp` — cruza por gen | ⬜ ni empezado |
 | `actions.cpp` — alimentar, jugar, acariciar | ⬜ ni empezado |
@@ -102,20 +104,26 @@ criatura tiene stats reales, envejece, evoluciona y entra en letargo, todo
 accesible desde GDScript. Lo que falta portar (`breeding`, `actions`,
 `expeditions`) es de sistemas de meta y no bloquea tener algo en pantalla.
 
-### Fase 2 — Criatura en pantalla ⬜
-
-Ya no está bloqueada: `PetBitsCore` expone `nacer`, `simular` y `estado`, así
-que las barras pueden mostrar valores de verdad desde el primer día.
+### Fase 2 — Criatura en pantalla 🚧
 
 | | |
 |---|---|
-| Escena de la criatura con sus barras y acciones | ⬜ `PetView.gd` existe pero no tiene escena, y quedó escrito contra una API que no es la que terminó habiendo |
-| Sprites: portar `spriteGen.ts` o generarlos desde el C++ | ⬜ `tools/sprite_gen.py` es un boceto en HSL, no tiene paridad |
-| Tipografía, HUD, caja de diálogo estilo Game Boy | ⬜ |
+| Sprites generados desde el C++ | ✅ 2560 comparados contra el TypeScript |
+| `PetBitsCore.sprite()` devuelve una `Image` de 32×32 | ✅ |
+| `PetView.tscn` — sprite, barras, registro de eventos, parpadeo | ✅ escrita, **falta verla corriendo** |
+| Acciones: alimentar, jugar, acariciar | ⬜ necesita portar `actions.cpp` |
+| Tipografía y caja de diálogo estilo Game Boy | ⬜ |
 
-La decisión pendiente de esta fase: si los sprites se generan portando el
-algoritmo por tercera vez (TS, Python, C++) o llamando al C++ que ya existe. La
-segunda evita mantener tres implementaciones del mismo algoritmo en sincronía.
+**La decisión de los sprites quedó tomada: se portó el algoritmo.** Las otras
+dos opciones —dejar `tools/sprite_gen.py` o dibujarlos a mano— rompían la
+promesa del proyecto, porque no hay forma de verificar que un dibujo hecho
+aparte coincida con lo que calcula la web. Portándolo, el sprite entra en la
+misma disciplina que todo lo demás: los vectores salen de ejecutar el
+TypeScript y se compara el buffer completo.
+
+`tools/sprite_gen.py` queda obsoleto. Era un boceto en HSL sin paridad; ahora
+hay una implementación de verdad y conviene borrarlo antes de que alguien lo
+use creyendo que sirve.
 
 ### Fase 3 — Mundo navegable ⬜
 

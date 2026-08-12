@@ -41,7 +41,7 @@ Desde una consola *Developer Command Prompt for VS 2022* (la común no tiene `cl
 en el PATH):
 
 ```bash
-cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp && run_tests.exe
+cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp && run_tests.exe
 ```
 
 `/utf-8` no es adorno: los catálogos están llenos de acentos y sin esa opción
@@ -85,7 +85,16 @@ script.
 | `traits.cpp` | Las 8 rarezas y el tier agregado | 2010 genomas |
 | `evolution.cpp` | `resolverJuvenil` y `resolverAdulto` | 10 crianzas × 8 afinidades |
 | `rng.cpp` | `mulberry32` y `deriveSeed` | 7 semillas × 8 salidas |
+| `palette.cpp` | Los 5 colores de la rampa, canal por canal | 260 genomas × 3 formas |
+| `sprite_gen.cpp` | El buffer RGBA entero, por hash, más el conteo de opacos | 2560 sprites |
 | `simulation.cpp` | Estado completo, stats y conteo de eventos | 14 escenarios |
+
+Los sprites se comparan por hash y no píxel por píxel porque cada uno son 4096
+bytes: ponerlos crudos en el header serían megabytes. Junto al hash va el conteo
+de píxeles opacos, y los dos juntos distinguen el tipo de falla — si cambió el
+hash pero el conteo coincide, la silueta está bien y el problema es de color; si
+cambió el conteo, se movió la geometría. Con el hash solo, un fallo dice "algo
+cambió" y nada más.
 
 Dos comprobaciones no salen de vectores porque son propiedades del código y no
 del TypeScript:

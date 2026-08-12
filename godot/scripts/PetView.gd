@@ -1,187 +1,289 @@
 ## PetView.gd
-## Escena principal de la criatura activa.
 ##
-## Muestra los stats en tiempo real, maneja las acciones del jugador
-## y recibe señales del nodo C++ PetCore.
+## La criatura en pantalla: sprite, estadísticas y el paso del tiempo.
 ##
-## La lógica de juego NO vive aquí — vive en PetCore (C++ GDExtension).
-## Este script es solo glue: escucha señales y actualiza la UI.
+## Toda la lógica vive en PetBitsCore (C++). Este script no calcula nada — lee
+## el estado y lo dibuja. Es a propósito: si el ánimo se decidiera acá, la web y
+## el nativo tendrían dos reglas distintas y la promesa del proyecto se caería.
+##
+## ---
+##
+## La interfaz se arma por código en _ready() en vez de en el .tscn. Un .tscn
+## escrito a mano es fácil de romper de maneras que Godot reporta mal, y todavía
+## no hay diseño visual definitivo que justifique fijarlo en un archivo de
+## escena. Cuando la pantalla se estabilice, conviene pasarla al editor.
 
-extends Node2D
+extends Control
 
-# ---------------------------------------------------------------------------
-# Nodos (se conectan en _ready)
-# ---------------------------------------------------------------------------
+# La consola verde fósforo que el proyecto ya tenía del lado web. Se mantiene
+# porque es lo mejor que tiene su identidad visual.
+const FONDO := Color("#0a0e0a")
+const PANEL := Color("#0c140d")
+const BORDE := Color("#3d5c46")
+const FOSFORO := Color("#9bbc0f")
+const TEXTO := Color("#d6e6d0")
+const TENUE := Color("#7e937a")
 
-@onready var sprite: AnimatedSprite2D     = $PetSprite
-@onready var bar_energia: ProgressBar     = $HUD/Bars/Energia/Bar
-@onready var bar_animo: ProgressBar       = $HUD/Bars/Animo/Bar
-@onready var bar_salud: ProgressBar       = $HUD/Bars/Salud/Bar
-@onready var bar_vinculo: ProgressBar     = $HUD/Bars/Vinculo/Bar
-@onready var lbl_nombre: Label            = $HUD/Nombre
-@onready var lbl_etapa: Label             = $HUD/Etapa
-@onready var lbl_forma: Label             = $HUD/Forma
-@onready var dialog_box: Control          = $DialogBox
-@onready var lbl_dialog: RichTextLabel   = $DialogBox/Text
-@onready var btn_alimentar: Button        = $ActionMenu/Alimentar
-@onready var btn_jugar: Button            = $ActionMenu/Jugar
-@onready var btn_acariciar: Button        = $ActionMenu/Acariciar
-@onready var btn_expedicion: Button       = $ActionMenu/Expedicion
-@onready var btn_codex: Button            = $ActionMenu/Codex
-@onready var pet_core: Node               = $PetCore  # Nodo C++ GDExtension
+## Un tick del juego es un minuto real. Preguntar más seguido no cambia nada
+## —simulate() solo avanza en ticks enteros— pero mantiene el reloj de pantalla
+## al día sin costo.
+const INTERVALO_CONSULTA := 1.0
 
-# ---------------------------------------------------------------------------
-# Estado local de UI
-# ---------------------------------------------------------------------------
+## Cada cuánto parpadea. Es la animación más barata que existe y la que más hace
+## por que algo lea como vivo.
+const INTERVALO_PARPADEO := 4.2
+const DURACION_PARPADEO := 0.16
 
-var _dialog_queue: Array[String] = []
-var _dialog_timer: float = 0.0
-const DIALOG_DURATION := 3.0
-const TYPEWRITER_SPEED := 0.03 # segundos por caracter
+var _core: RefCounted = null
+var _sprite: TextureRect = null
+var _barras := {}
+var _etiquetas := {}
+var _registro: RichTextLabel = null
 
-# ---------------------------------------------------------------------------
-# _ready
-# ---------------------------------------------------------------------------
+var _parpadeando := false
+var _proximo_parpadeo := INTERVALO_PARPADEO
+
 
 func _ready() -> void:
-	# Conectar señales del núcleo C++
-	pet_core.pet_evolved.connect(_on_evolved)
-	pet_core.expedition_returned.connect(_on_expedition_returned)
-	pet_core.lethargy_entered.connect(_on_lethargy_entered)
-	pet_core.stats_updated.connect(_on_stats_updated)
+	if not ClassDB.class_exists("PetBitsCore"):
+		_sin_extension()
+		return
 
-	# Conectar botones
-	btn_alimentar.pressed.connect(_on_btn_alimentar)
-	btn_jugar.pressed.connect(_on_btn_jugar)
-	btn_acariciar.pressed.connect(_on_btn_acariciar)
-	btn_expedicion.pressed.connect(_on_btn_expedicion)
-	btn_codex.pressed.connect(_on_btn_codex)
+	_core = ClassDB.instantiate("PetBitsCore")
+	_construir_interfaz()
 
-	# Ocultar dialog al inicio
-	dialog_box.hide()
+	# Nace con un seed al azar. Cuando haya guardado, acá se carga la partida.
+	var seed: String = _core.seed_al_azar()
+	_core.nacer(seed, _ahora_ms(), _tz_min())
 
-	# Primer render
-	_refresh_ui()
+	_refrescar_sprite()
+	_refrescar_estado()
+	set_process(true)
+
 
 # ---------------------------------------------------------------------------
-# _process
+# Tiempo
 # ---------------------------------------------------------------------------
+
+## El reloj del sistema en milisegundos.
+##
+## Godot lo da en segundos y como float. Se multiplica y se redondea acá para
+## que al C++ le llegue un entero: la simulación cuenta ticks de un minuto y un
+## flotante con parte decimal en los milisegundos no aporta nada y sí puede
+## correr una frontera.
+func _ahora_ms() -> int:
+	return int(Time.get_unix_time_from_system()) * 1000
+
+
+## Minutos de desfasaje horario respecto de UTC.
+##
+## Se lee UNA vez, al nacer, y después vive dentro del estado de la criatura. Si
+## se leyera en cada tick, mudarse de zona horaria —o simplemente viajar— movería
+## la hora local de ticks ya procesados y rompería el invariante de que simular
+## por pedazos da lo mismo que de corrido.
+func _tz_min() -> int:
+	return int(Time.get_time_zone_from_system().get("bias", 0))
+
 
 func _process(delta: float) -> void:
-	# Actualizar simulación (el PetCore lo hace por tick, no cada frame)
-	pet_core.update(Time.get_ticks_msec())
+	if _core == null:
+		return
 
-	# Dialog queue
-	if _dialog_timer > 0.0:
-		_dialog_timer -= delta
-		if _dialog_timer <= 0.0:
-			dialog_box.hide()
-			if _dialog_queue.size() > 0:
-				_show_dialog(_dialog_queue.pop_front())
+	_proximo_parpadeo -= delta
+	if _parpadeando and _proximo_parpadeo <= 0.0:
+		_parpadeando = false
+		_proximo_parpadeo = INTERVALO_PARPADEO
+		_refrescar_sprite()
+	elif not _parpadeando and _proximo_parpadeo <= 0.0:
+		_parpadeando = true
+		_proximo_parpadeo = DURACION_PARPADEO
+		_refrescar_sprite()
 
-# ---------------------------------------------------------------------------
-# Señales del PetCore (C++)
-# ---------------------------------------------------------------------------
 
-func _on_stats_updated(_stats: Dictionary) -> void:
-	_refresh_ui()
+func _on_consultar() -> void:
+	var r: Dictionary = _core.simular(_ahora_ms())
+	if r.get("ticks", 0) > 0:
+		_anotar_eventos(r)
+		# La etapa o la forma pueden haber cambiado con la evolución, y eso
+		# cambia el dibujo.
+		_refrescar_sprite()
+	_refrescar_estado()
 
-func _on_evolved(new_form: String, new_stage: String) -> void:
-	sprite.play("evolve")
-	await sprite.animation_finished
-	_show_dialog("¡Evolucionó a " + new_form + "!")
-	_refresh_ui()
-
-func _on_expedition_returned(destino: String, botin: String) -> void:
-	sprite.play("happy")
-	_show_dialog("Volvió " + destino + ". " + botin)
-	_refresh_ui()
-
-func _on_lethargy_entered() -> void:
-	sprite.play("sad")
-	_show_dialog("Cayó en letargo... Necesita atención.")
 
 # ---------------------------------------------------------------------------
-# Botones de acción
+# Interfaz
 # ---------------------------------------------------------------------------
 
-func _on_btn_alimentar() -> void:
-	# Abre el submenú de comida (se implementa en Fase 2)
-	get_tree().change_scene_to_file("res://scenes/ui/FoodMenu.tscn")
+func _construir_interfaz() -> void:
+	var fondo := ColorRect.new()
+	fondo.color = FONDO
+	fondo.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(fondo)
 
-func _on_btn_jugar() -> void:
-	const result: Dictionary = pet_core.play()
-	if result.ok:
-		sprite.play("happy")
-		_show_dialog(result.message)
-	else:
-		_show_dialog(result.reason)
-	_refresh_ui()
+	var raiz := VBoxContainer.new()
+	raiz.set_anchors_preset(Control.PRESET_FULL_RECT)
+	raiz.offset_left = 12
+	raiz.offset_top = 10
+	raiz.offset_right = -12
+	raiz.offset_bottom = -10
+	raiz.add_theme_constant_override("separation", 6)
+	add_child(raiz)
 
-func _on_btn_acariciar() -> void:
-	const result: Dictionary = pet_core.pet()
-	if result.ok:
-		sprite.play("happy")
-		_show_dialog(result.message)
-	else:
-		_show_dialog(result.reason)
-	_refresh_ui()
+	# --- criatura ---
+	_sprite = TextureRect.new()
+	_sprite.custom_minimum_size = Vector2(128, 128)
+	_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# Nearest-neighbor: sin esto el pixel art de 32×32 se ve borroso al ampliar,
+	# que es exactamente lo contrario de lo que se busca.
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	raiz.add_child(_sprite)
 
-func _on_btn_expedicion() -> void:
-	get_tree().change_scene_to_file("res://scenes/world/ExpeditionMenu.tscn")
+	_etiquetas["seed"] = _linea(raiz, FOSFORO, 14)
+	_etiquetas["quien"] = _linea(raiz, TEXTO, 12)
+	_etiquetas["etapa"] = _linea(raiz, TENUE, 11)
 
-func _on_btn_codex() -> void:
-	get_tree().change_scene_to_file("res://scenes/codex/Codex.tscn")
+	raiz.add_child(HSeparator.new())
+
+	# --- estadísticas ---
+	for clave in ["energia", "animo", "salud", "vinculo"]:
+		_barras[clave] = _barra(raiz, clave)
+
+	raiz.add_child(HSeparator.new())
+
+	# --- registro ---
+	_registro = RichTextLabel.new()
+	_registro.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_registro.custom_minimum_size = Vector2(0, 60)
+	_registro.add_theme_color_override("default_color", TENUE)
+	_registro.append_text("Nació recién.\n")
+	raiz.add_child(_registro)
+
+	# El reloj de la simulación. Se consulta seguido y barato.
+	var reloj := Timer.new()
+	reloj.wait_time = INTERVALO_CONSULTA
+	reloj.timeout.connect(_on_consultar)
+	reloj.autostart = true
+	add_child(reloj)
+
+
+func _linea(padre: Node, color: Color, tamano: int) -> Label:
+	var etiqueta := Label.new()
+	etiqueta.add_theme_color_override("font_color", color)
+	etiqueta.add_theme_font_size_override("font_size", tamano)
+	padre.add_child(etiqueta)
+	return etiqueta
+
+
+## Una fila de estadística: nombre, barra y número.
+##
+## La grilla es de tres columnas con anchos fijos en los extremos. Del lado web
+## esto mismo tuvo un bug que vale recordar: el número quedaba en una columna de
+## ancho cero y solo se veía porque desbordaba contra el marco. Acá el ancho
+## mínimo de la etiqueta del valor lo evita.
+func _barra(padre: Node, clave: String) -> Dictionary:
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 8)
+	padre.add_child(fila)
+
+	var nombre := Label.new()
+	nombre.text = clave.capitalize()
+	nombre.custom_minimum_size = Vector2(62, 0)
+	nombre.add_theme_color_override("font_color", TENUE)
+	nombre.add_theme_font_size_override("font_size", 11)
+	fila.add_child(nombre)
+
+	var barra := ProgressBar.new()
+	barra.max_value = 100
+	barra.show_percentage = false
+	barra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	barra.custom_minimum_size = Vector2(0, 12)
+	fila.add_child(barra)
+
+	var valor := Label.new()
+	valor.custom_minimum_size = Vector2(34, 0)
+	valor.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	valor.add_theme_color_override("font_color", TEXTO)
+	valor.add_theme_font_size_override("font_size", 11)
+	fila.add_child(valor)
+
+	return {"barra": barra, "valor": valor}
+
 
 # ---------------------------------------------------------------------------
-# Helpers de UI
+# Refresco
 # ---------------------------------------------------------------------------
 
-func _refresh_ui() -> void:
-	const stats: Dictionary = pet_core.get_stats()
-	const info: Dictionary  = pet_core.get_info()
+func _refrescar_sprite() -> void:
+	var imagen: Image = _core.sprite_actual(_parpadeando)
+	if imagen == null:
+		return
+	_sprite.texture = ImageTexture.create_from_image(imagen)
 
-	bar_energia.value = stats.get("energia", 0.0)
-	bar_animo.value   = stats.get("animo",   0.0)
-	bar_salud.value   = stats.get("salud",   0.0)
-	bar_vinculo.value = stats.get("vinculo", 0.0)
 
-	lbl_nombre.text = info.get("nombre", "???")
-	lbl_etapa.text  = info.get("etapa",  "")
-	lbl_forma.text  = info.get("forma",  "")
+func _refrescar_estado() -> void:
+	var e: Dictionary = _core.estado()
+	if e.is_empty():
+		return
 
-	# Colorear barras según nivel
-	_set_bar_color(bar_energia, stats.get("energia", 100.0))
-	_set_bar_color(bar_animo,   stats.get("animo",   100.0))
-	_set_bar_color(bar_salud,   stats.get("salud",   100.0))
+	var genes: Dictionary = _core.decodificar(e["seed"])
 
-	# Animación idle según estado
-	const letargico: bool = info.get("letargico", false)
-	if letargico:
-		sprite.play("sad")
-	elif stats.get("animo", 100.0) < 25.0:
-		sprite.play("sad")
-	else:
-		sprite.play("idle")
+	_etiquetas["seed"].text = e["seed"]
+	_etiquetas["quien"].text = "%s · %s" % [genes["linaje"], genes["temperamento"]]
 
-func _set_bar_color(bar: ProgressBar, value: float) -> void:
-	const style = bar.get_theme_stylebox("fill").duplicate()
-	if value < 25.0:
-		style.bg_color = Color(0.9, 0.2, 0.2)  # rojo
-	elif value < 50.0:
-		style.bg_color = Color(0.9, 0.7, 0.1)  # amarillo
-	else:
-		style.bg_color = Color(0.2, 0.8, 0.3)  # verde
-	bar.add_theme_stylebox_override("fill", style)
+	var forma: String = e["forma"]
+	var descripcion: String = e["etapa"].capitalize()
+	if forma != "Sin definir":
+		descripcion += " · " + forma
+	if e["letargico"]:
+		descripcion += " · en letargo"
+	elif e["durmiendo"]:
+		descripcion += " · durmiendo"
+	_etiquetas["etapa"].text = descripcion
 
-func _show_dialog(text: String) -> void:
-	lbl_dialog.text = ""
-	dialog_box.show()
-	_dialog_timer = DIALOG_DURATION
+	var stats: Dictionary = e["stats"]
+	for clave in _barras:
+		var valor: float = stats[clave]
+		_barras[clave]["barra"].value = valor
+		_barras[clave]["valor"].text = "%d" % int(valor)
+		_barras[clave]["barra"].modulate = _color_de(clave, valor)
 
-	# Efecto typewriter
-	var i := 0
-	while i < text.length():
-		lbl_dialog.text += text[i]
-		i += 1
-		await get_tree().create_timer(TYPEWRITER_SPEED).timeout
+
+## Semáforo. Con la barra sola, un ánimo en 8 y uno en 80 se distinguen mal de
+## reojo; el color se lee sin mirar el número.
+func _color_de(clave: String, valor: float) -> Color:
+	if clave == "vinculo":
+		return FOSFORO
+	if valor < 25.0:
+		return Color("#ff6b6b")
+	if valor < 50.0:
+		return Color("#ffc23d")
+	return FOSFORO
+
+
+func _anotar_eventos(r: Dictionary) -> void:
+	for ev in r["eventos"]:
+		var color := TENUE
+		if ev["tipo"] == "evolucion":
+			color = FOSFORO
+		elif ev["tipo"] in ["salud", "letargo"]:
+			color = Color("#ff6b6b")
+		_registro.push_color(color)
+		_registro.append_text(ev["texto"] + "\n")
+		_registro.pop()
+
+	if r.get("omitidos", 0) > 0:
+		_registro.append_text("(y %d cosas más)\n" % r["omitidos"])
+
+
+func _sin_extension() -> void:
+	var etiqueta := Label.new()
+	etiqueta.text = (
+		"La GDExtension no cargó, así que no hay criatura que mostrar.\n"
+		+ "Compilá el C++ con `scons` en gdext/ y volvé a abrir Godot.\n"
+		+ "La escena scenes/Arranque.tscn da el diagnóstico completo."
+	)
+	etiqueta.set_anchors_preset(Control.PRESET_FULL_RECT)
+	etiqueta.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	etiqueta.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	etiqueta.add_theme_color_override("font_color", Color("#ffc23d"))
+	add_child(etiqueta)

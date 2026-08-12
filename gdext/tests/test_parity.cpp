@@ -33,8 +33,10 @@
 
 #include "../src/evolution.h"
 #include "../src/genome.h"
+#include "../src/palette.h"
 #include "../src/rng.h"
 #include "../src/simulation.h"
+#include "../src/sprite_gen.h"
 #include "../src/traits.h"
 #include "vectores_generados.h"
 
@@ -451,15 +453,88 @@ static void probarRelojAtras() {
 }
 
 // ---------------------------------------------------------------------------
+// palette
+// ---------------------------------------------------------------------------
+
+static void probarRampas() {
+    bloque("buildRamp (OKLCH)");
+
+    static const char* NOMBRES[] = {"contorno", "sombra", "base", "luz", "acento"};
+    static const char* FORMAS[] = {"indefinida", "petreo",  "vaporoso", "coloso",
+                                   "guardian",   "errante", "oraculo"};
+
+    for (const auto& v : vectores::RAMPAS) {
+        char ctx[96];
+        std::snprintf(ctx, sizeof(ctx), "seed %016llX forma %s",
+                      static_cast<unsigned long long>(v.seed), FORMAS[v.forma]);
+
+        const Ramp r = buildRamp(decodeGenome(v.seed), detectTraits(v.seed),
+                                 static_cast<Form>(v.forma));
+
+        for (size_t i = 0; i < 5; ++i) {
+            const uint8_t esperados[3] = {v.rgb[i * 3], v.rgb[i * 3 + 1], v.rgb[i * 3 + 2]};
+            if (r[i].r == esperados[0] && r[i].g == esperados[1] && r[i].b == esperados[2]) {
+                revisar(true, ctx, "");
+                continue;
+            }
+            char detalle[192];
+            std::snprintf(detalle, sizeof(detalle),
+                          "%s: C++ dio (%u,%u,%u), el TS da (%u,%u,%u)", NOMBRES[i], r[i].r,
+                          r[i].g, r[i].b, esperados[0], esperados[1], esperados[2]);
+            revisar(false, ctx, detalle);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// sprite_gen
+// ---------------------------------------------------------------------------
+
+static uint32_t contarOpacos(const std::vector<uint8_t>& datos) {
+    uint32_t total = 0;
+    for (size_t i = 3; i < datos.size(); i += 4) {
+        if (datos[i] > 0) ++total;
+    }
+    return total;
+}
+
+static void probarSprites() {
+    bloque("generateSprite");
+
+    static const char* ETAPAS[] = {"bebe", "juvenil", "adulto"};
+    static const char* FORMAS[] = {"indefinida", "petreo",  "vaporoso", "coloso",
+                                   "guardian",   "errante", "oraculo"};
+
+    for (const auto& v : vectores::SPRITES) {
+        char ctx[160];
+        std::snprintf(ctx, sizeof(ctx), "seed %016llX %s %s%s",
+                      static_cast<unsigned long long>(v.seed), ETAPAS[v.etapa], FORMAS[v.forma],
+                      v.expresion == 1 ? " parpadeo" : "");
+
+        const Sprite s = generateSprite(
+            v.seed, static_cast<Stage>(v.etapa), static_cast<Form>(v.forma),
+            v.expresion == 1 ? Expression::Parpadeo : Expression::Normal);
+
+        // El conteo de opacos va PRIMERO. Si la silueta cambió, el hash también,
+        // y mirar el hash no diría cuál de las dos cosas se movió.
+        revisarEnteros(contarOpacos(s.data), v.opacos, ctx, "píxeles opacos");
+        revisarEnteros(hashPixels(s.data), v.hash, ctx, "hash del buffer");
+    }
+}
+
+// ---------------------------------------------------------------------------
 
 int main() {
     std::printf("\nPetBits — paridad TypeScript <-> C++\n");
-    std::printf("%zu genomas, %zu crianzas, %zu parseos, %zu hashes, %zu simulaciones\n\n",
+    std::printf("%zu genomas, %zu crianzas, %zu parseos, %zu hashes, %zu simulaciones,\n"
+                "%zu rampas de color, %zu sprites\n\n",
                 sizeof(vectores::GENOMAS) / sizeof(vectores::GENOMAS[0]),
                 sizeof(vectores::EVOLUCIONES) / sizeof(vectores::EVOLUCIONES[0]),
                 sizeof(vectores::PARSEOS) / sizeof(vectores::PARSEOS[0]),
                 sizeof(vectores::HASHES) / sizeof(vectores::HASHES[0]),
-                sizeof(vectores::SIMULACIONES) / sizeof(vectores::SIMULACIONES[0]));
+                sizeof(vectores::SIMULACIONES) / sizeof(vectores::SIMULACIONES[0]),
+                sizeof(vectores::RAMPAS) / sizeof(vectores::RAMPAS[0]),
+                sizeof(vectores::SPRITES) / sizeof(vectores::SPRITES[0]));
 
     probarGenomas();
     probarParseo();
@@ -467,6 +542,8 @@ int main() {
     probarRarezas();
     probarEvolucion();
     probarRng();
+    probarRampas();
+    probarSprites();
     probarSimulacion();
     probarParticion();
     probarRelojAtras();
