@@ -49,6 +49,11 @@ void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("rarezas", "entrada"), &PetBitsCore::rarezas);
     ClassDB::bind_method(D_METHOD("seed_al_azar"), &PetBitsCore::seed_al_azar);
     ClassDB::bind_method(D_METHOD("version"), &PetBitsCore::version);
+
+    ClassDB::bind_method(D_METHOD("nacer", "seed", "ahora_ms", "tz_min"), &PetBitsCore::nacer);
+    ClassDB::bind_method(D_METHOD("tiene_criatura"), &PetBitsCore::tiene_criatura);
+    ClassDB::bind_method(D_METHOD("simular", "ahora_ms"), &PetBitsCore::simular);
+    ClassDB::bind_method(D_METHOD("estado"), &PetBitsCore::estado);
 }
 
 String PetBitsCore::formatear_seed(const String& entrada) const {
@@ -125,6 +130,81 @@ String PetBitsCore::seed_al_azar() const {
     return aGodot(petbits::formatSeed(petbits::randomSeed()));
 }
 
+// ---------------------------------------------------------------------------
+// Simulación
+// ---------------------------------------------------------------------------
+
+static const char* ETAPAS[] = {"bebe", "juvenil", "adulto"};
+
+bool PetBitsCore::nacer(const String& seed, int64_t ahora_ms, int64_t tz_min) {
+    petbits::Seed valor = 0;
+    if (!leerSeed(seed, valor)) return false;
+
+    criatura = petbits::createCreature(valor, ahora_ms, static_cast<int>(tz_min));
+    return true;
+}
+
+bool PetBitsCore::tiene_criatura() const {
+    return criatura.has_value();
+}
+
+Dictionary PetBitsCore::simular(int64_t ahora_ms) {
+    Dictionary salida;
+    if (!criatura.has_value()) return salida;
+
+    const petbits::SimResult r = petbits::simulate(*criatura, ahora_ms);
+    criatura = r.state;
+
+    salida["ticks"] = r.ticks;
+    salida["omitidos"] = r.omitted;
+
+    Array eventos;
+    for (const petbits::SimEvent& e : r.events) {
+        Dictionary d;
+        d["tipo"] = aGodot(petbits::simEventKindId(e.kind));
+        d["cuando_ms"] = e.atMs;
+        d["texto"] = aGodot(e.text);
+        eventos.push_back(d);
+    }
+    salida["eventos"] = eventos;
+
+    Dictionary resumen;
+    for (const auto& [id, cantidad] : r.summary) {
+        resumen[aGodot(id)] = cantidad;
+    }
+    salida["resumen"] = resumen;
+
+    return salida;
+}
+
+Dictionary PetBitsCore::estado() const {
+    Dictionary d;
+    if (!criatura.has_value()) return d;
+
+    const petbits::CreatureState& c = *criatura;
+
+    d["id"] = aGodot(c.id);
+    d["seed"] = aGodot(petbits::formatSeed(c.seed));
+    d["nacimiento_ms"] = c.nacimientoMs;
+    d["ultimo_tick_ms"] = c.lastTickMs;
+    d["ticks_vividos"] = c.ticksVividos;
+    d["ticks_activos"] = c.ticksActivos;
+    d["ticks_sin_cuidado"] = c.ticksSinCuidado;
+    d["letargico"] = c.letargico;
+    d["durmiendo"] = c.durmiendo;
+    d["etapa"] = ETAPAS[static_cast<int>(c.etapa)];
+    d["forma"] = aGodot(petbits::formName(c.forma));
+
+    Dictionary stats;
+    stats["energia"] = c.stats.energia;
+    stats["animo"] = c.stats.animo;
+    stats["salud"] = c.stats.salud;
+    stats["vinculo"] = c.stats.vinculo;
+    d["stats"] = stats;
+
+    return d;
+}
+
 String PetBitsCore::version() const {
     // aGodot y no String(...) directo. El constructor de String desde const
     // char* NO interpreta UTF-8: ensancha cada byte como si fuera Latin-1. El
@@ -133,5 +213,5 @@ String PetBitsCore::version() const {
     // Es el mismo error que este archivo documenta más arriba, cometido en la
     // única línea que no pasaba por el helper. Vale dejarlo anotado: la
     // conversión correcta hay que usarla siempre, no cuando uno se acuerda.
-    return aGodot("PetBits core 3.0.0-fase1 · genome + traits + evolution");
+    return aGodot("PetBits core 3.0.0-fase1 · genome + traits + evolution + rng + simulation");
 }

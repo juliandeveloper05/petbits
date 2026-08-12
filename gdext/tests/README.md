@@ -41,7 +41,7 @@ Desde una consola *Developer Command Prompt for VS 2022* (la común no tiene `cl
 en el PATH):
 
 ```bash
-cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp && run_tests.exe
+cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp && run_tests.exe
 ```
 
 `/utf-8` no es adorno: los catálogos están llenos de acentos y sin esa opción
@@ -81,9 +81,50 @@ script.
 | Módulo | Qué se compara | Casos |
 |---|---|---|
 | `genome.cpp` | Los 17 campos de `decodeGenome`, más `formatSeed` | 2010 genomas |
-| `genome.cpp` | `hashString` (FNV-1a 64) | 7 textos |
+| `genome.cpp` | `parseSeed` y `hashString` (FNV-1a 64 sobre UTF-16) | 21 + 12 textos |
 | `traits.cpp` | Las 8 rarezas y el tier agregado | 2010 genomas |
 | `evolution.cpp` | `resolverJuvenil` y `resolverAdulto` | 10 crianzas × 8 afinidades |
+| `rng.cpp` | `mulberry32` y `deriveSeed` | 7 semillas × 8 salidas |
+| `simulation.cpp` | Estado completo, stats y conteo de eventos | 14 escenarios |
+
+Dos comprobaciones no salen de vectores porque son propiedades del código y no
+del TypeScript:
+
+**El invariante de partición.** Simular un intervalo de una sola vez tiene que
+dar exactamente lo mismo que simularlo en pedazos. Se prueba con diez cortes
+elegidos para caer en lugares incómodos: sobre el cambio de día, sobre el borde
+del letargo, y en números que no son múltiplos redondos.
+
+Es *la* propiedad de la que depende que el juego funcione. El jugador cierra la
+pestaña cuando quiere, así que el mismo tiempo transcurrido se simula partido de
+mil maneras distintas. Rompe si el azar se arrastra entre ticks en vez de
+sembrarse por índice, o si algún tick lee el reloj de afuera en vez del de su
+propia frontera.
+
+**El reloj hacia atrás** no tiene que perder nada ni avanzar el tiempo.
+
+---
+
+## Sobre comparar números con coma
+
+Los stats se comparan por igualdad **exacta**, sin tolerancia, y es a propósito.
+
+Una tolerancia sería lo razonable si esto midiera algo físico. Acá los dos lados
+hacen las mismas operaciones en el mismo orden sobre los mismos IEEE-754: si
+difieren aunque sea en el último bit, es que el orden o una constante no
+coinciden. Y eso se amplifica tick a tick — a los mil cuatrocientos cuarenta de
+un día, dos criaturas que arrancaron iguales ya no lo son. Un epsilon escondería
+justamente lo que hay que ver.
+
+Por eso los valores esperados en el header se ven así:
+
+```
+92.2119999999997
+```
+
+Ese número no está mal escrito. Es el resultado exacto de acumular en punto
+flotante, y es el mismo que da la web. Si diera `92.212` redondo, algo estaría
+haciendo las cuentas distinto.
 
 Los 2010 genomas son 2000 de `splitmix64` con semilla fija más 10 elegidos a
 mano. Los de a mano importan más de lo que parece: entre dos mil seeds al azar

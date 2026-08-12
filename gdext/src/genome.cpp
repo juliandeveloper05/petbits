@@ -5,6 +5,7 @@
  */
 
 #include "genome.h"
+#include "utf16.h"
 
 #include <cassert>
 #include <cstring>
@@ -122,67 +123,10 @@ Seed hashString(std::string_view text) {
     uint64_t hash = 0xcbf29ce484222325ULL;
     constexpr uint64_t prime = 0x100000001b3ULL;
 
-    const auto mezclar = [&](uint32_t unidad) {
+    paraCadaUnidadUtf16(text, [&](uint32_t unidad) {
         hash ^= static_cast<uint64_t>(unidad);
         hash *= prime;
-    };
-
-    const size_t largoTexto = text.size();
-    size_t i = 0;
-
-    while (i < largoTexto) {
-        const unsigned char b0 = static_cast<unsigned char>(text[i]);
-        uint32_t punto = 0;
-        size_t largo = 0;
-
-        if (b0 < 0x80) {
-            punto = b0;
-            largo = 1;
-        } else if ((b0 & 0xE0) == 0xC0) {
-            punto = b0 & 0x1Fu;
-            largo = 2;
-        } else if ((b0 & 0xF0) == 0xE0) {
-            punto = b0 & 0x0Fu;
-            largo = 3;
-        } else if ((b0 & 0xF8) == 0xF0) {
-            punto = b0 & 0x07u;
-            largo = 4;
-        } else {
-            // Byte suelto que no puede empezar una secuencia. Un string de JS
-            // nunca llega así; se mezcla tal cual y se sigue, que es preferible
-            // a quedarse en el lugar.
-            mezclar(b0);
-            ++i;
-            continue;
-        }
-
-        bool completa = (i + largo <= largoTexto);
-        for (size_t k = 1; completa && k < largo; ++k) {
-            const unsigned char bk = static_cast<unsigned char>(text[i + k]);
-            if ((bk & 0xC0) != 0x80) {
-                completa = false;
-                break;
-            }
-            punto = (punto << 6) | (bk & 0x3Fu);
-        }
-        if (!completa) {
-            mezclar(b0);
-            ++i;
-            continue;
-        }
-
-        i += largo;
-
-        if (punto <= 0xFFFF) {
-            mezclar(punto);
-        } else {
-            // Fuera del plano básico: JavaScript lo guarda como dos unidades, y
-            // charCodeAt las devuelve por separado.
-            const uint32_t resto = punto - 0x10000u;
-            mezclar(0xD800u + (resto >> 10));
-            mezclar(0xDC00u + (resto & 0x3FFu));
-        }
-    }
+    });
 
     return hash;
 }

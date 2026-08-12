@@ -22,10 +22,14 @@
  * cualquier texto —tu nombre— que se convierte en un seed por hash.
  */
 
+#include "simulation.h"
+
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string.hpp>
+
+#include <optional>
 
 namespace godot {
 
@@ -34,6 +38,21 @@ class PetBitsCore : public RefCounted {
 
 protected:
     static void _bind_methods();
+
+private:
+    /**
+     * La criatura viva, si hay una.
+     *
+     * Se guarda acá en vez de que GDScript pase el estado entero en cada
+     * llamada. Serializar diecisiete campos de ida y de vuelta en cada tick
+     * sería un montón de código de traducción, y cada campo una oportunidad de
+     * que se pierda algo en el camino — que es exactamente el tipo de error que
+     * el resto del proyecto se ocupa de que no pase.
+     *
+     * El día que haya que guardar la partida, el que serializa es el C++, que
+     * ya tiene el estado completo y de primera mano.
+     */
+    std::optional<petbits::CreatureState> criatura;
 
 public:
     /** "a3f0 91c4" → "A3F0-91C4-0000-0000". Devuelve "" si la entrada es vacía. */
@@ -53,6 +72,32 @@ public:
      * hablando. Si esto responde, toda la cadena funciona.
      */
     String version() const;
+
+    // -----------------------------------------------------------------------
+    // Simulación
+    // -----------------------------------------------------------------------
+
+    /**
+     * Nace una criatura. Devuelve false si el seed no se pudo leer.
+     *
+     * `tz_min` son minutos de desfasaje horario y se guardan en el estado a
+     * propósito: si la hora local se leyera del sistema en cada tick, la misma
+     * partida daría resultados distintos según dónde se abra, y se rompería el
+     * invariante de que simular por pedazos da lo mismo que de corrido.
+     */
+    bool nacer(const String& seed, int64_t ahora_ms, int64_t tz_min);
+
+    bool tiene_criatura() const;
+
+    /**
+     * Avanza el tiempo hasta `ahora_ms` y devuelve lo que pasó.
+     *
+     * { ticks, omitidos, eventos: Array[Dictionary], resumen: Dictionary }
+     */
+    Dictionary simular(int64_t ahora_ms);
+
+    /** El estado actual, listo para pintar en pantalla. */
+    Dictionary estado() const;
 };
 
 } // namespace godot

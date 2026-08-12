@@ -53,18 +53,24 @@ vectores generados ejecutando el TypeScript.
 | `genome.cpp` — decodificación, formato, parseo, hash | ✅ portado, compilado y verificado |
 | `traits.cpp` — las 8 rarezas, Miller-Rabin | ✅ portado, compilado y verificado |
 | `evolution.cpp` — ejes de crianza, resolución de forma | ✅ portado, compilado y verificado |
-| `petbits_core.cpp` — puente a GDScript | ✅ compila y linkea |
-| `simulation.cpp` — tick, letargo, eventos | ⬜ solo el header |
+| `rng.cpp` — splitmix64, mulberry32, deriveSeed | ✅ portado, compilado y verificado |
+| `simulation.cpp` — tick, letargo, eventos, evolución | ✅ portado, compilado y verificado |
+| `petbits_core.cpp` — puente a GDScript | ✅ carga en Godot 4.7.1 |
 | `breeding.cpp` — cruza por gen | ⬜ ni empezado |
 | `actions.cpp` — alimentar, jugar, acariciar | ⬜ ni empezado |
 | `expeditions.cpp` — destinos, botín determinista | ⬜ ni empezado |
 | `save_manager.cpp` — leer y escribir los saves de la web | ⬜ ni empezado |
 
 **Los tests de paridad** (`gdext/tests/`) comparan 2010 genomas, 80 crianzas, 21
-entradas de parseo y 12 hashes contra lo que devuelve el TypeScript. No hacen
-falta Godot ni SCons: un compilador y un comando.
+entradas de parseo, 12 hashes, 7 semillas de PRNG y 14 escenarios de simulación
+contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
+compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **40.416 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **41.051 comprobaciones, 0 fallas.**
+
+Además se comprueba el **invariante de partición** —simular de una vez da lo
+mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
+corrido hacia atrás. Esas dos no salen de vectores: son propiedades del código.
 
 Encontraron tres bugs de corrección que no se ven leyendo el código —
 desbordamiento de enteros sin signo, hash sobre bytes en vez de unidades
@@ -91,14 +97,19 @@ String con el constructor desde `const char*`, que no interpreta UTF-8, y el "·
 salía como "Â·". El resto del puente usaba el helper correcto; el error estaba
 justo en la línea que no pasaba por él.
 
-**Próximo paso concreto:** portar `simulation.cpp`, que es lo que bloquea la
-Fase 2.
+**Próximo paso concreto:** la Fase 2. El núcleo que necesita ya está: la
+criatura tiene stats reales, envejece, evoluciona y entra en letargo, todo
+accesible desde GDScript. Lo que falta portar (`breeding`, `actions`,
+`expeditions`) es de sistemas de meta y no bloquea tener algo en pantalla.
 
 ### Fase 2 — Criatura en pantalla ⬜
 
+Ya no está bloqueada: `PetBitsCore` expone `nacer`, `simular` y `estado`, así
+que las barras pueden mostrar valores de verdad desde el primer día.
+
 | | |
 |---|---|
-| Escena de la criatura con sus barras y acciones | ⬜ `PetView.gd` existe pero no tiene escena ni el nodo C++ que usa |
+| Escena de la criatura con sus barras y acciones | ⬜ `PetView.gd` existe pero no tiene escena, y quedó escrito contra una API que no es la que terminó habiendo |
 | Sprites: portar `spriteGen.ts` o generarlos desde el C++ | ⬜ `tools/sprite_gen.py` es un boceto en HSL, no tiene paridad |
 | Tipografía, HUD, caja de diálogo estilo Game Boy | ⬜ |
 

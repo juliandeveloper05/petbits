@@ -57,6 +57,8 @@ func _init() -> void:
 	_probar_rarezas(core)
 	_probar_acentos(core)
 	_probar_seeds_grandes(core)
+	_probar_simulacion(core)
+	_probar_particion(core)
 
 	if _fallas == 0:
 		print("\nPuente OK: los valores llegan intactos hasta GDScript.")
@@ -161,3 +163,88 @@ func _probar_seeds_grandes(core: RefCounted) -> void:
 	# Es una diferencia visible para el jugador —dos textos parecidos, dos bichos
 	# distintos— así que conviene que un cambio de comportamiento acá rompa algo.
 	_igual(core.formatear_seed("8000000000000000"), "001C-6BF5-2634-0000", "todo dígitos = decimal")
+
+
+func _probar_simulacion(core: RefCounted) -> void:
+	# Un día entero simulado. Los esperados salen del mismo lugar que todo lo
+	# demás: gdext/tests/vectores_generados.h, que produce el TypeScript.
+	#
+	# Un día son 1440 ticks, y en cada uno los stats se recalculan sobre el valor
+	# anterior. Que la salud termine en 92.2119999999997 y no en 92.212 no es
+	# ruido: es el resultado exacto de acumular en punto flotante, y es el mismo
+	# número que da la web. Si acá diera 92.212 redondo, algo estaría haciendo
+	# las cuentas distinto.
+	print("simular — un día entero desde 2026-08-11T00:00Z, tz -180")
+
+	const INICIO_MS := 1786406400000
+	const TICK_MS := 60000
+	const TICKS := 1440
+
+	if not core.nacer("A3F0-91C4-77BE-2D08", INICIO_MS, -180):
+		_fallas += 1
+		print("  FALLA: nacer() rechazó un seed válido")
+		return
+
+	var r: Dictionary = core.simular(INICIO_MS + TICKS * TICK_MS)
+	_igual(r["ticks"], 1440, "ticks simulados")
+
+	var e: Dictionary = core.estado()
+	_igual(e["ticks_vividos"], 1440, "ticks_vividos")
+	_igual(e["ticks_activos"], 1440, "ticks_activos")
+	_igual(e["letargico"], false, "letargico")
+	_igual(e["etapa"], "juvenil", "etapa")
+	_igual(e["forma"], "Pétreo", "forma")
+
+	var st: Dictionary = e["stats"]
+	_igual(st["energia"], 0.0, "energia")
+	_igual(st["animo"], 0.0, "animo")
+	_igual(st["salud"], 92.2119999999997, "salud")
+
+	var resumen: Dictionary = r["resumen"]
+	_igual(resumen.get("evolucion", 0), 1, "eventos de evolución")
+	_igual(resumen.get("hallazgo", 0), 6, "hallazgos")
+	_igual(r["eventos"].size(), 11, "eventos devueltos")
+
+	print("  %s · %s · salud %.4f" % [e["etapa"], e["forma"], st["salud"]])
+	for ev in r["eventos"]:
+		if ev["tipo"] == "evolucion":
+			print("  ◆ %s" % ev["texto"])
+
+
+func _probar_particion(core: RefCounted) -> void:
+	# Simular de una vez tiene que dar lo mismo que simular en dos pedazos.
+	#
+	# Ya está comprobado en los tests de C++, pero se repite acá por una razón
+	# distinta: es la propiedad de la que depende que el juego funcione. El
+	# jugador cierra y abre cuando quiere, así que el mismo tiempo transcurrido
+	# se simula partido de mil maneras. Si el resultado dependiera de en cuántos
+	# pedazos se hizo, dos personas con la misma criatura y la misma ausencia
+	# terminarían con criaturas distintas.
+	print("invariante de partición a través del puente")
+
+	const INICIO_MS := 1786406400000
+	const TICK_MS := 60000
+
+	core.nacer("A3F0-91C4-77BE-2D08", INICIO_MS, -180)
+	core.simular(INICIO_MS + 2000 * TICK_MS)
+	var entero: Dictionary = core.estado()
+
+	var otro: RefCounted = ClassDB.instantiate("PetBitsCore")
+	otro.nacer("A3F0-91C4-77BE-2D08", INICIO_MS, -180)
+	otro.simular(INICIO_MS + 733 * TICK_MS)
+	otro.simular(INICIO_MS + 1501 * TICK_MS)
+	otro.simular(INICIO_MS + 2000 * TICK_MS)
+	var partido: Dictionary = otro.estado()
+
+	_igual(partido["ticks_vividos"], entero["ticks_vividos"], "ticks_vividos partido")
+	_igual(partido["ticks_activos"], entero["ticks_activos"], "ticks_activos partido")
+	_igual(partido["etapa"], entero["etapa"], "etapa partida")
+	_igual(partido["forma"], entero["forma"], "forma partida")
+
+	var a: Dictionary = entero["stats"]
+	var b: Dictionary = partido["stats"]
+	_igual(b["energia"], a["energia"], "energia partida")
+	_igual(b["animo"], a["animo"], "animo partida")
+	_igual(b["salud"], a["salud"], "salud partida")
+
+	print("  2000 ticks de una vez == 733 + 768 + 499")

@@ -270,14 +270,15 @@ npm run parity
 ```
 
 Ese comando **ejecuta el TypeScript** de `src/core/` y vuelca lo que devuelve —
-2010 genomas, 80 crianzas, 21 entradas de parseo, 12 hashes— en un header de
-C++. Después, desde el *Developer Command Prompt* en `gdext/tests`:
+2010 genomas, 80 crianzas, 21 entradas de parseo, 12 hashes y 14 escenarios de
+simulación— en un header de C++. Después, desde el *Developer Command Prompt* en
+`gdext/tests`:
 
 ```bash
-cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp && run_tests.exe
+cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp && run_tests.exe
 ```
 
-Estado actual: **40.416 comprobaciones, 0 fallas.**
+Estado actual: **41.051 comprobaciones, 0 fallas.**
 
 No hacen falta Godot ni SCons ni godot-cpp: los módulos portados son C++ puro.
 Con un compilador alcanza, así que la paridad se puede comprobar antes de
@@ -397,10 +398,11 @@ contenido de otra. Un save que no valida se pone en cuarentena, nunca se borra.
 El detalle completo está en el **[roadmap](ROADMAP.md)**. En dos líneas:
 
 - La web está terminada y desplegada.
-- Del nativo hay tres módulos portados con paridad verificada (40.416
-  comprobaciones, 0 fallas) y la GDExtension cargando en Godot 4.7.1: la cadena
-  está cerrada de punta a punta. **Lo próximo es portar `simulation.cpp`**, que
-  es lo que bloquea la Fase 2.
+- Del nativo hay cinco módulos portados con paridad verificada (41.051
+  comprobaciones, 0 fallas) y la GDExtension cargando en Godot 4.7.1. La
+  criatura ya vive del lado nativo: envejece, evoluciona y entra en letargo con
+  los mismos números que la web. **Lo próximo es la Fase 2**, poner eso en
+  pantalla.
 
 ---
 

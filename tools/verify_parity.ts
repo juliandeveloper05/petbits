@@ -32,7 +32,8 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { type Crianza, resolverAdulto, resolverJuvenil } from "../src/core/evolution.ts";
 import { type Genes, decodeGenome, formatSeed, hashString, parseSeed } from "../src/core/genome.ts";
-import { splitmix64 } from "../src/core/rng.ts";
+import { deriveSeed, mulberry32, splitmix64 } from "../src/core/rng.ts";
+import { TICK_MS, createCreature, simulate } from "../src/core/simulation.ts";
 import { TRAIT_CATALOG, detectTraits, rarityTier } from "../src/core/traits.ts";
 
 function arg(name: string, fallback: number): number {
@@ -159,6 +160,24 @@ function indiceForma(forma: string): number {
 
 function hex(valor: bigint): string {
   return `0x${valor.toString(16).toUpperCase().padStart(16, "0")}ULL`;
+}
+
+/**
+ * Un double, escrito de forma que C++ lo lea EXACTAMENTE igual.
+ *
+ * `String(x)` en JavaScript da la cadena más corta que vuelve al mismo double
+ * al releerla. La conversión de decimal a binario del compilador está obligada
+ * a redondear correctamente, así que el literal que sale de acá reconstruye el
+ * mismo patrón de bits. No es aproximado: es el mismo número.
+ *
+ * Importa porque los stats se acumulan a lo largo de miles de ticks. Una
+ * diferencia en el último bit del primer tick se amplifica, y a los tres días
+ * simulados la criatura de la web y la del nativo dejan de ser la misma.
+ */
+function dbl(valor: number): string {
+  if (!Number.isFinite(valor)) throw new Error(`Valor no finito: ${valor}`);
+  const texto = String(valor);
+  return /[.eE]/.test(texto) ? texto : `${texto}.0`;
 }
 
 // ---------------------------------------------------------------------------
@@ -342,6 +361,224 @@ for (const entrada of ENTRADAS) {
 }
 lineas.push("};");
 lineas.push("");
+
+// --- rng ---
+//
+// Va aparte de la simulación porque si mulberry32 se desvía, TODO lo que
+// depende del azar se desvía con él y los errores de más arriba se vuelven
+// ilegibles. Teniendo esto verificado, una falla en la simulación se sabe que
+// es de la simulación.
+lineas.push("struct VectorRng {");
+lineas.push("    uint32_t semilla;");
+lineas.push("    double   valores[8];   ///< las primeras 8 salidas de next()");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline constexpr VectorRng RNGS[] = {");
+for (const semilla of [0, 1, 42, 0x6d2b79f5, 0xffffffff, 0x9e3779b1, 123456789]) {
+  const rng = mulberry32(semilla);
+  const valores = Array.from({ length: 8 }, () => dbl(rng.next()));
+  lineas.push(`    {${semilla >>> 0}u, {${valores.join(", ")}}},`);
+}
+lineas.push("};");
+lineas.push("");
+
+lineas.push("struct VectorDerive {");
+lineas.push("    uint64_t    seed;");
+lineas.push("    const char* etiqueta;");
+lineas.push("    uint32_t    derivada;");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline constexpr VectorDerive DERIVES[] = {");
+for (const [seed, etiqueta] of [
+  [0n, "eventos"],
+  [1n, "eventos"],
+  [0xa3f091c477be2d08n, "eventos"],
+  [0xffffffffffffffffn, "eventos"],
+  [0xa3f091c477be2d08n, "manchas"],
+  [0xa3f091c477be2d08n, ""],
+  // Con acento: hoy ninguna etiqueta lo lleva, pero el día que una lo lleve
+  // esto avisa en vez de dar otro número en silencio.
+  [0xa3f091c477be2d08n, "señuelo"],
+] as [bigint, string][]) {
+  lineas.push(`    {${hex(seed)}, ${JSON.stringify(etiqueta)}, ${deriveSeed(seed, etiqueta)}u},`);
+}
+lineas.push("};");
+lineas.push("");
+
+// --- simulación ---
+//
+// Es el módulo con más superficie para desviarse: mezcla punto flotante
+// acumulado a lo largo de miles de ticks, aritmética de fechas con divisiones
+// que redondean distinto en cada lenguaje, y azar sembrado por índice de tick.
+//
+// Los escenarios están elegidos para cruzar los bordes que importan: el paso a
+// juvenil (1440 ticks activos), el letargo (2880 ticks sin cuidado), la entrada
+// y salida de la noche, y el cambio de día local con desfasajes horarios
+// distintos — incluido uno negativo, que es donde la división con piso se
+// separa de la división truncada.
+const BASE_MS = 1786406400000; // 2026-08-11T00:00:00Z, elegido y fijo
+
+interface Escenario {
+  nombre: string;
+  seed: bigint;
+  inicioMs: number;
+  tz: number;
+  ticks: number;
+}
+
+const ESCENARIOS: readonly Escenario[] = [
+  {
+    nombre: "corto de dia",
+    seed: 0xa3f091c477be2d08n,
+    inicioMs: BASE_MS + 12 * 3600_000,
+    tz: -180,
+    ticks: 30,
+  },
+  {
+    nombre: "cruza la noche",
+    seed: 0xa3f091c477be2d08n,
+    inicioMs: BASE_MS + 22 * 3600_000,
+    tz: -180,
+    ticks: 180,
+  },
+  { nombre: "un dia entero", seed: 0xa3f091c477be2d08n, inicioMs: BASE_MS, tz: -180, ticks: 1440 },
+  {
+    nombre: "justo al evolucionar",
+    seed: 0xa3f091c477be2d08n,
+    inicioMs: BASE_MS,
+    tz: -180,
+    ticks: 1441,
+  },
+  {
+    nombre: "hasta el letargo",
+    seed: 0xa3f091c477be2d08n,
+    inicioMs: BASE_MS,
+    tz: -180,
+    ticks: 2880,
+  },
+  {
+    nombre: "pasado el letargo",
+    seed: 0xa3f091c477be2d08n,
+    inicioMs: BASE_MS,
+    tz: -180,
+    ticks: 3000,
+  },
+  { nombre: "siete dias", seed: 0xa3f091c477be2d08n, inicioMs: BASE_MS, tz: -180, ticks: 10080 },
+  {
+    nombre: "metabolismo lento",
+    seed: 0x0000000000000000n,
+    inicioMs: BASE_MS,
+    tz: -180,
+    ticks: 2000,
+  },
+  {
+    nombre: "metabolismo frenetico",
+    seed: 0xffffffffffffffffn,
+    inicioMs: BASE_MS,
+    tz: -180,
+    ticks: 2000,
+  },
+  { nombre: "tz cero", seed: 0x5555555555555555n, inicioMs: BASE_MS, tz: 0, ticks: 1500 },
+  { nombre: "tz positivo", seed: 0x5555555555555555n, inicioMs: BASE_MS, tz: 540, ticks: 1500 },
+  {
+    nombre: "tz negativo grande",
+    seed: 0x5555555555555555n,
+    inicioMs: BASE_MS,
+    tz: -720,
+    ticks: 1500,
+  },
+  {
+    nombre: "arranca de madrugada",
+    seed: 0xfedcba9876543210n,
+    inicioMs: BASE_MS + 3 * 3600_000,
+    tz: -180,
+    ticks: 600,
+  },
+  {
+    nombre: "sin ticks completos",
+    seed: 0xa3f091c477be2d08n,
+    inicioMs: BASE_MS,
+    tz: -180,
+    ticks: 0,
+  },
+];
+
+const ETAPAS = ["bebe", "juvenil", "adulto"];
+
+lineas.push("struct VectorSim {");
+lineas.push("    uint64_t seed;");
+lineas.push("    int64_t  inicioMs;");
+lineas.push("    int32_t  tz;");
+lineas.push("    int64_t  ticksPedidos;");
+lineas.push("    // --- lo que tiene que dar ---");
+lineas.push("    int64_t  ticks;");
+lineas.push("    int64_t  lastTickMs;");
+lineas.push("    int64_t  ticksVividos;");
+lineas.push("    int64_t  ticksActivos;");
+lineas.push("    int64_t  ticksSinCuidado;");
+lineas.push("    int64_t  diaIndice;");
+lineas.push("    uint8_t  letargico;");
+lineas.push("    uint8_t  durmiendo;");
+lineas.push("    uint8_t  etapa;      ///< 0 bebe, 1 juvenil, 2 adulto");
+lineas.push("    uint8_t  forma;      ///< índice en FORMAS");
+lineas.push("    double   energia, animo, salud, vinculo;");
+lineas.push("    double   sumaAnimo, sumaSalud;");
+lineas.push("    int64_t  ticksMedidos;");
+lineas.push("    int64_t  eventos;    ///< cuántos quedaron después del recorte");
+lineas.push("    int64_t  omitidos;");
+lineas.push("    int64_t  hallazgos, evoluciones, durmio, desperto, letargo;");
+lineas.push("    int64_t  hambre, animoEv, saludEv;");
+lineas.push("    const char* nombre;");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline constexpr VectorSim SIMULACIONES[] = {");
+
+for (const e of ESCENARIOS) {
+  const inicial = createCreature(e.seed, e.inicioMs, e.tz);
+  const r = simulate(inicial, e.inicioMs + e.ticks * TICK_MS);
+  const s = r.state;
+  const c = s.crianza;
+  const n = (k: string) => r.summary[k] ?? 0;
+
+  const campos = [
+    hex(e.seed),
+    `${e.inicioMs}LL`,
+    e.tz,
+    `${e.ticks}LL`,
+    `${r.ticks}LL`,
+    `${s.lastTickMs}LL`,
+    `${s.ticksVividos}LL`,
+    `${s.ticksActivos}LL`,
+    `${s.ticksSinCuidado}LL`,
+    `${s.diaIndice}LL`,
+    s.letargico ? 1 : 0,
+    s.durmiendo ? 1 : 0,
+    ETAPAS.indexOf(s.etapa),
+    indiceForma(s.forma),
+    dbl(s.stats.energia),
+    dbl(s.stats.animo),
+    dbl(s.stats.salud),
+    dbl(s.stats.vinculo),
+    dbl(c.sumaAnimo),
+    dbl(c.sumaSalud),
+    `${c.ticksMedidos}LL`,
+    `${r.events.length}LL`,
+    `${r.omitted}LL`,
+    `${n("hallazgo")}LL`,
+    `${n("evolucion")}LL`,
+    `${n("durmio")}LL`,
+    `${n("desperto")}LL`,
+    `${n("letargo")}LL`,
+    `${n("hambre")}LL`,
+    `${n("animo")}LL`,
+    `${n("salud")}LL`,
+    `"${e.nombre}"`,
+  ];
+  lineas.push(`    {${campos.join(", ")}},`);
+}
+
+lineas.push("};");
+lineas.push("");
 lineas.push("} // namespace petbits::vectores");
 lineas.push("");
 
@@ -351,4 +588,5 @@ console.log(`Vectores escritos en ${SALIDA}`);
 console.log(`  ${seeds.length} genomas`);
 console.log(`  ${CRIANZAS.length * 8} crianzas`);
 console.log(`  ${ENTRADAS.length} entradas de parseSeed`);
+console.log(`  ${ESCENARIOS.length} escenarios de simulación`);
 console.log("\nAhora compilá y corré los tests de C++ — ver gdext/tests/README.md");
