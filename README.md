@@ -427,10 +427,14 @@ MIT.
 
 "La identidad digital no nace del azar, sino del código. La rareza no debería ser una tabla de botín ni un dado oculto, sino una propiedad matemática inmutable de su propio ADN determinista."
 
-👨‍💻 Sobre Mí
+</div>
+
+### 👨‍💻 Sobre Mí
+
 Soy Full-Stack Software Engineer especializado en construir sistemas deterministas, arquitecturas local-first y plataformas interactivas complejas. Me apasiona explorar la intersección entre la matemática pura, la generación procedural y el audio digital para crear experiencias únicas, robustas y de alto rendimiento.
 
-🛠️ Stack Tecnológico
+### 🛠️ Stack Tecnológico
+
 Frontend & Core: React, React Native, Next.js, TypeScript, Vite.
 
 Backend & Datos: Node.js, Python (FastAPI), PHP, MySQL, Supabase.
@@ -438,5 +442,3 @@ Backend & Datos: Node.js, Python (FastAPI), PHP, MySQL, Supabase.
 Infraestructura & Ops: Git, Vercel, Render, Railway, Sentry.
 
 Creative Coding & Ecosistema: Web Audio API, C++ (Godot / GDExtension), integración de herramientas de IA.
-
-</div>
