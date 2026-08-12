@@ -52,21 +52,58 @@ aparente.
 ### Windows — MinGW, Linux o macOS
 
 ```bash
-g++ -std=c++17 -O2 test_parity.cpp ../src/genome.cpp ../src/traits.cpp ../src/evolution.cpp -o run_tests && ./run_tests
+g++ -std=c++17 -O2 test_parity.cpp ../src/genome.cpp ../src/traits.cpp ../src/evolution.cpp ../src/rng.cpp ../src/simulation.cpp ../src/palette.cpp ../src/sprite_gen.cpp -o run_tests && ./run_tests
 ```
 
-Salida esperada:
+### Desde Visual Studio 2022
+
+Hay un `CMakeLists.txt` en `gdext/`. En Visual Studio:
+
+> **Archivo → Abrir → Carpeta…** y elegir `gdext/`
+
+VS lo detecta solo y configura todo. Después:
+
+| | |
+|---|---|
+| Compilar | `Ctrl+Shift+B` |
+| Correr con el depurador | Elegir `run_tests.exe` como elemento de inicio y `F5` |
+| Correr sin depurar | `Ctrl+F5` |
+
+Elegí la configuración **msvc-release** para correr la paridad —los cincuenta
+mil chequeos tardan tres segundos— y **msvc-debug** para depurar.
+
+Es lo que conviene cuando algo no coincide: se pone un breakpoint adentro de
+`simulate()` y se miran los stats tick a tick, en vez de deducir qué pasó
+leyendo un número al final.
+
+> **Esto no reemplaza a SCons, y no puede.** La GDExtension la tiene que
+> construir SCons, porque godot-cpp trae su propio sistema de build y genera
+> cientos de archivos de binding antes de compilar nada. Lo que cubre CMake es
+> el núcleo portado, que es C++ puro y es justamente donde se quiere un
+> depurador. Los dos compilan las mismas fuentes con el mismo compilador.
+
+---
+
+## Salida esperada
 
 ```
 PetBits — paridad TypeScript <-> C++
-2010 genomas, 80 crianzas, 7 hashes
+2010 genomas, 80 crianzas, 21 parseos, 12 hashes, 14 simulaciones,
+780 rampas de color, 2560 sprites
 
 decodeGenome / formatSeed
+parseSeed
 hashString (FNV-1a 64)
 detectTraits / rarityTier
 resolverJuvenil / resolverAdulto
+mulberry32 / deriveSeed
+buildRamp (OKLCH)
+generateSprite
+simulate
+invariante de partición
+reloj hacia atrás
 
-38200 comprobaciones, 0 fallas
+50071 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
@@ -142,9 +179,12 @@ en 64 bits. Son exactamente los valores donde un port se rompe.
 
 ## Qué falta
 
-`simulation.cpp` y `breeding.cpp` todavía no están portados —hay header pero no
-implementación—, así que no hay vectores para ellos. Cuando se porten, se
-agregan al generador y al test.
+`breeding.cpp`, `actions.cpp` y `expeditions.cpp` todavía no están portados, así
+que no hay vectores para ellos. Cuando se porten, se agregan al generador y acá.
+
+`battle.cpp` es distinto: no existe del lado web, así que no hay contra qué
+comparar. Ese va a necesitar tests propios, escritos como tests de verdad y no
+como vectores de paridad.
 
 ---
 
