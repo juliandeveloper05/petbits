@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 
+#include "../src/actions.h"
 #include "../src/evolution.h"
 #include "../src/genome.h"
 #include "../src/palette.h"
@@ -435,6 +436,81 @@ static void probarParticion() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// actions
+// ---------------------------------------------------------------------------
+
+static void probarAcciones() {
+    bloque("alimentar / jugar / acariciar");
+
+    for (const auto& v : vectores::ACCIONES) {
+        // El estado inicial se arma campo por campo desde el vector. Varios de
+        // estos escenarios —salud por debajo de 30, el tope de vínculo ya
+        // alcanzado, una expedición en curso— no se alcanzan simulando: hay que
+        // ponerlos.
+        CreatureState s = createCreature(v.seed, v.nowMs, v.tz);
+        s.stats.energia = v.energia;
+        s.stats.animo = v.animo;
+        s.stats.salud = v.salud;
+        s.stats.vinculo = v.vinculo;
+        s.vinculoHoy = v.vinculoHoy;
+        s.diaIndice = v.diaIndice;
+        s.letargico = v.letargico != 0;
+        s.ticksSinCuidado = v.ticksSinCuidado;
+        if (v.conExpedicion != 0) {
+            s.expedicion = Expedicion{"patio", v.nowMs, v.nowMs + 900'000};
+        }
+
+        bool ultimoOk = true;
+        std::string ultimoMensaje;
+
+        for (const char* p = v.secuencia; *p != '\0'; ++p) {
+            ActionResult r{};
+            switch (*p) {
+                case 'j': r = jugar(s, v.nowMs); break;
+                case 'a': r = acariciar(s, v.nowMs); break;
+                case 'b': r = alimentar(s, "baya", v.nowMs); break;
+                case 'r': r = alimentar(s, "raiz", v.nowMs); break;
+                case 'l': r = alimentar(s, "larva", v.nowMs); break;
+                case 'c': r = alimentar(s, "cristal", v.nowMs); break;
+                default:  r = alimentar(s, "no-existe", v.nowMs); break;
+            }
+            ultimoOk = r.ok;
+            ultimoMensaje = r.message;
+            if (r.ok) s = r.state;
+        }
+
+        revisarDobles(s.stats.energia, v.eEnergia, v.nombre, "energia");
+        revisarDobles(s.stats.animo, v.eAnimo, v.nombre, "animo");
+        revisarDobles(s.stats.salud, v.eSalud, v.nombre, "salud");
+        revisarDobles(s.stats.vinculo, v.eVinculo, v.nombre, "vinculo");
+        revisarDobles(s.vinculoHoy, v.eVinculoHoy, v.nombre, "vinculoHoy");
+        revisarEnteros(static_cast<uint64_t>(s.diaIndice), static_cast<uint64_t>(v.eDiaIndice),
+                       v.nombre, "diaIndice");
+        revisarEnteros(s.letargico ? 1 : 0, v.eLetargico, v.nombre, "letargico");
+        revisarEnteros(static_cast<uint64_t>(s.ticksSinCuidado),
+                       static_cast<uint64_t>(v.eTicksSinCuidado), v.nombre, "ticksSinCuidado");
+
+        revisarEnteros(s.crianza.dieta_proteina, v.eProteina, v.nombre, "dieta.proteina");
+        revisarEnteros(s.crianza.dieta_dulce, v.eDulce, v.nombre, "dieta.dulce");
+        revisarEnteros(s.crianza.dieta_mineral, v.eMineral, v.nombre, "dieta.mineral");
+        revisarEnteros(s.crianza.dieta_raro, v.eRaro, v.nombre, "dieta.raro");
+        revisarEnteros(s.crianza.juego, v.eJuego, v.nombre, "crianza.juego");
+        revisarEnteros(s.crianza.calma, v.eCalma, v.nombre, "crianza.calma");
+
+        revisarEnteros(ultimoOk ? 1 : 0, v.eOk, v.nombre, "ok de la última acción");
+
+        // El mensaje se compara entero. No es adorno: es lo que le dice al
+        // jugador por qué pasó lo que pasó, y cada texto corresponde a una rama
+        // distinta —comió con ganas o sin ganas, jugó entero o a media máquina—.
+        // Si el estado coincide pero el mensaje no, el port tomó otro camino
+        // para llegar al mismo número, y eso es un bug esperando.
+        const std::string detalle =
+            "mensaje: C++ dio \"" + ultimoMensaje + "\", el TS da \"" + v.eMensaje + "\"";
+        revisar(ultimoMensaje == v.eMensaje, v.nombre, detalle.c_str());
+    }
+}
+
 /** El reloj para atrás no tiene que perder nada ni avanzar el tiempo. */
 static void probarRelojAtras() {
     bloque("reloj hacia atrás");
@@ -527,14 +603,15 @@ static void probarSprites() {
 int main() {
     std::printf("\nPetBits — paridad TypeScript <-> C++\n");
     std::printf("%zu genomas, %zu crianzas, %zu parseos, %zu hashes, %zu simulaciones,\n"
-                "%zu rampas de color, %zu sprites\n\n",
+                "%zu rampas de color, %zu sprites, %zu escenarios de acciones\n\n",
                 sizeof(vectores::GENOMAS) / sizeof(vectores::GENOMAS[0]),
                 sizeof(vectores::EVOLUCIONES) / sizeof(vectores::EVOLUCIONES[0]),
                 sizeof(vectores::PARSEOS) / sizeof(vectores::PARSEOS[0]),
                 sizeof(vectores::HASHES) / sizeof(vectores::HASHES[0]),
                 sizeof(vectores::SIMULACIONES) / sizeof(vectores::SIMULACIONES[0]),
                 sizeof(vectores::RAMPAS) / sizeof(vectores::RAMPAS[0]),
-                sizeof(vectores::SPRITES) / sizeof(vectores::SPRITES[0]));
+                sizeof(vectores::SPRITES) / sizeof(vectores::SPRITES[0]),
+                sizeof(vectores::ACCIONES) / sizeof(vectores::ACCIONES[0]));
 
     probarGenomas();
     probarParseo();
@@ -545,6 +622,7 @@ int main() {
     probarRampas();
     probarSprites();
     probarSimulacion();
+    probarAcciones();
     probarParticion();
     probarRelojAtras();
 

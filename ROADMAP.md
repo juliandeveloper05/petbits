@@ -45,7 +45,7 @@ no llega a producción.
 
 ### Fase 1 — Port del núcleo a C++ 🚧
 
-Tres módulos de siete. Los tres portados tienen paridad verificada contra
+Ocho módulos de once. Todos los portados tienen paridad verificada contra
 vectores generados ejecutando el TypeScript.
 
 | Módulo | Estado |
@@ -58,17 +58,18 @@ vectores generados ejecutando el TypeScript.
 | `palette.cpp` — paletas OKLCH, 8 modos, sesgo por forma | ✅ portado, compilado y verificado |
 | `sprite_gen.cpp` — el pixel art de 32×32 | ✅ portado, compilado y verificado |
 | `petbits_core.cpp` — puente a GDScript | ✅ carga en Godot 4.7.1 |
+| `actions.cpp` — alimentar, jugar, acariciar | ✅ portado, compilado y verificado |
 | `breeding.cpp` — cruza por gen | ⬜ ni empezado |
-| `actions.cpp` — alimentar, jugar, acariciar | ⬜ ni empezado |
 | `expeditions.cpp` — destinos, botín determinista | ⬜ ni empezado |
 | `save_manager.cpp` — leer y escribir los saves de la web | ⬜ ni empezado |
 
 **Los tests de paridad** (`gdext/tests/`) comparan 2010 genomas, 80 crianzas, 21
-entradas de parseo, 12 hashes, 7 semillas de PRNG y 14 escenarios de simulación
-contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
-compilador y un comando.
+entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
+780 rampas de color, 2560 sprites y 23 escenarios de acciones contra lo que
+devuelve el TypeScript. No hacen falta Godot ni SCons: un compilador y un
+comando.
 
-Estado medido con MSVC 2022 sobre Windows: **41.051 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **50.439 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -99,10 +100,8 @@ String con el constructor desde `const char*`, que no interpreta UTF-8, y el "·
 salía como "Â·". El resto del puente usaba el helper correcto; el error estaba
 justo en la línea que no pasaba por él.
 
-**Próximo paso concreto:** la Fase 2. El núcleo que necesita ya está: la
-criatura tiene stats reales, envejece, evoluciona y entra en letargo, todo
-accesible desde GDScript. Lo que falta portar (`breeding`, `actions`,
-`expeditions`) es de sistemas de meta y no bloquea tener algo en pantalla.
+Lo que falta portar —`breeding`, `expeditions`, `save_manager`— es de sistemas
+de meta y del guardado; nada de eso bloquea el bucle de juego básico.
 
 ### Fase 2 — Criatura en pantalla 🚧
 
@@ -112,8 +111,23 @@ accesible desde GDScript. Lo que falta portar (`breeding`, `actions`,
 | `PetBitsCore.sprite()` devuelve una `Image` de 32×32 | ✅ |
 | `PetView.tscn` — sprite, barras, registro de eventos, parpadeo | ✅ corre; es la escena principal del proyecto |
 | `hoja_de_contacto.gd` — muchas criaturas de una, como `npm run sheet` | ✅ |
-| Acciones: alimentar, jugar, acariciar | ⬜ necesita portar `actions.cpp` |
+| Acciones: alimentar, jugar, acariciar | ✅ con sus tradeoffs y el tope diario de vínculo |
 | Tipografía y caja de diálogo estilo Game Boy | ⬜ |
+| Guardado: la partida se pierde al cerrar | ⬜ necesita `save_manager.cpp` |
+
+**El presupuesto de pantalla es 480×270** —resolución de consola portátil, que
+es la identidad visual del juego— y eso son 254 píxeles útiles de alto. La
+primera versión de `PetView` apilaba todo en una columna y pedía unos 400:
+Salud y Vínculo quedaban abajo del borde y el registro no se veía nunca. Godot
+no avisa de eso, simplemente recorta.
+
+Ahora va en dos columnas y hay un script que lo mide en vez de mirarlo a ojo:
+
+```bash
+godot --headless --path godot --script res://scripts/medir_layout.gd
+```
+
+Devuelve 1 si el contenido se pasa. Hoy pide 152 px de los 270.
 
 **La decisión de los sprites quedó tomada: se portó el algoritmo.** Las otras
 dos opciones —dejar `tools/sprite_gen.py` o dibujarlos a mano— rompían la

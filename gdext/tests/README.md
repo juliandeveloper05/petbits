@@ -41,7 +41,8 @@ Desde una consola *Developer Command Prompt for VS 2022* (la común no tiene `cl
 en el PATH):
 
 ```bash
-cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp && run_tests.exe
+cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\src\actions.cpp && run_tests.exe
+ng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\srcctions.cpp && run_tests.exe
 ```
 
 `/utf-8` no es adorno: los catálogos están llenos de acentos y sin esa opción
@@ -52,7 +53,7 @@ aparente.
 ### Windows — MinGW, Linux o macOS
 
 ```bash
-g++ -std=c++17 -O2 test_parity.cpp ../src/genome.cpp ../src/traits.cpp ../src/evolution.cpp ../src/rng.cpp ../src/simulation.cpp ../src/palette.cpp ../src/sprite_gen.cpp -o run_tests && ./run_tests
+g++ -std=c++17 -O2 test_parity.cpp ../src/genome.cpp ../src/traits.cpp ../src/evolution.cpp ../src/rng.cpp ../src/simulation.cpp ../src/palette.cpp ../src/sprite_gen.cpp ../src/actions.cpp -o run_tests && ./run_tests
 ```
 
 ### Desde Visual Studio 2022
@@ -95,7 +96,7 @@ leyendo un número al final.
 ```
 PetBits — paridad TypeScript <-> C++
 2010 genomas, 80 crianzas, 21 parseos, 12 hashes, 14 simulaciones,
-780 rampas de color, 2560 sprites
+780 rampas de color, 2560 sprites, 23 escenarios de acciones
 
 decodeGenome / formatSeed
 parseSeed
@@ -106,10 +107,11 @@ mulberry32 / deriveSeed
 buildRamp (OKLCH)
 generateSprite
 simulate
+alimentar / jugar / acariciar
 invariante de partición
 reloj hacia atrás
 
-50071 comprobaciones, 0 fallas
+50439 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
@@ -131,6 +133,7 @@ script.
 | `palette.cpp` | Los 5 colores de la rampa, canal por canal | 260 genomas × 3 formas |
 | `sprite_gen.cpp` | El buffer RGBA entero, por hash, más el conteo de opacos | 2560 sprites |
 | `simulation.cpp` | Estado completo, stats y conteo de eventos | 14 escenarios |
+| `actions.cpp` | Stats, crianza, tope de vínculo y el mensaje al jugador | 23 escenarios |
 
 Los sprites se comparan por hash y no píxel por píxel porque cada uno son 4096
 bytes: ponerlos crudos en el header serían megabytes. Junto al hash va el conteo
@@ -185,8 +188,8 @@ en 64 bits. Son exactamente los valores donde un port se rompe.
 
 ## Qué falta
 
-`breeding.cpp`, `actions.cpp` y `expeditions.cpp` todavía no están portados, así
-que no hay vectores para ellos. Cuando se porten, se agregan al generador y acá.
+`breeding.cpp` y `expeditions.cpp` todavía no están portados, así que no hay
+vectores para ellos. Cuando se porten, se agregan al generador y acá.
 
 `battle.cpp` es distinto: no existe del lado web, así que no hay contra qué
 comparar. Ese va a necesitar tests propios, escritos como tests de verdad y no

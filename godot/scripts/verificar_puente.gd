@@ -60,6 +60,7 @@ func _init() -> void:
 	_probar_simulacion(core)
 	_probar_particion(core)
 	_probar_sprite(core)
+	_probar_acciones(core)
 
 	if _fallas == 0:
 		print("\nPuente OK: los valores llegan intactos hasta GDScript.")
@@ -291,3 +292,41 @@ func _probar_sprite(core: RefCounted) -> void:
 	var parpadeo: Image = core.sprite(SEED_EJEMPLO, "adulto", "indefinida", true)
 	var distintos := parpadeo.get_data() != datos
 	_igual(distintos, true, "el parpadeo cambia el dibujo")
+
+
+func _probar_acciones(core: RefCounted) -> void:
+	# Los esperados salen del vector "baya al nacer" de vectores_generados.h.
+	# Una criatura recién nacida tiene 70 de energía; la baya suma 18 y 5 de
+	# ánimo, y toda acción da 2 de vínculo.
+	print("alimentar / jugar / acariciar")
+
+	const INICIO_MS := 1786406400000
+
+	core.nacer(SEED_EJEMPLO, INICIO_MS, -180)
+
+	var alimentos: Array = core.alimentos()
+	_igual(alimentos.size(), 4, "cantidad de alimentos")
+	_igual(alimentos[1]["nombre"], "Raíz", "el nombre con tilde cruza bien")
+
+	var r: Dictionary = core.alimentar("baya", INICIO_MS)
+	_igual(r["ok"], true, "alimentar acepta")
+	_igual(r["mensaje"], "Se morfó la baya sin respirar.", "mensaje de alimentar")
+
+	var st: Dictionary = core.estado()["stats"]
+	_igual(st["energia"], 88.0, "energia tras la baya")
+	_igual(st["animo"], 75.0, "animo tras la baya")
+	_igual(st["vinculo"], 2.0, "vinculo tras la baya")
+
+	# Un rechazo tiene que traer el motivo, no un error genérico. Es lo que la
+	# pantalla le muestra al jugador para que sepa qué hacer.
+	core.nacer(SEED_EJEMPLO, INICIO_MS, -180)
+	var flaca: Dictionary = core.simular(INICIO_MS + 2000 * 60000)
+	var rechazo: Dictionary = core.jugar(INICIO_MS + 2000 * 60000)
+	_igual(rechazo["ok"], false, "jugar sin energía se rechaza")
+	_igual(
+		rechazo["mensaje"],
+		"No le da la energía para jugar. Primero tiene que comer algo.",
+		"el rechazo explica por qué"
+	)
+
+	print("  %s" % rechazo["mensaje"])

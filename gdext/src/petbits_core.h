@@ -101,6 +101,25 @@ public:
     Dictionary estado() const;
 
     // -----------------------------------------------------------------------
+    // Acciones
+    // -----------------------------------------------------------------------
+
+    /** El catálogo de alimentos, para armar los botones sin repetirlo en GDScript. */
+    Array alimentos() const;
+
+    /**
+     * Las tres acciones. Todas devuelven { ok: bool, mensaje: String }.
+     *
+     * Cuando `ok` es false, `mensaje` dice POR QUÉ no se pudo —"no le da la
+     * energía para jugar", "está de expedición"— y eso se muestra tal cual. Es
+     * mejor que deshabilitar el botón: un botón gris no explica nada, y el
+     * motivo forma parte de lo que el jugador tiene que entender para decidir.
+     */
+    Dictionary alimentar(const String& alimento_id, int64_t ahora_ms);
+    Dictionary jugar(int64_t ahora_ms);
+    Dictionary acariciar(int64_t ahora_ms);
+
+    // -----------------------------------------------------------------------
     // Sprite
     // -----------------------------------------------------------------------
 

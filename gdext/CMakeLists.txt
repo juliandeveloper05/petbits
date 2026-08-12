@@ -37,6 +37,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # register_types.cpp quedan afuera a propósito — esos sí dependen de godot-cpp
 # y solo los puede compilar SCons.
 add_library(petbits_nucleo STATIC
+    src/actions.cpp
     src/genome.cpp
     src/traits.cpp
     src/evolution.cpp

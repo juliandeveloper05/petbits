@@ -7,6 +7,14 @@
 // 2010 genomas (10 de borde + 2000 de splitmix64)
 // 10 crianzas x 8 genomas de afinidad
 
+// Los arreglos van como `inline const` y NO como `constexpr`.
+//
+// Con constexpr, MSVC tiene que evaluar en tiempo de compilación las
+// ~5000 entradas de este archivo, y se queda sin memoria: error C1060.
+// No hace falta: nadie los usa en una expresión constante, solo se
+// recorren. Como son agregados de literales, igual quedan en datos
+// estáticos de solo lectura — se pierde nada y compila.
+
 #include <cstdint>
 
 namespace petbits::vectores {
@@ -22,7 +30,7 @@ struct VectorGenoma {
     const char* seedFormateado;
 };
 
-inline constexpr VectorGenoma GENOMAS[] = {
+inline const VectorGenoma GENOMAS[] = {
     {0x0000000000000000ULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 98, 3, "0000-0000-0000-0000"},
     {0x0000000000000001ULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, "0000-0000-0000-0001"},
     {0xFFFFFFFFFFFFFFFFULL, 15, 15, 15, 15, 15, 15, 255, 7, 7, 7, 7, 15, 3, 3, 3, 3, 255, 108, 3, "FFFF-FFFF-FFFF-FFFF"},
@@ -2046,7 +2054,7 @@ struct VectorEvolucion {
     const char* nombre;
 };
 
-inline constexpr VectorEvolucion EVOLUCIONES[] = {
+inline const VectorEvolucion EVOLUCIONES[] = {
     {0, 0, 0, 0, 0, 0, 0.0, 0.0, 0ULL, 0, 1, 3, "vacia / afinidad 0"},
     {0, 0, 0, 0, 0, 0, 0.0, 0.0, 0ULL, 1, 2, 5, "vacia / afinidad 1"},
     {0, 0, 0, 0, 0, 0, 0.0, 0.0, 0ULL, 2, 1, 3, "vacia / afinidad 2"},
@@ -2134,7 +2142,7 @@ struct VectorHash {
     uint64_t    hash;
 };
 
-inline constexpr VectorHash HASHES[] = {
+inline const VectorHash HASHES[] = {
     {"", 0xCBF29CE484222325ULL},
     {"hello", 0xA430D84680AABD0BULL},
     {"petbits", 0xFEDDDD7C67822C0EULL},
@@ -2154,7 +2162,7 @@ struct VectorParseo {
     uint64_t    seed;
 };
 
-inline constexpr VectorParseo PARSEOS[] = {
+inline const VectorParseo PARSEOS[] = {
     {"A3F0-91C4-77BE-2D08", 0xA3F091C477BE2D08ULL},
     {"a3f091c477be2d08", 0xA3F091C477BE2D08ULL},
     {"0xA3F091C477BE2D08", 0xA3F091C477BE2D08ULL},
@@ -2183,7 +2191,7 @@ struct VectorRng {
     double   valores[8];   ///< las primeras 8 salidas de next()
 };
 
-inline constexpr VectorRng RNGS[] = {
+inline const VectorRng RNGS[] = {
     {0u, {0.26642920868471265, 0.0003297457005828619, 0.2232720274478197, 0.1462021479383111, 0.46732782293111086, 0.5450490827206522, 0.6152513844426721, 0.6489853798411787}},
     {1u, {0.6270739405881613, 0.002735721180215478, 0.5274470399599522, 0.9810509674716741, 0.9683778982143849, 0.281103502959013, 0.6128388606011868, 0.7207431411370635}},
     {42u, {0.6011037519201636, 0.44829055899754167, 0.8524657934904099, 0.6697340414393693, 0.17481389874592423, 0.5265925421845168, 0.2732279943302274, 0.6247446539346129}},
@@ -2199,7 +2207,7 @@ struct VectorDerive {
     uint32_t    derivada;
 };
 
-inline constexpr VectorDerive DERIVES[] = {
+inline const VectorDerive DERIVES[] = {
     {0x0000000000000000ULL, "eventos", 3492312591u},
     {0x0000000000000001ULL, "eventos", 1850349234u},
     {0xA3F091C477BE2D08ULL, "eventos", 2135134647u},
@@ -2235,7 +2243,7 @@ struct VectorSim {
     const char* nombre;
 };
 
-inline constexpr VectorSim SIMULACIONES[] = {
+inline const VectorSim SIMULACIONES[] = {
     {0xA3F091C477BE2D08ULL, 1786449600000LL, -180, 30LL, 30LL, 1786451400000LL, 30LL, 30LL, 30LL, 20676LL, 0, 0, 0, 0, 65.83333333333343, 68.33333333333329, 100.0, 0.0, 2074.1666666666656, 3000.0, 30LL, 1LL, 0LL, 1LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, "corto de dia"},
     {0xA3F091C477BE2D08ULL, 1786485600000LL, -180, 180LL, 180LL, 1786496400000LL, 180LL, 180LL, 180LL, 20676LL, 0, 0, 0, 0, 45.00000000000057, 59.999999999999716, 100.0, 0.0, 11694.999999999976, 18000.0, 180LL, 1LL, 0LL, 1LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, 0LL, "cruza la noche"},
     {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 1440LL, 1440LL, 1786492800000LL, 1440LL, 1440LL, 1440LL, 20676LL, 0, 0, 1, 1, 0.0, 0.0, 92.2119999999997, 0.0, 57872.66666666623, 141468.8999999999, 1440LL, 11LL, 0LL, 6LL, 1LL, 1LL, 1LL, 0LL, 1LL, 1LL, 0LL, "un dia entero"},
@@ -2258,7 +2266,7 @@ struct VectorRampa {
     uint8_t  rgb[15];   ///< 5 colores x 3 canales: contorno, sombra, base, luz, acento
 };
 
-inline constexpr VectorRampa RAMPAS[] = {
+inline const VectorRampa RAMPAS[] = {
     {0x0000000000000000ULL, 0, {93, 86, 88, 179, 162, 170, 234, 217, 221, 255, 241, 242, 218, 241, 236}},
     {0x0000000000000000ULL, 3, {65, 56, 59, 148, 128, 137, 201, 180, 186, 245, 227, 228, 177, 207, 200}},
     {0x0000000000000000ULL, 6, {97, 92, 94, 181, 170, 175, 236, 225, 228, 252, 242, 243, 231, 246, 242}},
@@ -3050,7 +3058,7 @@ struct VectorSprite {
     uint32_t opacos;     ///< píxeles con alfa > 0
 };
 
-inline constexpr VectorSprite SPRITES[] = {
+inline const VectorSprite SPRITES[] = {
     {0x0000000000000000ULL, 0, 0, 0, 0xb6bb2af9u, 226u},
     {0x0000000000000000ULL, 0, 1, 0, 0xb207989du, 244u},
     {0x0000000000000000ULL, 0, 2, 0, 0x59556c4cu, 270u},
@@ -5611,6 +5619,54 @@ inline constexpr VectorSprite SPRITES[] = {
     {0x979223F7FAA67AC4ULL, 2, 0, 1, 0xec60e4e7u, 368u},
     {0x190136DAEA4E79E5ULL, 2, 0, 1, 0xc975a248u, 514u},
     {0xE986A6BE735BB4A6ULL, 2, 0, 1, 0x77b20abau, 392u},
+};
+
+struct VectorAccion {
+    uint64_t seed;
+    int64_t  nowMs;
+    int32_t  tz;
+    // --- estado inicial ---
+    double   energia, animo, salud, vinculo, vinculoHoy;
+    int64_t  diaIndice;
+    uint8_t  letargico;
+    int64_t  ticksSinCuidado;
+    uint8_t  conExpedicion;
+    const char* secuencia;
+    // --- lo que tiene que dar ---
+    double   eEnergia, eAnimo, eSalud, eVinculo, eVinculoHoy;
+    int64_t  eDiaIndice;
+    uint8_t  eLetargico;
+    int64_t  eTicksSinCuidado;
+    uint32_t eProteina, eDulce, eMineral, eRaro, eJuego, eCalma;
+    uint8_t  eOk;        ///< el ok de la ÚLTIMA acción de la secuencia
+    const char* eMensaje;
+    const char* nombre;
+};
+
+inline const VectorAccion ACCIONES[] = {
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "b", 88.0, 75.0, 100.0, 2.0, 2.0, 20675LL, 0, 0LL, 0u, 1u, 0u, 0u, 0u, 0u, 1, "Se morfó la baya sin respirar.", "baya al nacer"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 10.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "brlc", 91.0, 85.0, 100.0, 8.0, 8.0, 20675LL, 0, 0LL, 1u, 1u, 1u, 1u, 0u, 0u, 1, "Picoteó el cristal sin ganas. Ya estaba llena.", "las cuatro comidas"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "ll", 100.0, 66.0, 99.5, 4.0, 4.0, 20675LL, 0, 0LL, 2u, 0u, 0u, 0u, 0u, 0u, 1, "Picoteó la larva sin ganas. Ya estaba llena.", "sobrealimentada"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 92.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "c", 95.0, 82.0, 100.0, 2.0, 2.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 1u, 0u, 0u, 1, "Picoteó el cristal sin ganas. Ya estaba llena.", "llena de entrada"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "j", 58.0, 86.0, 100.0, 2.0, 2.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 1u, 0u, 1, "Jugó hasta quedar rendida de contenta.", "jugar normal"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 14.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "j", 14.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 0u, 0, "No le da la energía para jugar. Primero tiene que comer algo.", "jugar sin energia"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 15.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "j", 3.0, 86.0, 100.0, 2.0, 2.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 1u, 0u, 1, "Jugó hasta quedar rendida de contenta.", "jugar al limite"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 29.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "j", 58.0, 78.0, 29.0, 2.0, 2.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 1u, 0u, 1, "Jugó un rato pero se cansó enseguida, pobre.", "jugar decaida"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 30.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "j", 58.0, 86.0, 30.0, 2.0, 2.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 1u, 0u, 1, "Jugó hasta quedar rendida de contenta.", "jugar salud justa"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "a", 70.0, 74.0, 100.0, 2.0, 2.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 1u, 1, "Se dejó hacer mimos un buen rato.", "un mimo"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "aaaaaaa", 70.0, 98.0, 100.0, 12.0, 12.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 7u, 1, "Está a gusto, pero por hoy ya tuvo lo suyo.", "siete mimos, tope"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 12.0, 12.0, 20675LL, 0, 0LL, 0, "a", 70.0, 74.0, 100.0, 12.0, 12.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 1u, 1, "Está a gusto, pero por hoy ya tuvo lo suyo.", "tope ya alcanzado"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 11.0, 11.0, 20675LL, 0, 0LL, 0, "aa", 70.0, 78.0, 100.0, 12.0, 12.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 2u, 1, "Está a gusto, pero por hoy ya tuvo lo suyo.", "tope casi"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 12.0, 12.0, 0LL, 0, 0LL, 0, "a", 70.0, 74.0, 100.0, 14.0, 2.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 1u, 1, "Se dejó hacer mimos un buen rato.", "cambio de dia reinicia"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 40.0, 0.0, 20675LL, 1, 3000LL, 0, "a", 70.0, 74.0, 100.0, 32.0, 2.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 1u, 1, "Se dejó hacer mimos un buen rato. Salió del letargo, pero el vínculo quedó golpeado.", "sale del letargo"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 5.0, 70.0, 100.0, 40.0, 0.0, 20675LL, 1, 0LL, 0, "l", 39.0, 68.0, 100.0, 32.0, 2.0, 20675LL, 0, 0LL, 1u, 0u, 0u, 0u, 0u, 0u, 1, "Se morfó la larva sin respirar. Salió del letargo, pero el vínculo quedó golpeado.", "letargo comiendo"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 1, "b", 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 0u, 0, "Está de expedición. Volvé cuando regrese.", "de expedicion no come"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 1, "j", 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 0u, 0, "Está de expedición. Volvé cuando regrese.", "de expedicion no juega"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 1, "a", 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 0u, 0, "Está de expedición. Volvé cuando regrese.", "de expedicion no mimos"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "x", 70.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0u, 0u, 0u, 0u, 0u, 0u, 0, "No existe el alimento \"no-existe\"", "alimento inexistente"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 20.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "lljarbc", 100.0, 100.0, 98.0, 12.0, 12.0, 20675LL, 0, 0LL, 2u, 1u, 1u, 1u, 1u, 1u, 1, "Picoteó el cristal sin ganas. Ya estaba llena.", "crianza mezclada"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 99.0, 70.0, 100.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "lll", 100.0, 64.0, 98.5, 6.0, 6.0, 20675LL, 0, 0LL, 3u, 0u, 0u, 0u, 0u, 0u, 1, "Picoteó la larva sin ganas. Ya estaba llena.", "energia al techo"},
+    {0xA3F091C477BE2D08ULL, 1786406400000LL, -180, 95.0, 70.0, 1.0, 0.0, 0.0, 20675LL, 0, 0LL, 0, "bb", 100.0, 80.0, 0.0, 4.0, 4.0, 20675LL, 0, 0LL, 0u, 2u, 0u, 0u, 0u, 0u, 1, "Picoteó la baya sin ganas. Ya estaba llena.", "salud al piso"},
 };
 
 } // namespace petbits::vectores

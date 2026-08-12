@@ -1,38 +1,47 @@
 ## PetView.gd
 ##
-## La criatura en pantalla: sprite, estadísticas y el paso del tiempo.
+## La criatura en pantalla: sprite, estadísticas, botones y el paso del tiempo.
 ##
-## Toda la lógica vive en PetBitsCore (C++). Este script no calcula nada — lee
-## el estado y lo dibuja. Es a propósito: si el ánimo se decidiera acá, la web y
-## el nativo tendrían dos reglas distintas y la promesa del proyecto se caería.
+## Toda la lógica vive en PetBitsCore (C++). Este script no calcula nada — lee el
+## estado y lo dibuja, y cuando apretás un botón le pasa la acción al núcleo y
+## muestra lo que contesta. Es a propósito: si el ánimo se decidiera acá, la web
+## y el nativo tendrían dos reglas distintas y la promesa del proyecto se caería.
 ##
 ## ---
 ##
-## La interfaz se arma por código en _ready() en vez de en el .tscn. Un .tscn
-## escrito a mano es fácil de romper de maneras que Godot reporta mal, y todavía
-## no hay diseño visual definitivo que justifique fijarlo en un archivo de
-## escena. Cuando la pantalla se estabilice, conviene pasarla al editor.
+## EL PRESUPUESTO DE PANTALLA MANDA.
+##
+## El proyecto corre a 480×270 —la resolución de una consola portátil, que es la
+## identidad visual del juego— y eso son 254 píxeles útiles de alto. La primera
+## versión de esta pantalla apilaba todo en una columna y pedía unos 400: Salud y
+## Vínculo quedaban abajo del borde y el registro no se veía nunca.
+##
+## Ahora va en dos columnas, que es lo que pide un 16:9. El sprite a la
+## izquierda, la ficha a la derecha, y debajo los botones y el registro. Cada
+## bloque tiene su altura contada; si se agrega algo, hay que sacar otra cosa.
 
 extends Control
 
 # La consola verde fósforo que el proyecto ya tenía del lado web. Se mantiene
 # porque es lo mejor que tiene su identidad visual.
 const FONDO := Color("#0a0e0a")
-const PANEL := Color("#0c140d")
 const BORDE := Color("#3d5c46")
 const FOSFORO := Color("#9bbc0f")
 const TEXTO := Color("#d6e6d0")
 const TENUE := Color("#7e937a")
+const ALERTA := Color("#ff6b6b")
+const AVISO := Color("#ffc23d")
 
 ## Un tick del juego es un minuto real. Preguntar más seguido no cambia nada
-## —simulate() solo avanza en ticks enteros— pero mantiene el reloj de pantalla
-## al día sin costo.
+## —simulate() solo avanza en ticks enteros— pero mantiene la pantalla al día.
 const INTERVALO_CONSULTA := 1.0
 
-## Cada cuánto parpadea. Es la animación más barata que existe y la que más hace
-## por que algo lea como vivo.
+## Cada cuánto parpadea, y cuánto dura. Es la animación más barata que existe y
+## la que más hace por que algo lea como vivo.
 const INTERVALO_PARPADEO := 4.2
 const DURACION_PARPADEO := 0.16
+
+const LADO_SPRITE := 96
 
 var _core: RefCounted = null
 var _sprite: TextureRect = null
@@ -53,8 +62,7 @@ func _ready() -> void:
 	_construir_interfaz()
 
 	# Nace con un seed al azar. Cuando haya guardado, acá se carga la partida.
-	var seed: String = _core.seed_al_azar()
-	_core.nacer(seed, _ahora_ms(), _tz_min())
+	_core.nacer(_core.seed_al_azar(), _ahora_ms(), _tz_min())
 
 	_refrescar_sprite()
 	_refrescar_estado()
@@ -67,10 +75,9 @@ func _ready() -> void:
 
 ## El reloj del sistema en milisegundos.
 ##
-## Godot lo da en segundos y como float. Se multiplica y se redondea acá para
-## que al C++ le llegue un entero: la simulación cuenta ticks de un minuto y un
-## flotante con parte decimal en los milisegundos no aporta nada y sí puede
-## correr una frontera.
+## Godot lo da en segundos y como float. Se redondea acá para que al C++ le
+## llegue un entero: la simulación cuenta ticks de un minuto y una parte decimal
+## en los milisegundos no aporta nada y sí puede correr una frontera.
 func _ahora_ms() -> int:
 	return int(Time.get_unix_time_from_system()) * 1000
 
@@ -78,9 +85,9 @@ func _ahora_ms() -> int:
 ## Minutos de desfasaje horario respecto de UTC.
 ##
 ## Se lee UNA vez, al nacer, y después vive dentro del estado de la criatura. Si
-## se leyera en cada tick, mudarse de zona horaria —o simplemente viajar— movería
-## la hora local de ticks ya procesados y rompería el invariante de que simular
-## por pedazos da lo mismo que de corrido.
+## se leyera en cada tick, mudarse de zona horaria movería la hora local de ticks
+## ya procesados y rompería el invariante de que simular por pedazos da lo mismo
+## que de corrido.
 func _tz_min() -> int:
 	return int(Time.get_time_zone_from_system().get("bias", 0))
 
@@ -90,14 +97,12 @@ func _process(delta: float) -> void:
 		return
 
 	_proximo_parpadeo -= delta
-	if _parpadeando and _proximo_parpadeo <= 0.0:
-		_parpadeando = false
-		_proximo_parpadeo = INTERVALO_PARPADEO
-		_refrescar_sprite()
-	elif not _parpadeando and _proximo_parpadeo <= 0.0:
-		_parpadeando = true
-		_proximo_parpadeo = DURACION_PARPADEO
-		_refrescar_sprite()
+	if _proximo_parpadeo > 0.0:
+		return
+
+	_parpadeando = not _parpadeando
+	_proximo_parpadeo = DURACION_PARPADEO if _parpadeando else INTERVALO_PARPADEO
+	_refrescar_sprite()
 
 
 func _on_consultar() -> void:
@@ -107,6 +112,18 @@ func _on_consultar() -> void:
 		# La etapa o la forma pueden haber cambiado con la evolución, y eso
 		# cambia el dibujo.
 		_refrescar_sprite()
+	_refrescar_estado()
+
+
+# ---------------------------------------------------------------------------
+# Acciones
+# ---------------------------------------------------------------------------
+
+func _on_accion(resultado: Dictionary) -> void:
+	# Un rechazo NO es un error de la interfaz: es información. "No le da la
+	# energía para jugar" le dice al jugador qué hacer, y por eso se muestra
+	# igual que cualquier otro mensaje, solo que en ámbar.
+	_anotar(resultado["mensaje"], AVISO if not resultado["ok"] else TEXTO)
 	_refrescar_estado()
 
 
@@ -122,41 +139,24 @@ func _construir_interfaz() -> void:
 
 	var raiz := VBoxContainer.new()
 	raiz.set_anchors_preset(Control.PRESET_FULL_RECT)
-	raiz.offset_left = 12
-	raiz.offset_top = 10
-	raiz.offset_right = -12
-	raiz.offset_bottom = -10
-	raiz.add_theme_constant_override("separation", 6)
+	raiz.offset_left = 8
+	raiz.offset_top = 6
+	raiz.offset_right = -8
+	raiz.offset_bottom = -6
+	raiz.add_theme_constant_override("separation", 4)
 	add_child(raiz)
 
-	# --- criatura ---
-	_sprite = TextureRect.new()
-	_sprite.custom_minimum_size = Vector2(128, 128)
-	_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	# Nearest-neighbor: sin esto el pixel art de 32×32 se ve borroso al ampliar,
-	# que es exactamente lo contrario de lo que se busca.
-	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	raiz.add_child(_sprite)
-
-	_etiquetas["seed"] = _linea(raiz, FOSFORO, 14)
-	_etiquetas["quien"] = _linea(raiz, TEXTO, 12)
-	_etiquetas["etapa"] = _linea(raiz, TENUE, 11)
-
+	_construir_ficha(raiz)
+	raiz.add_child(HSeparator.new())
+	_construir_botones(raiz)
 	raiz.add_child(HSeparator.new())
 
-	# --- estadísticas ---
-	for clave in ["energia", "animo", "salud", "vinculo"]:
-		_barras[clave] = _barra(raiz, clave)
-
-	raiz.add_child(HSeparator.new())
-
-	# --- registro ---
 	_registro = RichTextLabel.new()
 	_registro.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_registro.custom_minimum_size = Vector2(0, 60)
 	_registro.add_theme_color_override("default_color", TENUE)
-	_registro.append_text("Nació recién.\n")
+	_registro.add_theme_font_size_override("normal_font_size", 9)
 	raiz.add_child(_registro)
+	_anotar("Nació recién.", TENUE)
 
 	# El reloj de la simulación. Se consulta seguido y barato.
 	var reloj := Timer.new()
@@ -164,6 +164,61 @@ func _construir_interfaz() -> void:
 	reloj.timeout.connect(_on_consultar)
 	reloj.autostart = true
 	add_child(reloj)
+
+
+## Fila de arriba: el sprite a la izquierda, la ficha y las barras a la derecha.
+func _construir_ficha(padre: Node) -> void:
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 10)
+	padre.add_child(fila)
+
+	_sprite = TextureRect.new()
+	_sprite.custom_minimum_size = Vector2(LADO_SPRITE, LADO_SPRITE)
+	_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# Nearest-neighbor: sin esto el pixel art de 32×32 se ve borroso al ampliar,
+	# que es exactamente lo contrario de lo que se busca.
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fila.add_child(_sprite)
+
+	var ficha := VBoxContainer.new()
+	ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ficha.add_theme_constant_override("separation", 1)
+	fila.add_child(ficha)
+
+	_etiquetas["seed"] = _linea(ficha, FOSFORO, 12)
+	_etiquetas["quien"] = _linea(ficha, TEXTO, 10)
+	_etiquetas["etapa"] = _linea(ficha, TENUE, 9)
+
+	var aire := Control.new()
+	aire.custom_minimum_size = Vector2(0, 4)
+	ficha.add_child(aire)
+
+	for clave in ["energia", "animo", "salud", "vinculo"]:
+		_barras[clave] = _barra(ficha, clave)
+
+
+func _construir_botones(padre: Node) -> void:
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 3)
+	padre.add_child(fila)
+
+	# El catálogo lo da el C++: si mañana se agrega un alimento, el botón aparece
+	# solo. Repetir la lista acá sería tener dos fuentes de verdad para lo mismo.
+	for alimento in _core.alimentos():
+		var id: String = alimento["id"]
+		_boton(fila, alimento["nombre"], func(): _on_accion(_core.alimentar(id, _ahora_ms())))
+
+	_boton(fila, "Jugar", func(): _on_accion(_core.jugar(_ahora_ms())))
+	_boton(fila, "Mimos", func(): _on_accion(_core.acariciar(_ahora_ms())))
+
+
+func _boton(padre: Node, texto: String, al_apretar: Callable) -> void:
+	var boton := Button.new()
+	boton.text = texto
+	boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	boton.add_theme_font_size_override("font_size", 9)
+	boton.pressed.connect(al_apretar)
+	padre.add_child(boton)
 
 
 func _linea(padre: Node, color: Color, tamano: int) -> Label:
@@ -176,34 +231,33 @@ func _linea(padre: Node, color: Color, tamano: int) -> Label:
 
 ## Una fila de estadística: nombre, barra y número.
 ##
-## La grilla es de tres columnas con anchos fijos en los extremos. Del lado web
-## esto mismo tuvo un bug que vale recordar: el número quedaba en una columna de
-## ancho cero y solo se veía porque desbordaba contra el marco. Acá el ancho
-## mínimo de la etiqueta del valor lo evita.
+## Los anchos de los extremos son mínimos fijos. Del lado web esto mismo tuvo un
+## bug que vale recordar: el número quedaba en una columna de ancho cero y solo
+## se veía porque desbordaba contra el marco.
 func _barra(padre: Node, clave: String) -> Dictionary:
 	var fila := HBoxContainer.new()
-	fila.add_theme_constant_override("separation", 8)
+	fila.add_theme_constant_override("separation", 5)
 	padre.add_child(fila)
 
 	var nombre := Label.new()
 	nombre.text = clave.capitalize()
-	nombre.custom_minimum_size = Vector2(62, 0)
+	nombre.custom_minimum_size = Vector2(48, 0)
 	nombre.add_theme_color_override("font_color", TENUE)
-	nombre.add_theme_font_size_override("font_size", 11)
+	nombre.add_theme_font_size_override("font_size", 9)
 	fila.add_child(nombre)
 
 	var barra := ProgressBar.new()
 	barra.max_value = 100
 	barra.show_percentage = false
 	barra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	barra.custom_minimum_size = Vector2(0, 12)
+	barra.custom_minimum_size = Vector2(0, 9)
 	fila.add_child(barra)
 
 	var valor := Label.new()
-	valor.custom_minimum_size = Vector2(34, 0)
+	valor.custom_minimum_size = Vector2(24, 0)
 	valor.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	valor.add_theme_color_override("font_color", TEXTO)
-	valor.add_theme_font_size_override("font_size", 11)
+	valor.add_theme_font_size_override("font_size", 9)
 	fila.add_child(valor)
 
 	return {"barra": barra, "valor": valor}
@@ -230,10 +284,9 @@ func _refrescar_estado() -> void:
 	_etiquetas["seed"].text = e["seed"]
 	_etiquetas["quien"].text = "%s · %s" % [genes["linaje"], genes["temperamento"]]
 
-	var forma: String = e["forma"]
 	var descripcion: String = e["etapa"].capitalize()
-	if forma != "Sin definir":
-		descripcion += " · " + forma
+	if e["forma"] != "Sin definir":
+		descripcion += " · " + e["forma"]
 	if e["letargico"]:
 		descripcion += " · en letargo"
 	elif e["durmiendo"]:
@@ -254,10 +307,16 @@ func _color_de(clave: String, valor: float) -> Color:
 	if clave == "vinculo":
 		return FOSFORO
 	if valor < 25.0:
-		return Color("#ff6b6b")
+		return ALERTA
 	if valor < 50.0:
-		return Color("#ffc23d")
+		return AVISO
 	return FOSFORO
+
+
+func _anotar(texto: String, color: Color) -> void:
+	_registro.push_color(color)
+	_registro.append_text(texto + "\n")
+	_registro.pop()
 
 
 func _anotar_eventos(r: Dictionary) -> void:
@@ -266,13 +325,11 @@ func _anotar_eventos(r: Dictionary) -> void:
 		if ev["tipo"] == "evolucion":
 			color = FOSFORO
 		elif ev["tipo"] in ["salud", "letargo"]:
-			color = Color("#ff6b6b")
-		_registro.push_color(color)
-		_registro.append_text(ev["texto"] + "\n")
-		_registro.pop()
+			color = ALERTA
+		_anotar(ev["texto"], color)
 
 	if r.get("omitidos", 0) > 0:
-		_registro.append_text("(y %d cosas más)\n" % r["omitidos"])
+		_anotar("(y %d cosas más)" % r["omitidos"], TENUE)
 
 
 func _sin_extension() -> void:
@@ -285,5 +342,5 @@ func _sin_extension() -> void:
 	etiqueta.set_anchors_preset(Control.PRESET_FULL_RECT)
 	etiqueta.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	etiqueta.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	etiqueta.add_theme_color_override("font_color", Color("#ffc23d"))
+	etiqueta.add_theme_color_override("font_color", AVISO)
 	add_child(etiqueta)

@@ -5,6 +5,7 @@
 #include "petbits_core.h"
 
 #include "genome.h"
+#include "actions.h"
 #include "sprite_gen.h"
 #include "traits.h"
 
@@ -57,6 +58,12 @@ void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("tiene_criatura"), &PetBitsCore::tiene_criatura);
     ClassDB::bind_method(D_METHOD("simular", "ahora_ms"), &PetBitsCore::simular);
     ClassDB::bind_method(D_METHOD("estado"), &PetBitsCore::estado);
+
+    ClassDB::bind_method(D_METHOD("alimentos"), &PetBitsCore::alimentos);
+    ClassDB::bind_method(D_METHOD("alimentar", "alimento_id", "ahora_ms"),
+                         &PetBitsCore::alimentar);
+    ClassDB::bind_method(D_METHOD("jugar", "ahora_ms"), &PetBitsCore::jugar);
+    ClassDB::bind_method(D_METHOD("acariciar", "ahora_ms"), &PetBitsCore::acariciar);
 
     ClassDB::bind_method(D_METHOD("sprite", "seed", "etapa", "forma", "parpadeo"),
                          &PetBitsCore::sprite, DEFVAL(false));
@@ -211,6 +218,66 @@ Dictionary PetBitsCore::estado() const {
     d["stats"] = stats;
 
     return d;
+}
+
+// ---------------------------------------------------------------------------
+// Acciones
+// ---------------------------------------------------------------------------
+
+Array PetBitsCore::alimentos() const {
+    Array salida;
+    for (const petbits::Food& f : petbits::FOODS) {
+        Dictionary d;
+        d["id"] = aGodot(f.id);
+        d["nombre"] = aGodot(f.name);
+        d["energia"] = f.energia;
+        d["animo"] = f.animo;
+        d["salud"] = f.salud;
+        salida.push_back(d);
+    }
+    return salida;
+}
+
+/** Aplica el resultado al estado guardado y lo traduce a diccionario. */
+static Dictionary aplicar(std::optional<petbits::CreatureState>& criatura,
+                          const petbits::ActionResult& r) {
+    Dictionary d;
+    d["ok"] = r.ok;
+    d["mensaje"] = aGodot(r.message);
+    if (r.ok) criatura = r.state;
+    return d;
+}
+
+Dictionary PetBitsCore::alimentar(const String& alimento_id, int64_t ahora_ms) {
+    Dictionary d;
+    if (!criatura.has_value()) {
+        d["ok"] = false;
+        d["mensaje"] = String("No hay ninguna criatura.");
+        return d;
+    }
+    const CharString bytes = aBytes(alimento_id);
+    const std::string_view id(bytes.get_data(), static_cast<size_t>(bytes.length()));
+    return aplicar(criatura, petbits::alimentar(*criatura, id, ahora_ms));
+}
+
+Dictionary PetBitsCore::jugar(int64_t ahora_ms) {
+    Dictionary d;
+    if (!criatura.has_value()) {
+        d["ok"] = false;
+        d["mensaje"] = String("No hay ninguna criatura.");
+        return d;
+    }
+    return aplicar(criatura, petbits::jugar(*criatura, ahora_ms));
+}
+
+Dictionary PetBitsCore::acariciar(int64_t ahora_ms) {
+    Dictionary d;
+    if (!criatura.has_value()) {
+        d["ok"] = false;
+        d["mensaje"] = String("No hay ninguna criatura.");
+        return d;
+    }
+    return aplicar(criatura, petbits::acariciar(*criatura, ahora_ms));
 }
 
 // ---------------------------------------------------------------------------

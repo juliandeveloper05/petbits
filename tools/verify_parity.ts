@@ -30,11 +30,12 @@
 
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { acariciar, alimentar, jugar } from "../src/core/actions.ts";
 import { type Crianza, resolverAdulto, resolverJuvenil } from "../src/core/evolution.ts";
 import { type Genes, decodeGenome, formatSeed, hashString, parseSeed } from "../src/core/genome.ts";
 import { buildRamp } from "../src/core/palette.ts";
 import { deriveSeed, mulberry32, splitmix64 } from "../src/core/rng.ts";
-import { TICK_MS, createCreature, simulate } from "../src/core/simulation.ts";
+import { TICK_MS, createCreature, localDayIndex, simulate } from "../src/core/simulation.ts";
 import { TRAIT_CATALOG, detectTraits, rarityTier } from "../src/core/traits.ts";
 import { hashPixels } from "../src/render/pixelBuffer.ts";
 import { type Expression, generateSprite } from "../src/render/spriteGen.ts";
@@ -199,6 +200,14 @@ lineas.push("//");
 lineas.push(`// ${seeds.length} genomas (${BORDES.length} de borde + ${CANTIDAD} de splitmix64)`);
 lineas.push(`// ${CRIANZAS.length} crianzas x 8 genomas de afinidad`);
 lineas.push("");
+lineas.push("// Los arreglos van como `inline const` y NO como `constexpr`.");
+lineas.push("//");
+lineas.push("// Con constexpr, MSVC tiene que evaluar en tiempo de compilación las");
+lineas.push("// ~5000 entradas de este archivo, y se queda sin memoria: error C1060.");
+lineas.push("// No hace falta: nadie los usa en una expresión constante, solo se");
+lineas.push("// recorren. Como son agregados de literales, igual quedan en datos");
+lineas.push("// estáticos de solo lectura — se pierde nada y compila.");
+lineas.push("");
 lineas.push("#include <cstdint>");
 lineas.push("");
 lineas.push("namespace petbits::vectores {");
@@ -216,7 +225,7 @@ lineas.push("    uint8_t  tier;         ///< 0 comun, 1 raro, 2 epico, 3 legenda
 lineas.push("    const char* seedFormateado;");
 lineas.push("};");
 lineas.push("");
-lineas.push("inline constexpr VectorGenoma GENOMAS[] = {");
+lineas.push("inline const VectorGenoma GENOMAS[] = {");
 
 for (const seed of seeds) {
   const g: Genes = decodeGenome(seed);
@@ -263,7 +272,7 @@ lineas.push("    uint8_t  adulto;");
 lineas.push("    const char* nombre;");
 lineas.push("};");
 lineas.push("");
-lineas.push("inline constexpr VectorEvolucion EVOLUCIONES[] = {");
+lineas.push("inline const VectorEvolucion EVOLUCIONES[] = {");
 
 for (const { nombre, c } of CRIANZAS) {
   // El gen de afinidad sesga el eje somático, así que se recorren los ocho.
@@ -299,7 +308,7 @@ lineas.push("    const char* texto;");
 lineas.push("    uint64_t    hash;");
 lineas.push("};");
 lineas.push("");
-lineas.push("inline constexpr VectorHash HASHES[] = {");
+lineas.push("inline const VectorHash HASHES[] = {");
 // Los acentos y el emoji están a propósito. En ASCII un byte es una unidad
 // UTF-16 y hashear bytes o unidades da lo mismo, así que solo con "hello" el
 // test pasa aunque el port esté mal. La é ocupa dos bytes y una unidad; el
@@ -358,7 +367,7 @@ lineas.push("    const char* entrada;");
 lineas.push("    uint64_t    seed;");
 lineas.push("};");
 lineas.push("");
-lineas.push("inline constexpr VectorParseo PARSEOS[] = {");
+lineas.push("inline const VectorParseo PARSEOS[] = {");
 for (const entrada of ENTRADAS) {
   lineas.push(`    {${JSON.stringify(entrada)}, ${hex(parseSeed(entrada))}},`);
 }
@@ -376,7 +385,7 @@ lineas.push("    uint32_t semilla;");
 lineas.push("    double   valores[8];   ///< las primeras 8 salidas de next()");
 lineas.push("};");
 lineas.push("");
-lineas.push("inline constexpr VectorRng RNGS[] = {");
+lineas.push("inline const VectorRng RNGS[] = {");
 for (const semilla of [0, 1, 42, 0x6d2b79f5, 0xffffffff, 0x9e3779b1, 123456789]) {
   const rng = mulberry32(semilla);
   const valores = Array.from({ length: 8 }, () => dbl(rng.next()));
@@ -391,7 +400,7 @@ lineas.push("    const char* etiqueta;");
 lineas.push("    uint32_t    derivada;");
 lineas.push("};");
 lineas.push("");
-lineas.push("inline constexpr VectorDerive DERIVES[] = {");
+lineas.push("inline const VectorDerive DERIVES[] = {");
 for (const [seed, etiqueta] of [
   [0n, "eventos"],
   [1n, "eventos"],
@@ -534,7 +543,7 @@ lineas.push("    int64_t  hambre, animoEv, saludEv;");
 lineas.push("    const char* nombre;");
 lineas.push("};");
 lineas.push("");
-lineas.push("inline constexpr VectorSim SIMULACIONES[] = {");
+lineas.push("inline const VectorSim SIMULACIONES[] = {");
 
 for (const e of ESCENARIOS) {
   const inicial = createCreature(e.seed, e.inicioMs, e.tz);
@@ -602,7 +611,7 @@ lineas.push(
 );
 lineas.push("};");
 lineas.push("");
-lineas.push("inline constexpr VectorRampa RAMPAS[] = {");
+lineas.push("inline const VectorRampa RAMPAS[] = {");
 
 const FORMAS_MUESTRA = ["indefinida", "coloso", "oraculo"] as const;
 const SEEDS_COLOR = seeds.slice(0, 260);
@@ -638,7 +647,7 @@ lineas.push("    uint32_t hash;       ///< FNV-1a del buffer RGBA completo");
 lineas.push("    uint32_t opacos;     ///< píxeles con alfa > 0");
 lineas.push("};");
 lineas.push("");
-lineas.push("inline constexpr VectorSprite SPRITES[] = {");
+lineas.push("inline const VectorSprite SPRITES[] = {");
 
 function contarOpacos(datos: Uint8ClampedArray): number {
   let total = 0;
@@ -681,6 +690,292 @@ for (const seed of seeds.slice(0, 40)) {
 
 lineas.push("};");
 lineas.push("");
+
+// --- acciones ---
+//
+// El estado inicial va explícito en el vector, campo por campo, en vez de
+// derivarse de "simular N ticks". Es más verboso y es la única manera de cubrir
+// los casos que importan: la salud por debajo de 30 —donde jugar rinde la
+// mitad— tarda días de deterioro en aparecer sola, y el letargo la congela antes
+// de llegar. Igual con el tope diario de vínculo y con la expedición en curso.
+//
+// Cada escenario aplica una SECUENCIA de acciones, no una sola. Ahí es donde
+// aparecen los estados que ninguna acción individual produce: comer dos veces
+// para pasar el umbral de saciedad, acariciar siete para tocar el tope.
+interface EstadoInicial {
+  energia?: number;
+  animo?: number;
+  salud?: number;
+  vinculo?: number;
+  vinculoHoy?: number;
+  diaIndice?: number;
+  letargico?: boolean;
+  ticksSinCuidado?: number;
+  conExpedicion?: boolean;
+}
+
+interface EscenarioAccion {
+  nombre: string;
+  seed: bigint;
+  tz: number;
+  inicial: EstadoInicial;
+  /** b=baya r=raiz l=larva c=cristal j=jugar a=acariciar x=alimento inexistente */
+  secuencia: string;
+}
+
+const ACCIONES: readonly EscenarioAccion[] = [
+  { nombre: "baya al nacer", seed: 0xa3f091c477be2d08n, tz: -180, inicial: {}, secuencia: "b" },
+  {
+    nombre: "las cuatro comidas",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { energia: 10 },
+    secuencia: "brlc",
+  },
+  // Con 70 de energía, dos larvas pasan el umbral de 85: la segunda entra por la
+  // rama de saciedad y resta salud.
+  { nombre: "sobrealimentada", seed: 0xa3f091c477be2d08n, tz: -180, inicial: {}, secuencia: "ll" },
+  {
+    nombre: "llena de entrada",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { energia: 92 },
+    secuencia: "c",
+  },
+  { nombre: "jugar normal", seed: 0xa3f091c477be2d08n, tz: -180, inicial: {}, secuencia: "j" },
+  {
+    nombre: "jugar sin energia",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { energia: 14 },
+    secuencia: "j",
+  },
+  {
+    nombre: "jugar al limite",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { energia: 15 },
+    secuencia: "j",
+  },
+  {
+    nombre: "jugar decaida",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { salud: 29 },
+    secuencia: "j",
+  },
+  {
+    nombre: "jugar salud justa",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { salud: 30 },
+    secuencia: "j",
+  },
+  { nombre: "un mimo", seed: 0xa3f091c477be2d08n, tz: -180, inicial: {}, secuencia: "a" },
+  // Siete mimos son 14 de vínculo pretendido contra un tope de 12: el séptimo
+  // tiene que decir que ya tuvo lo suyo.
+  {
+    nombre: "siete mimos, tope",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: {},
+    secuencia: "aaaaaaa",
+  },
+  {
+    nombre: "tope ya alcanzado",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { vinculoHoy: 12, vinculo: 12 },
+    secuencia: "a",
+  },
+  {
+    nombre: "tope casi",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { vinculoHoy: 11, vinculo: 11 },
+    secuencia: "aa",
+  },
+  // El día guardado no coincide con el de nowMs: el tope se reinicia.
+  {
+    nombre: "cambio de dia reinicia",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { vinculoHoy: 12, vinculo: 12, diaIndice: 0 },
+    secuencia: "a",
+  },
+  {
+    nombre: "sale del letargo",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { letargico: true, vinculo: 40, ticksSinCuidado: 3000 },
+    secuencia: "a",
+  },
+  {
+    nombre: "letargo comiendo",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { letargico: true, vinculo: 40, energia: 5 },
+    secuencia: "l",
+  },
+  {
+    nombre: "de expedicion no come",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { conExpedicion: true },
+    secuencia: "b",
+  },
+  {
+    nombre: "de expedicion no juega",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { conExpedicion: true },
+    secuencia: "j",
+  },
+  {
+    nombre: "de expedicion no mimos",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { conExpedicion: true },
+    secuencia: "a",
+  },
+  {
+    nombre: "alimento inexistente",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: {},
+    secuencia: "x",
+  },
+  {
+    nombre: "crianza mezclada",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { energia: 20 },
+    secuencia: "lljarbc",
+  },
+  {
+    nombre: "energia al techo",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { energia: 99 },
+    secuencia: "lll",
+  },
+  {
+    nombre: "salud al piso",
+    seed: 0xa3f091c477be2d08n,
+    tz: -180,
+    inicial: { salud: 1, energia: 95 },
+    secuencia: "bb",
+  },
+];
+
+const COMIDAS: Record<string, string> = {
+  b: "baya",
+  r: "raiz",
+  l: "larva",
+  c: "cristal",
+  x: "no-existe",
+};
+
+lineas.push("struct VectorAccion {");
+lineas.push("    uint64_t seed;");
+lineas.push("    int64_t  nowMs;");
+lineas.push("    int32_t  tz;");
+lineas.push("    // --- estado inicial ---");
+lineas.push("    double   energia, animo, salud, vinculo, vinculoHoy;");
+lineas.push("    int64_t  diaIndice;");
+lineas.push("    uint8_t  letargico;");
+lineas.push("    int64_t  ticksSinCuidado;");
+lineas.push("    uint8_t  conExpedicion;");
+lineas.push("    const char* secuencia;");
+lineas.push("    // --- lo que tiene que dar ---");
+lineas.push("    double   eEnergia, eAnimo, eSalud, eVinculo, eVinculoHoy;");
+lineas.push("    int64_t  eDiaIndice;");
+lineas.push("    uint8_t  eLetargico;");
+lineas.push("    int64_t  eTicksSinCuidado;");
+lineas.push("    uint32_t eProteina, eDulce, eMineral, eRaro, eJuego, eCalma;");
+lineas.push("    uint8_t  eOk;        ///< el ok de la ÚLTIMA acción de la secuencia");
+lineas.push("    const char* eMensaje;");
+lineas.push("    const char* nombre;");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline const VectorAccion ACCIONES[] = {");
+
+for (const e of ACCIONES) {
+  let estado = createCreature(e.seed, BASE_MS, e.tz);
+
+  // Los valores del escenario se pisan encima del estado recién nacido.
+  estado = {
+    ...estado,
+    stats: {
+      energia: e.inicial.energia ?? estado.stats.energia,
+      animo: e.inicial.animo ?? estado.stats.animo,
+      salud: e.inicial.salud ?? estado.stats.salud,
+      vinculo: e.inicial.vinculo ?? estado.stats.vinculo,
+    },
+    vinculoHoy: e.inicial.vinculoHoy ?? estado.vinculoHoy,
+    diaIndice: e.inicial.diaIndice ?? estado.diaIndice,
+    letargico: e.inicial.letargico ?? estado.letargico,
+    ticksSinCuidado: e.inicial.ticksSinCuidado ?? estado.ticksSinCuidado,
+    expedicion: e.inicial.conExpedicion
+      ? { destinoId: "patio", salidaMs: BASE_MS, regresoMs: BASE_MS + 900_000 }
+      : null,
+  };
+
+  let ultimoOk = true;
+  let ultimoMensaje = "";
+
+  for (const codigo of e.secuencia) {
+    const r =
+      codigo === "j"
+        ? jugar(estado, BASE_MS)
+        : codigo === "a"
+          ? acariciar(estado, BASE_MS)
+          : alimentar(estado, COMIDAS[codigo] ?? "?", BASE_MS);
+
+    ultimoOk = r.ok;
+    ultimoMensaje = r.ok ? r.message : r.reason;
+    if (r.ok) estado = r.state;
+  }
+
+  const s = estado.stats;
+  const c = estado.crianza;
+  const campos = [
+    hex(e.seed),
+    `${BASE_MS}LL`,
+    e.tz,
+    dbl(e.inicial.energia ?? 70),
+    dbl(e.inicial.animo ?? 70),
+    dbl(e.inicial.salud ?? 100),
+    dbl(e.inicial.vinculo ?? 0),
+    dbl(e.inicial.vinculoHoy ?? 0),
+    `${e.inicial.diaIndice ?? localDayIndex(BASE_MS, e.tz)}LL`,
+    e.inicial.letargico ? 1 : 0,
+    `${e.inicial.ticksSinCuidado ?? 0}LL`,
+    e.inicial.conExpedicion ? 1 : 0,
+    JSON.stringify(e.secuencia),
+    dbl(s.energia),
+    dbl(s.animo),
+    dbl(s.salud),
+    dbl(s.vinculo),
+    dbl(estado.vinculoHoy),
+    `${estado.diaIndice}LL`,
+    estado.letargico ? 1 : 0,
+    `${estado.ticksSinCuidado}LL`,
+    `${c.dieta.proteina}u`,
+    `${c.dieta.dulce}u`,
+    `${c.dieta.mineral}u`,
+    `${c.dieta.raro}u`,
+    `${c.juego}u`,
+    `${c.calma}u`,
+    ultimoOk ? 1 : 0,
+    JSON.stringify(ultimoMensaje),
+    JSON.stringify(e.nombre),
+  ];
+  lineas.push(`    {${campos.join(", ")}},`);
+}
+
+lineas.push("};");
+lineas.push("");
 lineas.push("} // namespace petbits::vectores");
 lineas.push("");
 
@@ -693,4 +988,5 @@ console.log(`  ${ENTRADAS.length} entradas de parseSeed`);
 console.log(`  ${ESCENARIOS.length} escenarios de simulación`);
 console.log(`  ${SEEDS_COLOR.length * FORMAS_MUESTRA.length} rampas de color`);
 console.log(`  ${SEEDS_SPRITE.length * 3 * FORMAS_TODAS.length + 40} sprites`);
+console.log(`  ${ACCIONES.length} escenarios de acciones`);
 console.log("\nAhora compilá y corré los tests de C++ — ver gdext/tests/README.md");
