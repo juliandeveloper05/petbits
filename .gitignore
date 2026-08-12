@@ -125,4 +125,12 @@ gdext/build/
 gdext/out/
 gdext/.vs/
 gdext/CMakeUserPresets.json
+# Todo lo que deja el compilador al lado de los tests. Antes el ejecutable se
+# construía acá; ahora va a gdext/build/, pero alguien puede seguir compilando a
+# mano con el comando `cl` que documenta el README y eso sigue dejando restos.
+gdext/tests/run_tests
+gdext/tests/*.exe
+gdext/tests/*.obj
+gdext/tests/*.pdb
+gdext/tests/*.ilk
 gdext/tests/*.manifest
