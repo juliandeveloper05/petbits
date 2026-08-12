@@ -166,12 +166,23 @@ funciona:
 python -m SCons
 ```
 
-### 3. Godot 4.3 o posterior
+### 3. Godot
 
 Bajá **[Godot Engine](https://godotengine.org/download/windows/)**, la versión
 **estándar** — no la .NET/C#, que es para proyectos en C# y acá no se usa.
 
 No tiene instalador: es un `.exe` suelto. Ponelo donde te quede cómodo.
+
+Probado sobre **4.7.1**. El proyecto quedó marcado con esa versión, así que abrirlo
+con una anterior va a dar aviso.
+
+> **Por qué `godot-cpp` está fijado en la rama 4.3 si Godot es 4.7.**
+>
+> No quedó viejo: es a propósito. GDExtension es compatible hacia adelante —una
+> extensión compilada contra godot-cpp 4.3 y declarada con
+> `compatibility_minimum = "4.3"` carga en 4.3 y en todas las posteriores—, y
+> está comprobado corriendo en 4.7.1. Subir el submódulo a 4.7 **achicaría** el
+> rango de versiones que pueden cargarla, no lo agrandaría.
 
 ### 4. Compilar la GDExtension
 
@@ -223,6 +234,15 @@ seed. Tiene que dar igual.
 
 > Las GDExtensions se cargan cuando arranca el editor. Si recompilás con
 > `scons`, cerrá y volvé a abrir Godot.
+
+Lo mismo se puede comprobar sin abrir el editor, y sirve para un script:
+
+```bash
+godot --headless --path godot --script res://scripts/verificar_puente.gd
+```
+
+Comprueba que la clase quede registrada y que los valores lleguen intactos hasta
+GDScript. Devuelve 0 si está bien y 1 si algo no coincide.
 
 ### Resumen de qué instalar
 
@@ -377,10 +397,10 @@ contenido de otra. Un save que no valida se pone en cuarentena, nunca se borra.
 El detalle completo está en el **[roadmap](ROADMAP.md)**. En dos líneas:
 
 - La web está terminada y desplegada.
-- Del nativo hay tres módulos portados y compilando, con paridad verificada
-  (40.416 comprobaciones, 0 fallas), y la GDExtension linkeada exportando el
-  símbolo que Godot busca. **Lo próximo es abrirla en Godot** — es el único
-  eslabón de la cadena que todavía no se comprobó.
+- Del nativo hay tres módulos portados con paridad verificada (40.416
+  comprobaciones, 0 fallas) y la GDExtension cargando en Godot 4.7.1: la cadena
+  está cerrada de punta a punta. **Lo próximo es portar `simulation.cpp`**, que
+  es lo que bloquea la Fase 2.
 
 ---
 

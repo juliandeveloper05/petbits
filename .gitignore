@@ -68,8 +68,14 @@ godot/bin/*.framework/
 godot/bin/*.exp
 godot/bin/*.lib
 # Lo único de godot/bin/ que sí se versiona es el .gdextension, que declara
-# dónde buscar la biblioteca en cada plataforma.
+# dónde buscar la biblioteca en cada plataforma, con su .uid al lado.
 !godot/bin/*.gdextension
+!godot/bin/*.uid
+
+# Los .uid de Godot 4.4+ SÍ van al repo, aunque parezcan generados. Son la
+# identidad estable de cada recurso: las escenas referencian por uid, no por
+# ruta, para sobrevivir a que un archivo se mueva. Si falta el .uid, Godot
+# inventa uno nuevo al abrir y esas referencias quedan colgando.
 
 # -----------------------------------------------------------------------
 # GDExtension C++ (gdext/)

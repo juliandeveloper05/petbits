@@ -110,7 +110,10 @@ Array PetBitsCore::rarezas(const String& entrada) const {
         rareza["id"] = aGodot(t.id);
         rareza["nombre"] = aGodot(t.name);
         rareza["regla"] = aGodot(t.rule);
-        rareza["tier"] = NOMBRES_TIER[static_cast<int>(t.tier)];
+        // Estos tres son ASCII puro, así que la conversión directa andaría. Se
+        // usa el helper igual: el día que alguien escriba "épico" con tilde, no
+        // tiene por qué acordarse de esta distinción.
+        rareza["tier"] = aGodot(NOMBRES_TIER[static_cast<int>(t.tier)]);
         rareza["frecuencia"] = t.approxRate;
         salida.push_back(rareza);
     }
@@ -123,5 +126,12 @@ String PetBitsCore::seed_al_azar() const {
 }
 
 String PetBitsCore::version() const {
-    return String("PetBits core 3.0.0-fase1 · genome + traits + evolution");
+    // aGodot y no String(...) directo. El constructor de String desde const
+    // char* NO interpreta UTF-8: ensancha cada byte como si fuera Latin-1. El
+    // "·" de acá son dos bytes (C2 B7) y salía en pantalla como "Â·".
+    //
+    // Es el mismo error que este archivo documenta más arriba, cometido en la
+    // única línea que no pasaba por el helper. Vale dejarlo anotado: la
+    // conversión correcta hay que usarla siempre, no cuando uno se acuerda.
+    return aGodot("PetBits core 3.0.0-fase1 · genome + traits + evolution");
 }

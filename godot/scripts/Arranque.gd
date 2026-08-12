@@ -89,11 +89,19 @@ func _titulo(padre: Node, texto: String) -> void:
 	etiqueta.add_theme_font_size_override("font_size", 20)
 	etiqueta.add_theme_color_override("font_color", VERDE)
 	padre.add_child(etiqueta)
+	print(texto)
 
 
+## Cada línea va a la pantalla y también a la consola.
+##
+## Duplicarlo cuesta una línea y sirve para lo que esta escena existe: cuando
+## algo no anda, se puede pegar el texto en un mensaje en vez de describir una
+## captura. Además hace que corra con sentido en --headless.
 func _linea(padre: Node, texto: String, color: Color) -> void:
 	var etiqueta := Label.new()
 	etiqueta.text = texto
 	etiqueta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	etiqueta.add_theme_color_override("font_color", color)
 	padre.add_child(etiqueta)
+	if texto != "":
+		print(texto)

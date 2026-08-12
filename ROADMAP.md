@@ -36,7 +36,7 @@ mismos algoritmos.
 | Estructura `godot/`, `gdext/`, `tools/` | ✅ |
 | `godot-cpp` como submódulo, fijado a 4.3 | ✅ |
 | SConstruct que compila y nombra la biblioteca como Godot la busca | ✅ |
-| El proyecto de Godot abre y arranca | ✅ |
+| El proyecto de Godot abre, carga la extensión y arranca | ✅ probado en 4.7.1 |
 | `.gitignore` para artefactos de SCons, Godot y Python | ✅ |
 
 Sin GitHub Actions: el CI vive dentro de `npm run build`, que corre typecheck,
@@ -76,12 +76,23 @@ La biblioteca compila y linkea:
 `petbits_gdextension_init` — el mismo nombre de archivo y el mismo símbolo que
 declara el `.gdextension`.
 
-**Lo único sin verificar de la cadena** es el último eslabón: que Godot cargue
-esa biblioteca al abrir el proyecto. No se pudo comprobar porque todavía no hay
-Godot instalado en la máquina de desarrollo. La pantalla de arranque
-(`scenes/Arranque.tscn`) existe justamente para responder eso de un vistazo.
+**La cadena está cerrada de punta a punta.** Godot 4.7.1 carga la extensión,
+`PetBitsCore` queda registrada, y los valores llegan intactos hasta GDScript —
+incluidos los nombres con acento y los seeds con el bit 63 encendido, que son
+los dos lugares donde el puente podía romperse solo. Se comprueba sin abrir el
+editor:
 
-**Próximo paso concreto:** instalar Godot 4.3+, abrir `godot/` y apretar F5.
+```bash
+godot --headless --path godot --script res://scripts/verificar_puente.gd
+```
+
+Esa verificación encontró un bug de conversión en `version()`: se armaba el
+String con el constructor desde `const char*`, que no interpreta UTF-8, y el "·"
+salía como "Â·". El resto del puente usaba el helper correcto; el error estaba
+justo en la línea que no pasaba por él.
+
+**Próximo paso concreto:** portar `simulation.cpp`, que es lo que bloquea la
+Fase 2.
 
 ### Fase 2 — Criatura en pantalla ⬜
 
