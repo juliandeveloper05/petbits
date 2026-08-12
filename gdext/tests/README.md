@@ -69,8 +69,14 @@ VS lo detecta solo y configura todo. Después:
 | Correr con el depurador | Elegir `run_tests.exe` como elemento de inicio y `F5` |
 | Correr sin depurar | `Ctrl+F5` |
 
-Elegí la configuración **msvc-release** para correr la paridad —los cincuenta
-mil chequeos tardan tres segundos— y **msvc-debug** para depurar.
+Elegí la configuración **msvc-release** para correr la paridad y **msvc-debug**
+para depurar. Los cincuenta mil chequeos tardan unas décimas de segundo en
+release y alrededor de un segundo en debug, así que la diferencia no molesta:
+elegí por lo que necesites, no por la velocidad.
+
+Cada configuración deja su ejecutable en su propia carpeta —`build/release/` y
+`build/debug/`— así que se pueden tener las dos compiladas a la vez sin que una
+pise a la otra.
 
 Es lo que conviene cuando algo no coincide: se pone un breakpoint adentro de
 `simulate()` y se miran los stats tick a tick, en vez de deducir qué pasó

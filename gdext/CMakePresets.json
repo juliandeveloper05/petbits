@@ -22,7 +22,7 @@
       "name": "msvc-release",
       "inherits": "base-msvc",
       "displayName": "MSVC Release — para correr la paridad",
-      "description": "Optimizado. Los 50.000 chequeos tardan segundos en vez de minutos.",
+      "description": "Optimizado. Es la que conviene para correr la paridad entera.",
       "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
     }

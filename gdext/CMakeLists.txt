@@ -61,13 +61,19 @@ endif()
 add_executable(run_tests tests/test_parity.cpp)
 target_link_libraries(run_tests PRIVATE petbits_nucleo)
 
-# El ejecutable se deja al lado de los vectores para que se pueda correr a mano
-# desde tests/ igual que con la compilación directa que documenta el README.
-set_target_properties(run_tests PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests"
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/tests"
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/tests"
-)
+# El ejecutable queda dentro de su carpeta de build —build/debug/ o
+# build/release/— y NO en tests/.
+#
+# Mandarlo a tests/ era más cómodo para correrlo a mano y estaba mal: las dos
+# configuraciones escribían el mismo archivo. Compilabas release, después debug,
+# y el de release desaparecía; peor todavía, al volver a release Ninja podía ver
+# un .exe más nuevo que sus objetos y no relinkear, dejándote corriendo el
+# binario de debug creyendo que era el otro. Un test que miente sobre qué está
+# probando es peor que no tenerlo.
+#
+# Visual Studio y ctest lo encuentran solos. El test no lee ningún archivo en
+# tiempo de ejecución —los vectores se compilan adentro— así que no le importa
+# desde dónde se lo invoque.
 
 enable_testing()
 add_test(NAME paridad COMMAND run_tests)
