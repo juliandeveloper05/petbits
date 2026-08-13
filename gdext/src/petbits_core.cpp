@@ -251,6 +251,9 @@ Array PetBitsCore::alimentos() const {
         d["energia"] = f.energia;
         d["animo"] = f.animo;
         d["salud"] = f.salud;
+        // Cuántas quedan, para que el botón pueda decirlo. Sin esto el jugador
+        // se entera de que no le queda comida recién al apretar.
+        d["cantidad"] = partida.has_value() ? partida->inventario.cuanto(f.id) : 0;
         salida.push_back(d);
     }
     return salida;
@@ -273,9 +276,38 @@ Dictionary PetBitsCore::alimentar(const String& alimento_id, int64_t ahora_ms) {
         d["mensaje"] = String("No hay ninguna criatura.");
         return d;
     }
+
     const CharString bytes = aBytes(alimento_id);
     const std::string_view id(bytes.get_data(), static_cast<size_t>(bytes.length()));
-    return aplicar(c, petbits::alimentar(*c, id, ahora_ms));
+
+    // Apartar, actuar, cobrar. Es el orden que usa la web y no es intercambiable:
+    //
+    //   1. la unidad se descuenta sobre una COPIA de la despensa
+    //   2. se llama a alimentar()
+    //   3. si la acción falla, la copia se descarta y no se cobró nada
+    //
+    // Cobrando primero sobre la despensa real, una acción rechazada —la criatura
+    // está de expedición, por ejemplo— se comería la baya igual.
+    petbits::Inventario despensaPendiente = partida->inventario;
+    if (!despensaPendiente.consumir(id)) {
+        d["ok"] = false;
+        d["mensaje"] = String::utf8("No te queda de eso. Mandala a buscar.");
+        return d;
+    }
+
+    const petbits::ActionResult r = petbits::alimentar(*c, id, ahora_ms);
+    if (!r.ok) {
+        d["ok"] = false;
+        d["mensaje"] = aGodot(r.message);
+        return d;
+    }
+
+    *c = r.state;
+    partida->inventario = std::move(despensaPendiente);
+
+    d["ok"] = true;
+    d["mensaje"] = aGodot(r.message);
+    return d;
 }
 
 Dictionary PetBitsCore::jugar(int64_t ahora_ms) {

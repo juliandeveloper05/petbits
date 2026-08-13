@@ -281,11 +281,11 @@ simulación, 780 rampas de color y 2560 sprites y 23 escenarios de acciones— e
 desde el _Developer Command Prompt_ en `gdext/tests`:
 
 ```bash
-cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\src\actions.cpp && run_tests.exe
+cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\src\actions.cpp ..\src\inventory.cpp ..\src\json.cpp ..\src\save_manager.cpp && run_tests.exe
 ng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\srcctions.cpp && run_tests.exe
 ```
 
-Estado actual: **50.533 comprobaciones, 0 fallas.**
+Estado actual: **50.557 comprobaciones, 0 fallas.**
 
 No hacen falta Godot ni SCons ni godot-cpp: los módulos portados son C++ puro.
 Con un compilador alcanza, así que la paridad se puede comprobar antes de

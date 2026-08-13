@@ -21,6 +21,7 @@
  * Cuando esos módulos se porten, dejan de ser opacos y nada más cambia.
  */
 
+#include "inventory.h"
 #include "json.h"
 #include "simulation.h"
 
@@ -37,11 +38,23 @@ struct Partida {
     std::string activaId;
 
     /**
-     * El resto del save, sin interpretar: codex, inventario, semillas y
-     * cualquier campo que una versión futura agregue.
+     * La despensa. Se interpreta porque el juego la gasta: alimentar cuesta una
+     * unidad.
      *
-     * Se guarda el objeto entero y no solo esas tres claves a propósito: si el
-     * TS suma un campo nuevo, este código lo preserva sin enterarse.
+     * Dejarla opaca como el codex parecía inofensivo y no lo era. El nativo
+     * daba de comer sin descontar nada, así que la comida era infinita de este
+     * lado y no del otro — y como la dieta decide la rama evolutiva, se podía
+     * empujar una evolución en el nativo sin pagar lo que la web sí cobra.
+     * Salió jugando una partida de verdad, no de un test.
+     */
+    Inventario inventario;
+
+    /**
+     * El resto del save, sin interpretar: codex, semillas y cualquier campo que
+     * una versión futura agregue.
+     *
+     * Se guarda el objeto entero y no una lista de claves conocidas a propósito:
+     * si el TS suma un campo nuevo, este código lo preserva sin enterarse.
      */
     Json otros;
 };

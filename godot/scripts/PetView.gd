@@ -48,6 +48,7 @@ var _sprite: TextureRect = null
 var _barras := {}
 var _etiquetas := {}
 var _registro: RichTextLabel = null
+var _botones_comida := {}
 
 var _parpadeando := false
 var _proximo_parpadeo := INTERVALO_PARPADEO
@@ -202,6 +203,16 @@ func _on_consultar() -> void:
 # Acciones
 # ---------------------------------------------------------------------------
 
+## Se pone al día ANTES de actuar, igual que catchUp() en la web.
+##
+## Si no, la acción se aplicaría sobre un estado viejo y el tiempo transcurrido
+## se descontaría después, pisándola. Con el reloj consultando cada segundo casi
+## nunca hay ticks pendientes, pero "casi nunca" no es una garantía.
+func _actuar(accion: Callable) -> void:
+	_core.simular(_ahora_ms())
+	_on_accion(accion.call())
+
+
 func _on_accion(resultado: Dictionary) -> void:
 	# Un rechazo NO es un error de la interfaz: es información. "No le da la
 	# energía para jugar" le dice al jugador qué hacer, y por eso se muestra
@@ -290,19 +301,40 @@ func _construir_botones(padre: Node) -> void:
 	# solo. Repetir la lista acá sería tener dos fuentes de verdad para lo mismo.
 	for alimento in _core.alimentos():
 		var id: String = alimento["id"]
-		_boton(fila, alimento["nombre"], func(): _on_accion(_core.alimentar(id, _ahora_ms())))
+		var boton := _boton(fila, alimento["nombre"], func(): _actuar(func(): return _core.alimentar(id, _ahora_ms())))
+		# Se guarda para poder actualizarle el contador cuando el stock cambia.
+		_botones_comida[id] = { "boton": boton, "nombre": alimento["nombre"] }
 
-	_boton(fila, "Jugar", func(): _on_accion(_core.jugar(_ahora_ms())))
-	_boton(fila, "Mimos", func(): _on_accion(_core.acariciar(_ahora_ms())))
+	_boton(fila, "Jugar", func(): _actuar(func(): return _core.jugar(_ahora_ms())))
+	_boton(fila, "Mimos", func(): _actuar(func(): return _core.acariciar(_ahora_ms())))
+	_refrescar_despensa()
 
 
-func _boton(padre: Node, texto: String, al_apretar: Callable) -> void:
+func _boton(padre: Node, texto: String, al_apretar: Callable) -> Button:
 	var boton := Button.new()
 	boton.text = texto
 	boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	boton.add_theme_font_size_override("font_size", 9)
 	boton.pressed.connect(al_apretar)
 	padre.add_child(boton)
+	return boton
+
+
+## Cuánto queda de cada comida, en el botón.
+##
+## El botón sigue habilitado con stock cero a propósito: apretarlo contesta "no
+## te queda de eso, mandala a buscar", que le dice al jugador qué hacer. Un botón
+## gris no explica nada, y encima esconde que el alimento existe.
+func _refrescar_despensa() -> void:
+	for alimento in _core.alimentos():
+		var id: String = alimento["id"]
+		if not _botones_comida.has(id):
+			continue
+		var cantidad: int = alimento["cantidad"]
+		var entrada: Dictionary = _botones_comida[id]
+		var boton: Button = entrada["boton"]
+		boton.text = "%s %d" % [entrada["nombre"], cantidad]
+		boton.modulate = Color(1, 1, 1) if cantidad > 0 else Color(0.55, 0.55, 0.55)
 
 
 func _linea(padre: Node, color: Color, tamano: int) -> Label:
@@ -376,6 +408,8 @@ func _refrescar_estado() -> void:
 	elif e["durmiendo"]:
 		descripcion += " · durmiendo"
 	_etiquetas["etapa"].text = descripcion
+
+	_refrescar_despensa()
 
 	var stats: Dictionary = e["stats"]
 	for clave in _barras:

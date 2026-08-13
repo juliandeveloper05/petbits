@@ -34,6 +34,7 @@
 #include "../src/actions.h"
 #include "../src/evolution.h"
 #include "../src/genome.h"
+#include "../src/inventory.h"
 #include "../src/json.h"
 #include "../src/save_manager.h"
 #include "../src/palette.h"
@@ -594,14 +595,19 @@ static void probarGuardado() {
                            "codex.linajes preservado");
         }
 
-        const Json* inv = q.otros.buscar("inventario");
-        if (inv == nullptr || !inv->esObjeto()) {
-            revisar(false, v.nombre, "se perdió el inventario al guardar");
-        } else {
-            const Json* bayas = inv->buscar("baya");
-            revisarEnteros(bayas != nullptr ? static_cast<uint64_t>(bayas->comoEntero()) : 0, 3,
-                           v.nombre, "inventario.baya preservado");
-        }
+        // El inventario NO va en `otros`: se interpreta, porque el juego lo
+        // gasta. Que llegue acá con los valores del save es lo que hace que
+        // alimentar pueda cobrar.
+        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("baya")), 3, v.nombre,
+                       "inventario.baya leído");
+        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("raiz")), 1, v.nombre,
+                       "inventario.raiz leído");
+        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("cristal")), 0, v.nombre,
+                       "inventario.cristal leído");
+        // Y sobrevive la ida y vuelta por el archivo.
+        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("baya")),
+                       static_cast<uint64_t>(p.inventario.cuanto("baya")), v.nombre,
+                       "inventario tras ida y vuelta");
 
         const Json* semillas = q.otros.buscar("semillas");
         if (semillas == nullptr || !semillas->esArreglo()) {
@@ -616,6 +622,59 @@ static void probarGuardado() {
             revisar(intacta, v.nombre, "la semilla de 20 dígitos volvió cambiada");
         }
     }
+}
+
+/**
+ * La despensa se gasta, y solo cuando la acción salió bien.
+ *
+ * Este bloque existe por un bug que no encontró ningún test: apareció jugando
+ * una partida de verdad y pasándola de la web al nativo. El inventario se
+ * guardaba y se devolvía intacto —eso estaba testeado— pero nadie lo descontaba,
+ * así que del lado nativo la comida era infinita. Como la dieta decide la rama
+ * evolutiva, se podía empujar una evolución sin pagar lo que la web sí cobra.
+ *
+ * El orden importa tanto como el descuento: apartar, actuar, y recién cobrar si
+ * la acción salió bien. Cobrando primero, una acción rechazada te comería la
+ * baya igual.
+ */
+static void probarDespensa() {
+    bloque("la despensa se gasta");
+
+    const Inventario inicial = inventarioInicial();
+    revisarEnteros(static_cast<uint64_t>(inicial.cuanto("baya")), 3, "inicial", "bayas");
+    revisarEnteros(static_cast<uint64_t>(inicial.cuanto("cristal")), 0, "inicial", "cristales");
+    revisarEnteros(static_cast<uint64_t>(inicial.total()), 7, "inicial", "total");
+
+    // Consumir descuenta de a una y se planta en cero.
+    Inventario i = inicial;
+    revisar(i.consumir("baya"), "consumir", "tendría que haber bayas");
+    revisarEnteros(static_cast<uint64_t>(i.cuanto("baya")), 2, "consumir", "quedan 2");
+    revisar(i.consumir("baya"), "consumir", "tendría que haber bayas");
+    revisar(i.consumir("baya"), "consumir", "tendría que haber bayas");
+    revisar(!i.consumir("baya"), "consumir", "sin bayas no se puede consumir");
+    revisarEnteros(static_cast<uint64_t>(i.cuanto("baya")), 0, "consumir", "no baja de cero");
+
+    // El cristal arranca en cero: es lo raro y tiene que sentirse así.
+    revisar(!inicial.hay("cristal"), "cristal", "arranca sin cristales");
+
+    // Un id que no existe no rompe ni inventa comida.
+    Inventario j = inicial;
+    revisar(!j.consumir("piedra"), "id inexistente", "no debería consumir nada");
+    revisarEnteros(static_cast<uint64_t>(j.total()), 7, "id inexistente", "el total no cambió");
+
+    // Y el circuito completo: la copia se descarta si la acción falla. Se simula
+    // con una criatura de expedición, que rechaza toda acción.
+    const int64_t base = 1786406400000LL;
+    CreatureState c = createCreature(0xA3F091C477BE2D08ULL, base, -180);
+    c.expedicion = Expedicion{"patio", base, base + 900'000};
+
+    Inventario pendiente = inicial;
+    revisar(pendiente.consumir("baya"), "acción rechazada", "la copia se descuenta");
+    const ActionResult r = alimentar(c, "baya", base);
+    revisar(!r.ok, "acción rechazada", "de expedición no se puede comer");
+    // La despensa REAL no se tocó: `pendiente` es una copia que se descarta.
+    revisarEnteros(static_cast<uint64_t>(inicial.cuanto("baya")), 3, "acción rechazada",
+                   "la despensa original quedó intacta");
 }
 
 /** El JSON tiene que aguantar entradas rotas sin reventar el arranque. */
@@ -765,6 +824,7 @@ int main() {
     probarSimulacion();
     probarAcciones();
     probarGuardado();
+    probarDespensa();
     probarJsonRoto();
     probarParticion();
     probarRelojAtras();

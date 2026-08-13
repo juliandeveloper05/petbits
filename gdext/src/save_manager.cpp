@@ -306,6 +306,8 @@ Partida partidaInicial(const CreatureState& criatura) {
     p.criaturas.push_back(criatura);
     p.activaId = criatura.id;
 
+    p.inventario = inventarioInicial();
+
     Json codex = Json::objeto();
     codex.poner("linajes", Json::arreglo());
     codex.poner("formas", Json::arreglo());
@@ -314,7 +316,6 @@ Partida partidaInicial(const CreatureState& criatura) {
 
     p.otros = Json::objeto();
     p.otros.poner("codex", std::move(codex));
-    p.otros.poner("inventario", Json::objeto());
     p.otros.poner("semillas", Json::arreglo());
 
     return p;
@@ -376,12 +377,21 @@ bool cargarPartida(const std::string& texto, Partida& salida, std::string& error
         return false;
     }
 
+    // La despensa sí se interpreta: el juego la gasta.
+    salida.inventario = Inventario();
+    const Json* inventario = raiz.buscar("inventario");
+    if (inventario != nullptr && inventario->esObjeto()) {
+        for (const auto& [id, cantidad] : inventario->campos()) {
+            if (cantidad.esNumero()) salida.inventario.poner(id, cantidad.comoEntero());
+        }
+    }
+
     // Todo lo demás se guarda sin mirar. Es lo que permite que un save de la
     // web pase por el nativo sin perder el codex.
     salida.otros = Json::objeto();
     for (const auto& [clave, valor] : raiz.campos()) {
         if (clave == "version" || clave == "guardadoMs" || clave == "criaturas" ||
-            clave == "activaId") {
+            clave == "activaId" || clave == "inventario") {
             continue;
         }
         salida.otros.poner(clave, valor);
@@ -405,6 +415,15 @@ std::string guardarPartida(const Partida& p, int64_t nowMs) {
     for (const auto& [clave, valor] : p.otros.campos()) {
         raiz.poner(clave, valor);
     }
+
+    // La despensa va después de `otros` para que quede donde la escribe el TS:
+    // entre el codex y las semillas. El orden no cambia el significado, pero sí
+    // el diff entre un save de la web y uno del nativo.
+    Json inventario = Json::objeto();
+    for (const auto& [id, cantidad] : p.inventario.items()) {
+        inventario.poner(id, Json::numero(static_cast<double>(cantidad)));
+    }
+    raiz.poner("inventario", std::move(inventario));
 
     return raiz.escribir();
 }

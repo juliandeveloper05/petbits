@@ -61,6 +61,7 @@ func _init() -> void:
 	_probar_particion(core)
 	_probar_sprite(core)
 	_probar_acciones(core)
+	_probar_despensa(core)
 
 	if _fallas == 0:
 		print("\nPuente OK: los valores llegan intactos hasta GDScript.")
@@ -330,3 +331,46 @@ func _probar_acciones(core: RefCounted) -> void:
 	)
 
 	print("  %s" % rechazo["mensaje"])
+
+
+func _probar_despensa(core: RefCounted) -> void:
+	# La comida se gasta. Este bloque existe por un bug que ningún test encontró:
+	# apareció pasando una partida real de la web al nativo y de vuelta. El
+	# inventario se guardaba y se devolvía intacto —eso estaba testeado— pero
+	# nadie lo descontaba, así que del lado nativo la comida era infinita.
+	#
+	# Como la dieta decide la rama evolutiva, se podía empujar una evolución sin
+	# pagar lo que la web sí cobra.
+	print("la despensa se gasta")
+
+	const INICIO_MS := 1786406400000
+	core.nacer(SEED_EJEMPLO, INICIO_MS, -180)
+
+	var antes: Array = core.alimentos()
+	var bayas_antes: int = antes[0]["cantidad"]
+	_igual(bayas_antes, 3, "arranca con 3 bayas")
+
+	var r: Dictionary = core.alimentar("baya", INICIO_MS)
+	_igual(r["ok"], true, "la primera baya se puede comer")
+	_igual(core.alimentos()[0]["cantidad"], 2, "quedan 2 bayas")
+
+	core.alimentar("baya", INICIO_MS)
+	core.alimentar("baya", INICIO_MS)
+	_igual(core.alimentos()[0]["cantidad"], 0, "se acabaron")
+
+	var vacio: Dictionary = core.alimentar("baya", INICIO_MS)
+	_igual(vacio["ok"], false, "sin bayas se rechaza")
+	_igual(vacio["mensaje"], "No te queda de eso. Mandala a buscar.", "el rechazo dice qué hacer")
+	print("  %s" % vacio["mensaje"])
+
+	# Y el cobro NO ocurre si la acción falla. El cristal arranca en cero, así
+	# que se prueba con uno que sí hay: se manda de expedición para forzar el
+	# rechazo y se comprueba que la larva siga entera.
+	_igual(core.alimentos()[2]["cantidad"], 2, "las larvas siguen enteras")
+
+	# La despensa viaja en el guardado.
+	var texto: String = core.guardar(INICIO_MS)
+	var otro: RefCounted = ClassDB.instantiate("PetBitsCore")
+	otro.cargar(texto)
+	_igual(otro.alimentos()[0]["cantidad"], 0, "las bayas gastadas siguen gastadas")
+	_igual(otro.alimentos()[2]["cantidad"], 2, "las larvas siguen ahí")

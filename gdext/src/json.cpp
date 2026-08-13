@@ -4,9 +4,11 @@
 
 #include "json.h"
 
+#include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <system_error>
 
 namespace petbits {
 
@@ -121,30 +123,57 @@ static void escribirTexto(const std::string& s, std::string& salida) {
 }
 
 /**
- * Un número, de forma que JavaScript lo lea con el mismo valor.
+ * Un número, escrito como lo escribiría JavaScript.
  *
  * Los enteros salen sin coma. No es cosmético: el esquema de la web valida
- * varios campos con `.int()`, y aunque JSON no distinga enteros de reales, un
- * "1786406400000.0000000" en el archivo es ilegible y hace pensar que hay
- * pérdida de precisión donde no la hay.
+ * varios campos con `.int()`, y un "1786406400000.0000000" en el archivo es
+ * ilegible y hace pensar que hay pérdida de precisión donde no la hay.
  *
- * El resto va con %.17g, que es la cantidad de dígitos que garantiza recuperar
- * el mismo double al releerlo. Sale más largo que lo que escribe JSON.stringify
- * —que usa la representación más corta que round-trippea— pero vale el mismo
- * número, que es lo único que importa acá.
+ * El resto usa `std::to_chars` sin formato, que da **la cadena más corta que
+ * vuelve al mismo double** — exactamente el algoritmo de JSON.stringify.
+ *
+ * ---
+ *
+ * ANTES ESTO ERA %.17g, Y ANDABA. EL PROBLEMA ERA OTRO.
+ *
+ * Diecisiete dígitos significativos garantizan recuperar el mismo double, así
+ * que no había pérdida de precisión: 93.504000000000005 y 93.504 son el mismo
+ * número, bit por bit.
+ *
+ * Pero los dos lados escribían el MISMO valor con cadenas distintas, y eso se
+ * notó recién al pasar una partida real por web → nativo → web: cada salto
+ * cambiaba el aspecto de casi todos los números. Un diff entre dos saves daba
+ * diferencias en todos lados aunque nada hubiera cambiado, y comparar archivos
+ * —o sumarles un checksum algún día— habría sido imposible.
+ *
+ * Con to_chars los dos lados producen byte a byte lo mismo.
  */
 static void escribirNumero(double v, std::string& salida) {
-    char buf[40];
-    if (std::isfinite(v) && v == std::floor(v) && std::abs(v) < 1e15) {
-        std::snprintf(buf, sizeof(buf), "%.0f", v);
-    } else if (!std::isfinite(v)) {
+    if (!std::isfinite(v)) {
         // JSON no tiene infinito ni NaN. JSON.stringify escribe null; se hace
         // lo mismo para no producir un archivo que el otro lado no pueda leer.
         salida += "null";
         return;
-    } else {
-        std::snprintf(buf, sizeof(buf), "%.17g", v);
     }
+
+    char buf[40];
+    if (v == std::floor(v) && std::abs(v) < 1e15) {
+        std::snprintf(buf, sizeof(buf), "%.0f", v);
+        salida += buf;
+        return;
+    }
+
+#if defined(__cpp_lib_to_chars)
+    const auto r = std::to_chars(buf, buf + sizeof(buf), v);
+    if (r.ec == std::errc()) {
+        salida.append(buf, r.ptr);
+        return;
+    }
+#endif
+    // Sin to_chars para punto flotante —GCC anterior a la 11, por ejemplo— se
+    // vuelve a los 17 dígitos. Sigue siendo correcto: cambia el aspecto del
+    // archivo, no el valor.
+    std::snprintf(buf, sizeof(buf), "%.17g", v);
     salida += buf;
 }
 

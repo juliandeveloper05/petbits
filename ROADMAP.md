@@ -45,7 +45,7 @@ no llega a producción.
 
 ### Fase 1 — Port del núcleo a C++ 🚧
 
-Diez módulos de doce. Todos los portados tienen paridad verificada contra
+Once módulos de trece. Todos los portados tienen paridad verificada contra
 vectores generados ejecutando el TypeScript.
 
 | Módulo | Estado |
@@ -59,6 +59,7 @@ vectores generados ejecutando el TypeScript.
 | `sprite_gen.cpp` — el pixel art de 32×32 | ✅ portado, compilado y verificado |
 | `petbits_core.cpp` — puente a GDScript | ✅ carga en Godot 4.7.1 |
 | `actions.cpp` — alimentar, jugar, acariciar | ✅ portado, compilado y verificado |
+| `inventory.cpp` — la despensa | ✅ portado, compilado y verificado |
 | `json.cpp` — lector y escritor, con orden de claves estable | ✅ portado, compilado y verificado |
 | `save_manager.cpp` — leer y escribir los saves de la web | ✅ validado con el esquema real de la web |
 | `breeding.cpp` — cruza por gen | ⬜ ni empezado |
@@ -70,7 +71,7 @@ entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
 contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **50.533 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **50.557 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -141,10 +142,21 @@ Pasa el `parseSave` real —el mismo esquema de Zod y la misma validación cruza
 de `activaId` que corren en el navegador—. Un round-trip del C++ contra sí mismo
 no habría probado nada: alcanza con equivocarse igual al leer y al escribir.
 
-Lo que el C++ todavía no interpreta —codex, inventario, semillas— se lee y se
-vuelve a escribir tal cual. Abrir tu partida en el nativo no te borra el codex,
-y eso es lo que hace seguro compartir un formato entre dos programas que no
-están igual de completos.
+Lo que el C++ todavía no interpreta —codex y semillas— se lee y se vuelve a
+escribir tal cual. Abrir tu partida en el nativo no te borra el codex, y eso es
+lo que hace seguro compartir un formato entre dos programas que no están igual
+de completos.
+
+**El inventario sí se interpreta**, y esa distinción salió de jugar. Dejarlo
+opaco parecía inofensivo: se guardaba y se devolvía intacto, con tests que lo
+probaban. Pero nadie lo descontaba, así que del lado nativo la comida era
+infinita — y como la dieta decide la rama evolutiva, se podía empujar una
+evolución sin pagar lo que la web sí cobra.
+
+No lo encontró ningún test. Apareció pasando una partida real de la web al
+nativo y de vuelta, y comparando los dos archivos. Vale como recordatorio de
+que "el formato viaja bien" y "las dos plataformas juegan el mismo juego" son
+dos afirmaciones distintas.
 
 Un save que no carga **no se borra**: se renombra a `partida.rota.json`. Puede
 ser recuperable a mano, y esa decisión le toca al dueño de la partida.

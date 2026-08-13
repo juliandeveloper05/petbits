@@ -41,8 +41,8 @@ Desde una consola *Developer Command Prompt for VS 2022* (la común no tiene `cl
 en el PATH):
 
 ```bash
-cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\src\actions.cpp && run_tests.exe
-ng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\srcctions.cpp && run_tests.exe
+cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\src\actions.cpp ..\src\inventory.cpp ..\src\json.cpp ..\src\save_manager.cpp && run_tests.exe
+ng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\srcctions.cpp ..\src\inventory.cpp ..\src\json.cpp ..\src\save_manager.cpp && run_tests.exe
 ```
 
 `/utf-8` no es adorno: los catálogos están llenos de acentos y sin esa opción
@@ -53,7 +53,7 @@ aparente.
 ### Windows — MinGW, Linux o macOS
 
 ```bash
-g++ -std=c++17 -O2 test_parity.cpp ../src/genome.cpp ../src/traits.cpp ../src/evolution.cpp ../src/rng.cpp ../src/simulation.cpp ../src/palette.cpp ../src/sprite_gen.cpp ../src/actions.cpp -o run_tests && ./run_tests
+g++ -std=c++17 -O2 test_parity.cpp ../src/genome.cpp ../src/traits.cpp ../src/evolution.cpp ../src/rng.cpp ../src/simulation.cpp ../src/palette.cpp ../src/sprite_gen.cpp ../src/actions.cpp ../src/inventory.cpp ../src/json.cpp ../src/save_manager.cpp -o run_tests && ./run_tests
 ```
 
 ### Desde Visual Studio 2022
@@ -109,11 +109,12 @@ generateSprite
 simulate
 alimentar / jugar / acariciar
 cargar y guardar la partida
+la despensa se gasta
 guardados corruptos
 invariante de partición
 reloj hacia atrás
 
-50533 comprobaciones, 0 fallas
+50557 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
@@ -137,6 +138,7 @@ script.
 | `simulation.cpp` | Estado completo, stats y conteo de eventos | 14 escenarios |
 | `actions.cpp` | Stats, crianza, tope de vínculo y el mensaje al jugador | 23 escenarios |
 | `save_manager.cpp` | Lee saves de la web, los reescribe y no pierde nada | 3 saves + 11 corruptos |
+| `inventory.cpp` | Se gasta de a una, no baja de cero, y solo cobra si la acción salió bien | 1 bloque |
 
 Los sprites se comparan por hash y no píxel por píxel porque cada uno son 4096
 bytes: ponerlos crudos en el header serían megabytes. Junto al hash va el conteo
