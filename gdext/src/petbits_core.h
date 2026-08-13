@@ -127,6 +127,35 @@ public:
     Dictionary acariciar(int64_t ahora_ms);
 
     // -----------------------------------------------------------------------
+    // Expediciones
+    // -----------------------------------------------------------------------
+
+    /**
+     * Los destinos, con si la criatura puede ir a cada uno y por qué no.
+     *
+     * El motivo viaja junto al destino en vez de calcularse en GDScript: es una
+     * regla del juego —"todavía está muy chica para ir tan lejos"— y las reglas
+     * viven de un solo lado.
+     */
+    Array destinos() const;
+
+    /** La manda. Devuelve { ok, mensaje }. */
+    Dictionary enviar(const String& destino_id, int64_t ahora_ms);
+
+    /**
+     * La recibe si ya volvió, y le suma el botín a la despensa.
+     *
+     * { volvio: bool, mensaje: String, botin: Dictionary, semilla: String }
+     *
+     * `volvio` en false si sigue afuera o si nunca salió — no es un error, es la
+     * respuesta normal cuando todavía no es hora.
+     */
+    Dictionary recibir(int64_t ahora_ms);
+
+    /** Milisegundos que faltan para que vuelva. Cero si está en casa. */
+    int64_t falta_para_volver(int64_t ahora_ms) const;
+
+    // -----------------------------------------------------------------------
     // Sprite
     // -----------------------------------------------------------------------
 

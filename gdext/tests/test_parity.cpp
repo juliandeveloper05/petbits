@@ -33,6 +33,7 @@
 
 #include "../src/actions.h"
 #include "../src/evolution.h"
+#include "../src/expeditions.h"
 #include "../src/genome.h"
 #include "../src/inventory.h"
 #include "../src/json.h"
@@ -677,6 +678,124 @@ static void probarDespensa() {
                    "la despensa original quedó intacta");
 }
 
+/**
+ * El botín de las expediciones.
+ *
+ * Se decide cuando la criatura SALE, a partir del genoma y del momento de
+ * salida. Eso es lo que impide cerrar y reabrir hasta que salga un cristal, y
+ * solo funciona si las dos plataformas sortean exactamente igual.
+ *
+ * El sorteo recorre los pesos restando hasta cruzar el cero, así que el ORDEN de
+ * la tabla decide qué sale en cada tirada. Es la razón por la que en el C++ los
+ * pesos van en un vector y no en un map: alfabetizados darían otro botín.
+ */
+static void probarBotines() {
+    bloque("botín de expediciones");
+
+    for (const auto& v : vectores::BOTINES) {
+        char ctx[128];
+        std::snprintf(ctx, sizeof(ctx), "seed %016llX en %s, salida %lld",
+                      static_cast<unsigned long long>(v.seed), v.destinoId,
+                      static_cast<long long>(v.salidaMs));
+
+        const Destino* destino = destinoPorId(v.destinoId);
+        if (destino == nullptr) {
+            revisar(false, ctx, "el destino no existe en el C++");
+            continue;
+        }
+
+        const Botin b = resolverBotin(v.seed, *destino, v.salidaMs);
+
+        // Los alimentos se comparan en ORDEN, no como conjunto: el orden en que
+        // aparecen es el orden en que salieron sorteados, y si eso difiere el
+        // sorteo tomó otro camino aunque el total coincida.
+        std::string obtenidos;
+        for (const auto& [id, cantidad] : b.alimentos.items()) {
+            if (cantidad <= 0) continue;
+            if (!obtenidos.empty()) obtenidos += ",";
+            obtenidos += id + ":" + std::to_string(cantidad);
+        }
+        const std::string detalle =
+            "alimentos: C++ dio \"" + obtenidos + "\", el TS da \"" + v.alimentos + "\"";
+        revisar(obtenidos == v.alimentos, ctx, detalle.c_str());
+
+        revisarEnteros(b.semilla.has_value() ? 1 : 0, v.traeSemilla, ctx, "trae semilla");
+        if (b.semilla.has_value() && v.traeSemilla != 0) {
+            revisarEnteros(*b.semilla, v.semilla, ctx, "el genoma encontrado");
+        }
+
+        const std::string frase = describirBotin(b);
+        const std::string detalleFrase =
+            "frase: C++ dio \"" + frase + "\", el TS da \"" + v.frase + "\"";
+        revisar(frase == v.frase, ctx, detalleFrase.c_str());
+    }
+}
+
+/**
+ * Las reglas de salida, y la que evita que el juego se trabe.
+ *
+ * El patio no pide etapa ni cuesta energía. Es la garantía de que una criatura
+ * sin comida y sin energía siempre tenga algo que hacer para conseguir más — sin
+ * eso, la economía se cierra sobre sí misma y la partida queda muerta.
+ */
+static void probarSalidas() {
+    bloque("reglas de las expediciones");
+
+    const int64_t base = 1786406400000LL;
+    const Destino* patio = destinoPorId("patio");
+    const Destino* bosque = destinoPorId("bosque");
+    const Destino* ruinas = destinoPorId("ruinas");
+
+    // Una criatura recién nacida, sin energía. El peor caso posible.
+    CreatureState bebe = createCreature(0xA3F091C477BE2D08ULL, base, -180);
+    bebe.stats.energia = 0.0;
+
+    revisar(puedeSalir(bebe, *patio).puede, "bebé sin energía",
+            "el patio TIENE que estar disponible o el juego se traba");
+    revisar(!puedeSalir(bebe, *bosque).puede, "bebé", "el bosque pide juvenil");
+    revisar(!puedeSalir(bebe, *ruinas).puede, "bebé", "las ruinas piden adulto");
+
+    // Adulta pero agotada: los destinos que cuestan energía se cierran, el patio no.
+    CreatureState adulta = bebe;
+    adulta.etapa = Stage::Adulto;
+    adulta.stats.energia = 10.0;
+    revisar(puedeSalir(adulta, *patio).puede, "adulta agotada", "el patio sigue abierto");
+    revisar(!puedeSalir(adulta, *bosque).puede, "adulta agotada", "el bosque pide 15 de energía");
+
+    // En letargo no sale a ningún lado.
+    CreatureState dormida = adulta;
+    dormida.letargico = true;
+    dormida.stats.energia = 100.0;
+    revisar(!puedeSalir(dormida, *patio).puede, "en letargo", "no puede salir");
+
+    // Enviar cobra la energía y anota la vuelta.
+    CreatureState fuerte = adulta;
+    fuerte.stats.energia = 80.0;
+    const CreatureState enviada = enviar(fuerte, *bosque, base);
+    revisarDobles(enviada.stats.energia, 65.0, "enviar", "descuenta el costo");
+    revisar(enviada.expedicion.has_value(), "enviar", "queda anotada la expedición");
+    revisarEnteros(static_cast<uint64_t>(enviada.expedicion->regresoMs),
+                   static_cast<uint64_t>(base + 90 * 60'000), "enviar", "vuelve a los 90 minutos");
+    revisar(!puedeSalir(enviada, *patio).puede, "ya afuera", "no puede salir dos veces");
+
+    // Y no vuelve antes de tiempo.
+    revisar(!recibir(enviada, base + 89 * 60'000).volvio, "a los 89 minutos", "todavía no volvió");
+    const Regreso r = recibir(enviada, base + 90 * 60'000);
+    revisar(r.volvio, "a los 90 minutos", "ya tendría que estar de vuelta");
+    revisar(!r.criatura.expedicion.has_value(), "al volver", "deja de estar de expedición");
+    // Volver cuenta como atención: estuvo trabajando, no abandonada.
+    revisarEnteros(static_cast<uint64_t>(r.criatura.ticksSinCuidado), 0, "al volver",
+                   "se reinicia el contador de abandono");
+
+    // El patio SIEMPRE trae algo. Es la promesa que sostiene toda la economía.
+    for (int64_t salida = 0; salida < 40; ++salida) {
+        const Botin b = resolverBotin(0xA3F091C477BE2D08ULL, *patio, base + salida * 1000);
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "patio, salida %lld", static_cast<long long>(salida));
+        revisar(b.alimentos.total() >= 1, ctx, "el patio nunca puede volver vacío");
+    }
+}
+
 /** El JSON tiene que aguantar entradas rotas sin reventar el arranque. */
 static void probarJsonRoto() {
     bloque("guardados corruptos");
@@ -811,7 +930,8 @@ int main() {
                 sizeof(vectores::RAMPAS) / sizeof(vectores::RAMPAS[0]),
                 sizeof(vectores::SPRITES) / sizeof(vectores::SPRITES[0]),
                 sizeof(vectores::ACCIONES) / sizeof(vectores::ACCIONES[0]),
-                sizeof(vectores::SAVES) / sizeof(vectores::SAVES[0]));
+                sizeof(vectores::SAVES) / sizeof(vectores::SAVES[0]),
+                sizeof(vectores::BOTINES) / sizeof(vectores::BOTINES[0]));
 
     probarGenomas();
     probarParseo();
@@ -825,6 +945,8 @@ int main() {
     probarAcciones();
     probarGuardado();
     probarDespensa();
+    probarBotines();
+    probarSalidas();
     probarJsonRoto();
     probarParticion();
     probarRelojAtras();

@@ -6,6 +6,7 @@
 
 #include "genome.h"
 #include "actions.h"
+#include "expeditions.h"
 #include "sprite_gen.h"
 #include "traits.h"
 
@@ -76,6 +77,12 @@ void PetBitsCore::_bind_methods() {
                          &PetBitsCore::alimentar);
     ClassDB::bind_method(D_METHOD("jugar", "ahora_ms"), &PetBitsCore::jugar);
     ClassDB::bind_method(D_METHOD("acariciar", "ahora_ms"), &PetBitsCore::acariciar);
+
+    ClassDB::bind_method(D_METHOD("destinos"), &PetBitsCore::destinos);
+    ClassDB::bind_method(D_METHOD("enviar", "destino_id", "ahora_ms"), &PetBitsCore::enviar);
+    ClassDB::bind_method(D_METHOD("recibir", "ahora_ms"), &PetBitsCore::recibir);
+    ClassDB::bind_method(D_METHOD("falta_para_volver", "ahora_ms"),
+                         &PetBitsCore::falta_para_volver);
 
     ClassDB::bind_method(D_METHOD("sprite", "seed", "etapa", "forma", "parpadeo"),
                          &PetBitsCore::sprite, DEFVAL(false));
@@ -330,6 +337,120 @@ Dictionary PetBitsCore::acariciar(int64_t ahora_ms) {
         return d;
     }
     return aplicar(c, petbits::acariciar(*c, ahora_ms));
+}
+
+// ---------------------------------------------------------------------------
+// Expediciones
+// ---------------------------------------------------------------------------
+
+Array PetBitsCore::destinos() const {
+    Array salida;
+    const petbits::CreatureState* c = activa();
+
+    for (const petbits::Destino& d : petbits::destinos()) {
+        Dictionary dic;
+        dic["id"] = aGodot(d.id);
+        dic["nombre"] = aGodot(d.nombre);
+        dic["descripcion"] = aGodot(d.descripcion);
+        dic["duracion_ms"] = d.duracionMs;
+        dic["costo_energia"] = d.costoEnergia;
+
+        if (c == nullptr) {
+            dic["puede"] = false;
+            dic["motivo"] = String("No hay ninguna criatura.");
+        } else {
+            const petbits::PuedeSalir p = petbits::puedeSalir(*c, d);
+            dic["puede"] = p.puede;
+            dic["motivo"] = aGodot(p.motivo);
+        }
+
+        salida.push_back(dic);
+    }
+    return salida;
+}
+
+Dictionary PetBitsCore::enviar(const String& destino_id, int64_t ahora_ms) {
+    Dictionary d;
+    petbits::CreatureState* c = activa();
+    if (c == nullptr) {
+        d["ok"] = false;
+        d["mensaje"] = String("No hay ninguna criatura.");
+        return d;
+    }
+
+    const CharString bytes = aBytes(destino_id);
+    const petbits::Destino* destino = petbits::destinoPorId(
+        std::string_view(bytes.get_data(), static_cast<size_t>(bytes.length())));
+    if (destino == nullptr) {
+        d["ok"] = false;
+        d["mensaje"] = String("Ese lugar no existe.");
+        return d;
+    }
+
+    const petbits::PuedeSalir p = petbits::puedeSalir(*c, *destino);
+    if (!p.puede) {
+        d["ok"] = false;
+        d["mensaje"] = aGodot(p.motivo);
+        return d;
+    }
+
+    *c = petbits::enviar(*c, *destino, ahora_ms);
+    d["ok"] = true;
+    d["mensaje"] = aGodot("Salió para " + std::string(destino->nombre) + ".");
+    return d;
+}
+
+Dictionary PetBitsCore::recibir(int64_t ahora_ms) {
+    Dictionary d;
+    d["volvio"] = false;
+
+    petbits::CreatureState* c = activa();
+    if (c == nullptr) return d;
+
+    const petbits::Regreso r = petbits::recibir(*c, ahora_ms);
+    if (!r.volvio) return d;
+
+    *c = r.criatura;
+
+    // El botín entra en la despensa acá y no en `recibir` del núcleo, por lo
+    // mismo que el descuento de alimentar: el núcleo calcula, la capa de juego
+    // decide qué hacer con el resultado. Es también donde el TS lo hace.
+    Dictionary botin;
+    for (const auto& [id, cantidad] : r.botin.alimentos.items()) {
+        if (cantidad <= 0) continue;
+        partida->inventario.agregar(id, cantidad);
+        botin[aGodot(id)] = cantidad;
+    }
+
+    d["volvio"] = true;
+    d["destino"] = aGodot(r.destino != nullptr ? r.destino->desde : "");
+    d["botin"] = botin;
+    d["mensaje"] = aGodot(petbits::describirBotin(r.botin));
+
+    // La semilla va como texto decimal, igual que en el guardado: no entra
+    // exacta en un int con signo de GDScript.
+    if (r.botin.semilla.has_value()) {
+        d["semilla"] = aGodot(petbits::formatSeed(*r.botin.semilla));
+        // Se anota en el save para poder incubarla después. Va en `otros`, que
+        // es donde vive lo que el nativo todavía no usa: el TS la guarda en
+        // decimal, así que se respeta ese formato aunque acá se muestre en hex.
+        petbits::Json lista = petbits::Json::arreglo();
+        if (const petbits::Json* previa = partida->otros.buscar("semillas")) {
+            if (previa->esArreglo()) lista = *previa;
+        }
+        lista.agregar(petbits::Json::texto(petbits::seedADecimal(*r.botin.semilla)));
+        partida->otros.poner("semillas", std::move(lista));
+    } else {
+        d["semilla"] = String();
+    }
+
+    return d;
+}
+
+int64_t PetBitsCore::falta_para_volver(int64_t ahora_ms) const {
+    const petbits::CreatureState* c = activa();
+    if (c == nullptr) return 0;
+    return petbits::faltaParaVolver(*c, ahora_ms);
 }
 
 // ---------------------------------------------------------------------------

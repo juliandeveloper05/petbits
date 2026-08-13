@@ -32,6 +32,7 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { acariciar, alimentar, jugar } from "../src/core/actions.ts";
 import { type Crianza, resolverAdulto, resolverJuvenil } from "../src/core/evolution.ts";
+import { DESTINOS, describirBotin, resolverBotin } from "../src/core/expeditions.ts";
 import { type Genes, decodeGenome, formatSeed, hashString, parseSeed } from "../src/core/genome.ts";
 import { buildRamp } from "../src/core/palette.ts";
 import { deriveSeed, mulberry32, splitmix64 } from "../src/core/rng.ts";
@@ -1059,6 +1060,63 @@ for (const s of SAVES) {
 
 lineas.push("};");
 lineas.push("");
+
+// --- botín de expediciones ---
+//
+// El botín se decide cuando la criatura SALE, a partir del genoma y del momento
+// de salida. Eso es lo que impide cerrar y reabrir hasta que salga un cristal, y
+// solo funciona si las dos plataformas sortean exactamente igual.
+//
+// El sorteo recorre los pesos restando hasta cruzar el cero, así que el ORDEN de
+// la tabla decide qué sale en cada tirada. Un map ordenado alfabéticamente daría
+// otro botín — por eso en el C++ los pesos van en un vector.
+lineas.push("struct VectorBotin {");
+lineas.push("    uint64_t seed;");
+lineas.push("    const char* destinoId;");
+lineas.push("    int64_t  salidaMs;");
+lineas.push("    // --- lo que tiene que traer ---");
+lineas.push('    const char* alimentos;  ///< "baya:2,raiz:1", en orden de aparición');
+lineas.push("    uint8_t  traeSemilla;");
+lineas.push("    uint64_t semilla;");
+lineas.push("    const char* frase;");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline const VectorBotin BOTINES[] = {");
+
+const NOMBRES_ALIMENTO: Record<string, string> = {
+  baya: "Baya",
+  raiz: "Raíz",
+  larva: "Larva",
+  cristal: "Cristal",
+};
+
+// Varias salidas por destino: el botín depende del momento, así que un solo
+// caso por destino no diría nada sobre la distribución.
+const SALIDAS = [BASE_MS, BASE_MS + 1, BASE_MS + 997, BASE_MS + 60_000, 0, 1];
+
+for (const destino of DESTINOS) {
+  for (const seed of seeds.slice(0, 6)) {
+    for (const salida of SALIDAS) {
+      const botin = resolverBotin(seed, destino, salida);
+      const alimentos = Object.entries(botin.alimentos)
+        .map(([id, n]) => `${id}:${n}`)
+        .join(",");
+      const campos = [
+        hex(seed),
+        JSON.stringify(destino.id),
+        `${salida}LL`,
+        JSON.stringify(alimentos),
+        botin.semilla === null ? 0 : 1,
+        botin.semilla === null ? "0ULL" : hex(botin.semilla),
+        JSON.stringify(describirBotin(botin, NOMBRES_ALIMENTO)),
+      ];
+      lineas.push(`    {${campos.join(", ")}},`);
+    }
+  }
+}
+
+lineas.push("};");
+lineas.push("");
 lineas.push("} // namespace petbits::vectores");
 lineas.push("");
 
@@ -1073,4 +1131,5 @@ console.log(`  ${SEEDS_COLOR.length * FORMAS_MUESTRA.length} rampas de color`);
 console.log(`  ${SEEDS_SPRITE.length * 3 * FORMAS_TODAS.length + 40} sprites`);
 console.log(`  ${ACCIONES.length} escenarios de acciones`);
 console.log(`  ${SAVES.length} guardados`);
+console.log(`  ${DESTINOS.length * 6 * SALIDAS.length} botines de expedición`);
 console.log("\nAhora compilá y corré los tests de C++ — ver gdext/tests/README.md");

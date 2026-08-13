@@ -45,7 +45,7 @@ no llega a producción.
 
 ### Fase 1 — Port del núcleo a C++ 🚧
 
-Once módulos de trece. Todos los portados tienen paridad verificada contra
+Doce módulos de trece. Todos los portados tienen paridad verificada contra
 vectores generados ejecutando el TypeScript.
 
 | Módulo | Estado |
@@ -62,16 +62,16 @@ vectores generados ejecutando el TypeScript.
 | `inventory.cpp` — la despensa | ✅ portado, compilado y verificado |
 | `json.cpp` — lector y escritor, con orden de claves estable | ✅ portado, compilado y verificado |
 | `save_manager.cpp` — leer y escribir los saves de la web | ✅ validado con el esquema real de la web |
+| `expeditions.cpp` — destinos, botín determinista | ✅ portado, compilado y verificado |
 | `breeding.cpp` — cruza por gen | ⬜ ni empezado |
-| `expeditions.cpp` — destinos, botín determinista | ⬜ ni empezado |
 
 **Los tests de paridad** (`gdext/tests/`) comparan 2010 genomas, 80 crianzas, 21
 entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
-780 rampas de color, 2560 sprites, 23 escenarios de acciones y 3 guardados
-contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
+780 rampas de color, 2560 sprites, 23 escenarios de acciones, 3 guardados y 108
+botines de expedición contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **50.557 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **50.959 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -102,8 +102,8 @@ String con el constructor desde `const char*`, que no interpreta UTF-8, y el "·
 salía como "Â·". El resto del puente usaba el helper correcto; el error estaba
 justo en la línea que no pasaba por él.
 
-Lo que falta portar —`breeding` y `expeditions`— es de sistemas de meta; nada de
-eso bloquea el bucle de juego básico.
+Falta `breeding`, que es el único sistema de meta que queda y no bloquea nada:
+necesita dos criaturas adultas con vínculo alto para que se note.
 
 ### Fase 2 — Criatura en pantalla 🚧
 
@@ -116,6 +116,18 @@ eso bloquea el bucle de juego básico.
 | Acciones: alimentar, jugar, acariciar | ✅ con sus tradeoffs y el tope diario de vínculo |
 | Tipografía y caja de diálogo estilo Game Boy | ⬜ |
 | Guardado, compatible con el de la web | ✅ |
+| Expediciones: la criatura sale y vuelve con comida | ✅ |
+
+**La economía quedó cerrada, y hubo un momento en que no lo estaba.** Al hacer
+que alimentar cobrara del inventario, el nativo pasó de tener comida infinita a
+tener siete unidades y ninguna forma de conseguir más: a las siete alimentadas
+la partida quedaba muerta. Las expediciones son la otra mitad de ese arreglo, no
+una función aparte.
+
+Por eso el patio no pide etapa ni cuesta energía. Es la trampa clásica de una
+economía cerrada —si para conseguir comida hace falta comida, el jugador queda
+trabado— y hay un test que recorre cuarenta salidas comprobando que nunca vuelva
+con las manos vacías.
 
 **El presupuesto de pantalla es 480×270** —resolución de consola portátil, que
 es la identidad visual del juego— y eso son 254 píxeles útiles de alto. La

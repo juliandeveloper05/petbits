@@ -62,6 +62,7 @@ func _init() -> void:
 	_probar_sprite(core)
 	_probar_acciones(core)
 	_probar_despensa(core)
+	_probar_expediciones(core)
 
 	if _fallas == 0:
 		print("\nPuente OK: los valores llegan intactos hasta GDScript.")
@@ -374,3 +375,56 @@ func _probar_despensa(core: RefCounted) -> void:
 	otro.cargar(texto)
 	_igual(otro.alimentos()[0]["cantidad"], 0, "las bayas gastadas siguen gastadas")
 	_igual(otro.alimentos()[2]["cantidad"], 2, "las larvas siguen ahí")
+
+
+func _probar_expediciones(core: RefCounted) -> void:
+	# Es lo que cierra la economía. Sin expediciones, la despensa arranca con 7
+	# unidades y no hay forma de conseguir más: a las 7 alimentadas el juego se
+	# traba y no queda nada que hacer.
+	print("expediciones")
+
+	const INICIO_MS := 1786406400000
+	const MINUTO := 60000
+
+	core.nacer(SEED_EJEMPLO, INICIO_MS, -180)
+
+	var destinos: Array = core.destinos()
+	_igual(destinos.size(), 3, "hay tres destinos")
+
+	# El patio TIENE que estar disponible siempre, incluso recién nacida. Es la
+	# regla que evita que la partida quede muerta.
+	_igual(destinos[0]["id"], "patio", "el primero es el patio")
+	_igual(destinos[0]["puede"], true, "el patio siempre está disponible")
+	_igual(destinos[1]["puede"], false, "el bosque pide juvenil")
+	_igual(destinos[2]["puede"], false, "las ruinas piden adulto")
+	print("  bosque cerrado: %s" % destinos[1]["motivo"])
+
+	var salida: Dictionary = core.enviar("patio", INICIO_MS)
+	_igual(salida["ok"], true, "se puede mandar al patio")
+	_igual(core.falta_para_volver(INICIO_MS), 15 * MINUTO, "vuelve en 15 minutos")
+
+	# Mientras está afuera no se la puede alimentar ni mandar de nuevo.
+	_igual(core.alimentar("baya", INICIO_MS)["ok"], false, "de expedición no come")
+	_igual(core.enviar("patio", INICIO_MS)["ok"], false, "no sale dos veces")
+
+	# Y no vuelve antes de tiempo.
+	_igual(core.recibir(INICIO_MS + 14 * MINUTO)["volvio"], false, "a los 14 min sigue afuera")
+
+	var bayas_antes: int = core.alimentos()[0]["cantidad"]
+	var regreso: Dictionary = core.recibir(INICIO_MS + 15 * MINUTO)
+	_igual(regreso["volvio"], true, "a los 15 min ya volvió")
+	print("  %s %s" % [regreso["destino"], regreso["mensaje"]])
+
+	# El botín ENTRA en la despensa. Es el punto de todo esto.
+	var total_botin := 0
+	for cantidad in regreso["botin"].values():
+		total_botin += cantidad
+	_igual(total_botin >= 1, true, "el patio nunca vuelve vacío")
+
+	var bayas_despues: int = core.alimentos()[0]["cantidad"]
+	var raices_despues: int = core.alimentos()[1]["cantidad"]
+	_igual(bayas_despues + raices_despues > bayas_antes + 2, true, "la despensa creció")
+	print("  bayas: %d → %d" % [bayas_antes, bayas_despues])
+
+	# Y ya puede volver a comer.
+	_igual(core.alimentar("baya", INICIO_MS + 15 * MINUTO)["ok"], true, "vuelve a poder comer")

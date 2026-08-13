@@ -38,6 +38,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # y solo los puede compilar SCons.
 add_library(petbits_nucleo STATIC
     src/actions.cpp
+    src/expeditions.cpp
     src/inventory.cpp
     src/json.cpp
     src/save_manager.cpp

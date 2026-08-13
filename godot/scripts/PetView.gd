@@ -49,6 +49,7 @@ var _barras := {}
 var _etiquetas := {}
 var _registro: RichTextLabel = null
 var _botones_comida := {}
+var _botones_salida := {}
 
 var _parpadeando := false
 var _proximo_parpadeo := INTERVALO_PARPADEO
@@ -187,6 +188,7 @@ func _process(delta: float) -> void:
 
 func _on_consultar() -> void:
 	var r: Dictionary = _core.simular(_ahora_ms())
+	_revisar_regreso()
 	if r.get("ticks", 0) > 0:
 		_anotar_eventos(r)
 		# La etapa o la forma pueden haber cambiado con la evolución, y eso
@@ -197,6 +199,24 @@ func _on_consultar() -> void:
 		# serían sesenta escrituras al pedo por cada una que sirve.
 		_guardar()
 	_refrescar_estado()
+
+
+## ¿Volvió de la expedición?
+##
+## Se pregunta en cada consulta y no con un temporizador propio: el juego puede
+## haber estado cerrado durante toda la salida, así que "volvió" no es un evento
+## que ocurra mientras mirás, es una condición que se comprueba.
+func _revisar_regreso() -> void:
+	var r: Dictionary = _core.recibir(_ahora_ms())
+	if not r.get("volvio", false):
+		return
+
+	_anotar("Volvió %s. %s" % [r["destino"], r["mensaje"]], FOSFORO)
+	if r["semilla"] != "":
+		_anotar("Encontró una semilla: %s" % r["semilla"], Color("#c07cff"))
+	_refrescar_despensa()
+	_refrescar_estado()
+	_guardar()
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +327,21 @@ func _construir_botones(padre: Node) -> void:
 
 	_boton(fila, "Jugar", func(): _actuar(func(): return _core.jugar(_ahora_ms())))
 	_boton(fila, "Mimos", func(): _actuar(func(): return _core.acariciar(_ahora_ms())))
+
+	# La expedición va en su propia fila: es la única acción que saca a la
+	# criatura de casa, y mezclarla con las de cuidado la haría parecer una más.
+	var fila_salidas := HBoxContainer.new()
+	fila_salidas.add_theme_constant_override("separation", 3)
+	padre.add_child(fila_salidas)
+
+	for destino in _core.destinos():
+		var id: String = destino["id"]
+		_botones_salida[id] = _boton(
+			fila_salidas, destino["nombre"], func(): _actuar(func(): return _core.enviar(id, _ahora_ms()))
+		)
+
 	_refrescar_despensa()
+	_refrescar_salidas()
 
 
 func _boton(padre: Node, texto: String, al_apretar: Callable) -> Button:
@@ -325,6 +359,22 @@ func _boton(padre: Node, texto: String, al_apretar: Callable) -> Button:
 ## El botón sigue habilitado con stock cero a propósito: apretarlo contesta "no
 ## te queda de eso, mandala a buscar", que le dice al jugador qué hacer. Un botón
 ## gris no explica nada, y encima esconde que el alimento existe.
+## Los destinos, con su estado.
+##
+## El motivo del rechazo viene del C++ —"todavía está muy chica para ir tan
+## lejos"— y se muestra como tooltip. La regla vive de un solo lado; acá solo se
+## pinta.
+func _refrescar_salidas() -> void:
+	for destino in _core.destinos():
+		var id: String = destino["id"]
+		if not _botones_salida.has(id):
+			continue
+		var boton: Button = _botones_salida[id]
+		var puede: bool = destino["puede"]
+		boton.tooltip_text = destino["descripcion"] if puede else destino["motivo"]
+		boton.modulate = Color(1, 1, 1) if puede else Color(0.55, 0.55, 0.55)
+
+
 func _refrescar_despensa() -> void:
 	for alimento in _core.alimentos():
 		var id: String = alimento["id"]
@@ -403,13 +453,19 @@ func _refrescar_estado() -> void:
 	var descripcion: String = e["etapa"].capitalize()
 	if e["forma"] != "Sin definir":
 		descripcion += " · " + e["forma"]
-	if e["letargico"]:
+	var falta: int = _core.falta_para_volver(_ahora_ms())
+	if falta > 0:
+		# Minutos redondeados hacia arriba: decir "vuelve en 0 min" cuando todavía
+		# faltan cuarenta segundos es mentir.
+		descripcion += " · vuelve en %d min" % ceili(falta / 60000.0)
+	elif e["letargico"]:
 		descripcion += " · en letargo"
 	elif e["durmiendo"]:
 		descripcion += " · durmiendo"
 	_etiquetas["etapa"].text = descripcion
 
 	_refrescar_despensa()
+	_refrescar_salidas()
 
 	var stats: Dictionary = e["stats"]
 	for clave in _barras:
