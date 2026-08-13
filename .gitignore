@@ -137,3 +137,8 @@ gdext/tests/*.manifest
 
 # El save que produce escribir_save.exe para el chequeo de interoperabilidad.
 gdext/tests/save_del_cpp.json
+
+# Saves exportados del navegador para probar la interoperabilidad. Son partidas
+# personales, no código: quedan en el disco de cada uno y no en el repo.
+partida-web.json
+partida*.json
