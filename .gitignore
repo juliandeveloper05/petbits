@@ -134,3 +134,6 @@ gdext/tests/*.obj
 gdext/tests/*.pdb
 gdext/tests/*.ilk
 gdext/tests/*.manifest
+
+# El save que produce escribir_save.exe para el chequeo de interoperabilidad.
+gdext/tests/save_del_cpp.json

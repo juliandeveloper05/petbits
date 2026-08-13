@@ -17,7 +17,8 @@
     "format": "biome format --write src test scripts tools",
     "formas": "vite-node scripts/formas.ts",
     "iconos": "vite-node scripts/iconos.ts",
-    "parity": "vite-node tools/verify_parity.ts"
+    "parity": "vite-node tools/verify_parity.ts",
+    "validar-save": "vite-node tools/validar_save.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

@@ -108,10 +108,12 @@ buildRamp (OKLCH)
 generateSprite
 simulate
 alimentar / jugar / acariciar
+cargar y guardar la partida
+guardados corruptos
 invariante de partición
 reloj hacia atrás
 
-50439 comprobaciones, 0 fallas
+50533 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
@@ -134,6 +136,7 @@ script.
 | `sprite_gen.cpp` | El buffer RGBA entero, por hash, más el conteo de opacos | 2560 sprites |
 | `simulation.cpp` | Estado completo, stats y conteo de eventos | 14 escenarios |
 | `actions.cpp` | Stats, crianza, tope de vínculo y el mensaje al jugador | 23 escenarios |
+| `save_manager.cpp` | Lee saves de la web, los reescribe y no pierde nada | 3 saves + 11 corruptos |
 
 Los sprites se comparan por hash y no píxel por píxel porque cada uno son 4096
 bytes: ponerlos crudos en el header serían megabytes. Junto al hash va el conteo
@@ -157,6 +160,28 @@ sembrarse por índice, o si algún tick lee el reloj de afuera en vez del de su
 propia frontera.
 
 **El reloj hacia atrás** no tiene que perder nada ni avanzar el tiempo.
+
+---
+
+## El guardado se verifica en la otra dirección
+
+Los tests de acá comprueban que el C++ lee un save de la web y que lo que
+escribe lo puede volver a leer él mismo. Eso deja afuera lo que de verdad
+importa: que la WEB pueda leer lo que escribió el nativo.
+
+Un round-trip contra uno mismo es fácil de pasar estando equivocado — basta con
+equivocarse igual al leer y al escribir. Así que hay un paso más:
+
+```bash
+npm run parity && cd gdext && cmake --build --preset msvc-release
+```
+
+```bash
+gdext/build/release/escribir_save.exe save.json && npm run validar-save -- save.json
+```
+
+`validar-save` pasa el archivo por el `parseSave` real de la web, con su esquema
+de Zod. Si eso acepta, un save del nativo se abre en el navegador.
 
 ---
 

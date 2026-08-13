@@ -45,7 +45,7 @@ no llega a producción.
 
 ### Fase 1 — Port del núcleo a C++ 🚧
 
-Ocho módulos de once. Todos los portados tienen paridad verificada contra
+Diez módulos de doce. Todos los portados tienen paridad verificada contra
 vectores generados ejecutando el TypeScript.
 
 | Módulo | Estado |
@@ -59,17 +59,18 @@ vectores generados ejecutando el TypeScript.
 | `sprite_gen.cpp` — el pixel art de 32×32 | ✅ portado, compilado y verificado |
 | `petbits_core.cpp` — puente a GDScript | ✅ carga en Godot 4.7.1 |
 | `actions.cpp` — alimentar, jugar, acariciar | ✅ portado, compilado y verificado |
+| `json.cpp` — lector y escritor, con orden de claves estable | ✅ portado, compilado y verificado |
+| `save_manager.cpp` — leer y escribir los saves de la web | ✅ validado con el esquema real de la web |
 | `breeding.cpp` — cruza por gen | ⬜ ni empezado |
 | `expeditions.cpp` — destinos, botín determinista | ⬜ ni empezado |
-| `save_manager.cpp` — leer y escribir los saves de la web | ⬜ ni empezado |
 
 **Los tests de paridad** (`gdext/tests/`) comparan 2010 genomas, 80 crianzas, 21
 entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
-780 rampas de color, 2560 sprites y 23 escenarios de acciones contra lo que
-devuelve el TypeScript. No hacen falta Godot ni SCons: un compilador y un
-comando.
+780 rampas de color, 2560 sprites, 23 escenarios de acciones y 3 guardados
+contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
+compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **50.439 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **50.533 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -100,8 +101,8 @@ String con el constructor desde `const char*`, que no interpreta UTF-8, y el "·
 salía como "Â·". El resto del puente usaba el helper correcto; el error estaba
 justo en la línea que no pasaba por él.
 
-Lo que falta portar —`breeding`, `expeditions`, `save_manager`— es de sistemas
-de meta y del guardado; nada de eso bloquea el bucle de juego básico.
+Lo que falta portar —`breeding` y `expeditions`— es de sistemas de meta; nada de
+eso bloquea el bucle de juego básico.
 
 ### Fase 2 — Criatura en pantalla 🚧
 
@@ -113,7 +114,7 @@ de meta y del guardado; nada de eso bloquea el bucle de juego básico.
 | `hoja_de_contacto.gd` — muchas criaturas de una, como `npm run sheet` | ✅ |
 | Acciones: alimentar, jugar, acariciar | ✅ con sus tradeoffs y el tope diario de vínculo |
 | Tipografía y caja de diálogo estilo Game Boy | ⬜ |
-| Guardado: la partida se pierde al cerrar | ⬜ necesita `save_manager.cpp` |
+| Guardado, compatible con el de la web | ✅ |
 
 **El presupuesto de pantalla es 480×270** —resolución de consola portátil, que
 es la identidad visual del juego— y eso son 254 píxeles útiles de alto. La
@@ -128,6 +129,25 @@ godot --headless --path godot --script res://scripts/medir_layout.gd
 ```
 
 Devuelve 1 si el contenido se pasa. Hoy pide 152 px de los 270.
+
+**El guardado es el formato de la web, y eso está verificado contra su propio
+validador**, no contra el criterio de este código:
+
+```bash
+npm run validar-save -- "%APPDATA%/PetBits/partida.json"
+```
+
+Pasa el `parseSave` real —el mismo esquema de Zod y la misma validación cruzada
+de `activaId` que corren en el navegador—. Un round-trip del C++ contra sí mismo
+no habría probado nada: alcanza con equivocarse igual al leer y al escribir.
+
+Lo que el C++ todavía no interpreta —codex, inventario, semillas— se lee y se
+vuelve a escribir tal cual. Abrir tu partida en el nativo no te borra el codex,
+y eso es lo que hace seguro compartir un formato entre dos programas que no
+están igual de completos.
+
+Un save que no carga **no se borra**: se renombra a `partida.rota.json`. Puede
+ser recuperable a mano, y esa decisión le toca al dueño de la partida.
 
 **La decisión de los sprites quedó tomada: se portó el algoritmo.** Las otras
 dos opciones —dejar `tools/sprite_gen.py` o dibujarlos a mano— rompían la

@@ -976,6 +976,89 @@ for (const e of ACCIONES) {
 
 lineas.push("};");
 lineas.push("");
+
+// --- guardado ---
+//
+// El save es el único formato que las dos plataformas escriben y leen, así que
+// es donde una diferencia se paga más caro: no rompe un cálculo, corrompe la
+// partida de alguien.
+//
+// Se emiten saves REALES, producidos por createSave y JSON.stringify —los
+// mismos que escribe la web— y el C++ tiene que leerlos, entender lo que sabe
+// entender, y devolver intacto lo que no.
+//
+// El codex y el inventario van con contenido a propósito. Un save vacío no
+// probaría nada de lo que importa acá: lo que hay que verificar es que esos
+// campos, que el C++ todavía no interpreta, sobrevivan el viaje.
+const SAVES: readonly { nombre: string; save: unknown; seed: bigint }[] = (() => {
+  const armar = (seed: bigint, ticks: number, nombre: string) => {
+    const inicial = createCreature(seed, BASE_MS, -180);
+    const criatura = ticks > 0 ? simulate(inicial, BASE_MS + ticks * TICK_MS).state : inicial;
+    return {
+      nombre,
+      seed,
+      save: {
+        version: 5,
+        guardadoMs: BASE_MS + ticks * TICK_MS,
+        criaturas: [criatura],
+        activaId: criatura.id,
+        codex: {
+          linajes: [2, 8, 15],
+          formas: ["petreo", "coloso"],
+          rarezas: ["primordial", "uroboros"],
+          totalRegistradas: 7,
+        },
+        inventario: { baya: 3, raiz: 1, cristal: 0 },
+        semillas: ["11814994175403368200", "1"],
+      },
+    };
+  };
+
+  return [
+    armar(0xa3f091c477be2d08n, 0, "recien nacida"),
+    armar(0xa3f091c477be2d08n, 1441, "juvenil, con crianza acumulada"),
+    armar(0xffffffffffffffffn, 3000, "en letargo, seed máximo"),
+  ];
+})();
+
+lineas.push("struct VectorSave {");
+lineas.push("    const char* json;      ///< tal cual lo escribe la web");
+lineas.push("    uint64_t seed;");
+lineas.push("    const char* id;");
+lineas.push("    int64_t  lastTickMs, ticksVividos, ticksActivos;");
+lineas.push("    uint8_t  letargico, etapa, forma;");
+lineas.push("    double   energia, animo, salud, sumaAnimo, sumaSalud;");
+lineas.push("    const char* nombre;");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline const VectorSave SAVES[] = {");
+
+for (const s of SAVES) {
+  const save = s.save as { criaturas: ReturnType<typeof createCreature>[] };
+  const c = save.criaturas[0];
+  if (!c) throw new Error("save sin criatura");
+  const campos = [
+    JSON.stringify(JSON.stringify(s.save)),
+    hex(s.seed),
+    JSON.stringify(c.id),
+    `${c.lastTickMs}LL`,
+    `${c.ticksVividos}LL`,
+    `${c.ticksActivos}LL`,
+    c.letargico ? 1 : 0,
+    ETAPAS.indexOf(c.etapa),
+    indiceForma(c.forma),
+    dbl(c.stats.energia),
+    dbl(c.stats.animo),
+    dbl(c.stats.salud),
+    dbl(c.crianza.sumaAnimo),
+    dbl(c.crianza.sumaSalud),
+    JSON.stringify(s.nombre),
+  ];
+  lineas.push(`    {${campos.join(", ")}},`);
+}
+
+lineas.push("};");
+lineas.push("");
 lineas.push("} // namespace petbits::vectores");
 lineas.push("");
 
@@ -989,4 +1072,5 @@ console.log(`  ${ESCENARIOS.length} escenarios de simulación`);
 console.log(`  ${SEEDS_COLOR.length * FORMAS_MUESTRA.length} rampas de color`);
 console.log(`  ${SEEDS_SPRITE.length * 3 * FORMAS_TODAS.length + 40} sprites`);
 console.log(`  ${ACCIONES.length} escenarios de acciones`);
+console.log(`  ${SAVES.length} guardados`);
 console.log("\nAhora compilá y corré los tests de C++ — ver gdext/tests/README.md");

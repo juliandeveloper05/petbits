@@ -53,8 +53,8 @@ reemplaza**: comparte los algoritmos, no el código de presentación.
 | **Estado**       | ✅ v2.0 estable                                  | 🚧 v3.0 en curso                     |
 | **Stack**        | TypeScript + Vite                                | Godot 4 + C++17 (GDExtension)        |
 | **Cómo se abre** | [petbits.vercel.app](https://petbits.vercel.app) | ejecutable (todavía no)              |
-| **Guardado**     | IndexedDB                                        | archivo, compatible con el de la web |
-| **Sprites**      | canvas 32×32 procedural                          | pendiente                            |
+| **Guardado**     | IndexedDB                                        | archivo JSON, el mismo formato       |
+| **Sprites**      | canvas 32×32 procedural                          | los mismos, generados en C++         |
 
 Los algoritmos en C++ son un port del TypeScript, con tests que comparan los dos
 lado a lado. El detalle de qué está portado y qué no está en el
@@ -285,7 +285,7 @@ cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.c
 ng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\srcctions.cpp && run_tests.exe
 ```
 
-Estado actual: **50.439 comprobaciones, 0 fallas.**
+Estado actual: **50.533 comprobaciones, 0 fallas.**
 
 No hacen falta Godot ni SCons ni godot-cpp: los módulos portados son C++ puro.
 Con un compilador alcanza, así que la paridad se puede comprobar antes de

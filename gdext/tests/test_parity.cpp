@@ -34,6 +34,8 @@
 #include "../src/actions.h"
 #include "../src/evolution.h"
 #include "../src/genome.h"
+#include "../src/json.h"
+#include "../src/save_manager.h"
 #include "../src/palette.h"
 #include "../src/rng.h"
 #include "../src/simulation.h"
@@ -511,6 +513,143 @@ static void probarAcciones() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// save_manager
+// ---------------------------------------------------------------------------
+
+static void probarGuardado() {
+    bloque("cargar y guardar la partida");
+
+    for (const auto& v : vectores::SAVES) {
+        Partida p;
+        std::string error;
+
+        // 1. Leer el save que escribió la web.
+        if (!cargarPartida(v.json, p, error)) {
+            revisar(false, v.nombre, ("no se pudo cargar: " + error).c_str());
+            continue;
+        }
+
+        const CreatureState* c = criaturaActiva(p);
+        if (c == nullptr) {
+            revisar(false, v.nombre, "el save cargó pero no hay criatura activa");
+            continue;
+        }
+
+        revisarEnteros(c->seed, v.seed, v.nombre, "seed");
+        revisar(c->id == v.id, v.nombre, "el id no coincide");
+        revisarEnteros(static_cast<uint64_t>(c->lastTickMs),
+                       static_cast<uint64_t>(v.lastTickMs), v.nombre, "lastTickMs");
+        revisarEnteros(static_cast<uint64_t>(c->ticksVividos),
+                       static_cast<uint64_t>(v.ticksVividos), v.nombre, "ticksVividos");
+        revisarEnteros(static_cast<uint64_t>(c->ticksActivos),
+                       static_cast<uint64_t>(v.ticksActivos), v.nombre, "ticksActivos");
+        revisarEnteros(c->letargico ? 1 : 0, v.letargico, v.nombre, "letargico");
+        revisarEnteros(static_cast<uint8_t>(c->etapa), v.etapa, v.nombre, "etapa");
+        revisarEnteros(static_cast<uint8_t>(c->forma), v.forma, v.nombre, "forma");
+        revisarDobles(c->stats.energia, v.energia, v.nombre, "energia");
+        revisarDobles(c->stats.animo, v.animo, v.nombre, "animo");
+        revisarDobles(c->stats.salud, v.salud, v.nombre, "salud");
+        revisarDobles(c->crianza.sumaAnimo, v.sumaAnimo, v.nombre, "crianza.sumaAnimo");
+        revisarDobles(c->crianza.sumaSalud, v.sumaSalud, v.nombre, "crianza.sumaSalud");
+
+        // 2. Volver a escribirlo y volver a leerlo. Los stats acumulados tienen
+        //    quince dígitos significativos: si el número se escribiera con menos
+        //    precisión de la necesaria, la ida y vuelta lo cambiaría y la
+        //    criatura se iría corriendo un poquito en cada guardado.
+        const std::string reescrito = guardarPartida(p, 1786406400000LL);
+        Partida q;
+        if (!cargarPartida(reescrito, q, error)) {
+            revisar(false, v.nombre, ("lo que escribimos no se puede releer: " + error).c_str());
+            continue;
+        }
+
+        const CreatureState* d = criaturaActiva(q);
+        if (d == nullptr) {
+            revisar(false, v.nombre, "el save reescrito quedó sin criatura activa");
+            continue;
+        }
+
+        revisarDobles(d->stats.energia, c->stats.energia, v.nombre, "ida y vuelta: energia");
+        revisarDobles(d->stats.animo, c->stats.animo, v.nombre, "ida y vuelta: animo");
+        revisarDobles(d->stats.salud, c->stats.salud, v.nombre, "ida y vuelta: salud");
+        revisarDobles(d->crianza.sumaAnimo, c->crianza.sumaAnimo, v.nombre,
+                      "ida y vuelta: sumaAnimo");
+        revisarDobles(d->crianza.sumaSalud, c->crianza.sumaSalud, v.nombre,
+                      "ida y vuelta: sumaSalud");
+        revisarEnteros(d->seed, c->seed, v.nombre, "ida y vuelta: seed");
+
+        // 3. Y lo que el C++ NO entiende tiene que seguir ahí. Es la parte que
+        //    hace seguro compartir el formato: abrir la partida en el nativo no
+        //    puede borrarte el codex.
+        const Json* codex = q.otros.buscar("codex");
+        if (codex == nullptr || !codex->esObjeto()) {
+            revisar(false, v.nombre, "se perdió el codex al guardar");
+        } else {
+            const Json* total = codex->buscar("totalRegistradas");
+            revisarEnteros(total != nullptr ? static_cast<uint64_t>(total->comoEntero()) : 0, 7,
+                           v.nombre, "codex.totalRegistradas preservado");
+            const Json* linajes = codex->buscar("linajes");
+            revisarEnteros(linajes != nullptr ? linajes->elementos().size() : 0, 3, v.nombre,
+                           "codex.linajes preservado");
+        }
+
+        const Json* inv = q.otros.buscar("inventario");
+        if (inv == nullptr || !inv->esObjeto()) {
+            revisar(false, v.nombre, "se perdió el inventario al guardar");
+        } else {
+            const Json* bayas = inv->buscar("baya");
+            revisarEnteros(bayas != nullptr ? static_cast<uint64_t>(bayas->comoEntero()) : 0, 3,
+                           v.nombre, "inventario.baya preservado");
+        }
+
+        const Json* semillas = q.otros.buscar("semillas");
+        if (semillas == nullptr || !semillas->esArreglo()) {
+            revisar(false, v.nombre, "se perdieron las semillas al guardar");
+        } else {
+            revisarEnteros(semillas->elementos().size(), 2, v.nombre, "semillas preservadas");
+            // El genoma más grande no entra en un double sin perder precisión;
+            // por eso viaja como texto. Si alguien lo convirtiera a número en el
+            // camino, este valor volvería redondeado.
+            const bool intacta = !semillas->elementos().empty() &&
+                                 semillas->elementos()[0].comoTexto() == "11814994175403368200";
+            revisar(intacta, v.nombre, "la semilla de 20 dígitos volvió cambiada");
+        }
+    }
+}
+
+/** El JSON tiene que aguantar entradas rotas sin reventar el arranque. */
+static void probarJsonRoto() {
+    bloque("guardados corruptos");
+
+    static const char* BASURA[] = {
+        "",
+        "{",
+        "null",
+        "[1,2,3]",
+        "{\"version\":5}",
+        "{\"version\":\"cinco\",\"criaturas\":[]}",
+        "{\"version\":5,\"criaturas\":[],\"activaId\":\"x\"}",
+        "{\"version\":99,\"criaturas\":[{}],\"activaId\":\"x\"}",
+        "{\"version\":1,\"criaturas\":[{}],\"activaId\":\"x\"}",
+        "no soy json",
+        "{\"version\":5,\"criaturas\":[{\"id\":\"a\"}],\"activaId\":\"a\"}",
+    };
+
+    for (const char* texto : BASURA) {
+        char ctx[128];
+        std::snprintf(ctx, sizeof(ctx), "entrada \"%.40s\"", texto);
+
+        Partida p;
+        std::string error;
+        const bool cargo = cargarPartida(texto, p, error);
+        revisar(!cargo, ctx, "un guardado corrupto no tendría que cargar");
+        // Y tiene que decir por qué: "no se pudo" a secas no le sirve a nadie
+        // que esté tratando de recuperar una partida.
+        revisar(!error.empty(), ctx, "se rechazó sin explicar el motivo");
+    }
+}
+
 /** El reloj para atrás no tiene que perder nada ni avanzar el tiempo. */
 static void probarRelojAtras() {
     bloque("reloj hacia atrás");
@@ -603,7 +742,8 @@ static void probarSprites() {
 int main() {
     std::printf("\nPetBits — paridad TypeScript <-> C++\n");
     std::printf("%zu genomas, %zu crianzas, %zu parseos, %zu hashes, %zu simulaciones,\n"
-                "%zu rampas de color, %zu sprites, %zu escenarios de acciones\n\n",
+                "%zu rampas de color, %zu sprites, %zu escenarios de acciones,\n"
+                "%zu guardados\n\n",
                 sizeof(vectores::GENOMAS) / sizeof(vectores::GENOMAS[0]),
                 sizeof(vectores::EVOLUCIONES) / sizeof(vectores::EVOLUCIONES[0]),
                 sizeof(vectores::PARSEOS) / sizeof(vectores::PARSEOS[0]),
@@ -611,7 +751,8 @@ int main() {
                 sizeof(vectores::SIMULACIONES) / sizeof(vectores::SIMULACIONES[0]),
                 sizeof(vectores::RAMPAS) / sizeof(vectores::RAMPAS[0]),
                 sizeof(vectores::SPRITES) / sizeof(vectores::SPRITES[0]),
-                sizeof(vectores::ACCIONES) / sizeof(vectores::ACCIONES[0]));
+                sizeof(vectores::ACCIONES) / sizeof(vectores::ACCIONES[0]),
+                sizeof(vectores::SAVES) / sizeof(vectores::SAVES[0]));
 
     probarGenomas();
     probarParseo();
@@ -623,6 +764,8 @@ int main() {
     probarSprites();
     probarSimulacion();
     probarAcciones();
+    probarGuardado();
+    probarJsonRoto();
     probarParticion();
     probarRelojAtras();
 

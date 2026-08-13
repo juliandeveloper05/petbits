@@ -47,6 +47,18 @@ static bool leerSeed(const String& entrada, petbits::Seed& salida) {
 
 // ---------------------------------------------------------------------------
 
+petbits::CreatureState* PetBitsCore::activa() {
+    if (!partida.has_value()) return nullptr;
+    for (petbits::CreatureState& c : partida->criaturas) {
+        if (c.id == partida->activaId) return &c;
+    }
+    return nullptr;
+}
+
+const petbits::CreatureState* PetBitsCore::activa() const {
+    return const_cast<PetBitsCore*>(this)->activa();
+}
+
 void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("formatear_seed", "entrada"), &PetBitsCore::formatear_seed);
     ClassDB::bind_method(D_METHOD("decodificar", "entrada"), &PetBitsCore::decodificar);
@@ -69,6 +81,9 @@ void PetBitsCore::_bind_methods() {
                          &PetBitsCore::sprite, DEFVAL(false));
     ClassDB::bind_method(D_METHOD("sprite_actual", "parpadeo"), &PetBitsCore::sprite_actual,
                          DEFVAL(false));
+
+    ClassDB::bind_method(D_METHOD("guardar", "ahora_ms"), &PetBitsCore::guardar);
+    ClassDB::bind_method(D_METHOD("cargar", "texto"), &PetBitsCore::cargar);
 }
 
 String PetBitsCore::formatear_seed(const String& entrada) const {
@@ -155,20 +170,22 @@ bool PetBitsCore::nacer(const String& seed, int64_t ahora_ms, int64_t tz_min) {
     petbits::Seed valor = 0;
     if (!leerSeed(seed, valor)) return false;
 
-    criatura = petbits::createCreature(valor, ahora_ms, static_cast<int>(tz_min));
+    partida = petbits::partidaInicial(
+        petbits::createCreature(valor, ahora_ms, static_cast<int>(tz_min)));
     return true;
 }
 
 bool PetBitsCore::tiene_criatura() const {
-    return criatura.has_value();
+    return activa() != nullptr;
 }
 
 Dictionary PetBitsCore::simular(int64_t ahora_ms) {
     Dictionary salida;
-    if (!criatura.has_value()) return salida;
+    petbits::CreatureState* c = activa();
+    if (c == nullptr) return salida;
 
-    const petbits::SimResult r = petbits::simulate(*criatura, ahora_ms);
-    criatura = r.state;
+    const petbits::SimResult r = petbits::simulate(*c, ahora_ms);
+    *c = r.state;
 
     salida["ticks"] = r.ticks;
     salida["omitidos"] = r.omitted;
@@ -194,9 +211,10 @@ Dictionary PetBitsCore::simular(int64_t ahora_ms) {
 
 Dictionary PetBitsCore::estado() const {
     Dictionary d;
-    if (!criatura.has_value()) return d;
+    const petbits::CreatureState* activo = activa();
+    if (activo == nullptr) return d;
 
-    const petbits::CreatureState& c = *criatura;
+    const petbits::CreatureState& c = *activo;
 
     d["id"] = aGodot(c.id);
     d["seed"] = aGodot(petbits::formatSeed(c.seed));
@@ -239,45 +257,47 @@ Array PetBitsCore::alimentos() const {
 }
 
 /** Aplica el resultado al estado guardado y lo traduce a diccionario. */
-static Dictionary aplicar(std::optional<petbits::CreatureState>& criatura,
-                          const petbits::ActionResult& r) {
+static Dictionary aplicar(petbits::CreatureState* destino, const petbits::ActionResult& r) {
     Dictionary d;
     d["ok"] = r.ok;
     d["mensaje"] = aGodot(r.message);
-    if (r.ok) criatura = r.state;
+    if (r.ok) *destino = r.state;
     return d;
 }
 
 Dictionary PetBitsCore::alimentar(const String& alimento_id, int64_t ahora_ms) {
     Dictionary d;
-    if (!criatura.has_value()) {
+    petbits::CreatureState* c = activa();
+    if (c == nullptr) {
         d["ok"] = false;
         d["mensaje"] = String("No hay ninguna criatura.");
         return d;
     }
     const CharString bytes = aBytes(alimento_id);
     const std::string_view id(bytes.get_data(), static_cast<size_t>(bytes.length()));
-    return aplicar(criatura, petbits::alimentar(*criatura, id, ahora_ms));
+    return aplicar(c, petbits::alimentar(*c, id, ahora_ms));
 }
 
 Dictionary PetBitsCore::jugar(int64_t ahora_ms) {
     Dictionary d;
-    if (!criatura.has_value()) {
+    petbits::CreatureState* c = activa();
+    if (c == nullptr) {
         d["ok"] = false;
         d["mensaje"] = String("No hay ninguna criatura.");
         return d;
     }
-    return aplicar(criatura, petbits::jugar(*criatura, ahora_ms));
+    return aplicar(c, petbits::jugar(*c, ahora_ms));
 }
 
 Dictionary PetBitsCore::acariciar(int64_t ahora_ms) {
     Dictionary d;
-    if (!criatura.has_value()) {
+    petbits::CreatureState* c = activa();
+    if (c == nullptr) {
         d["ok"] = false;
         d["mensaje"] = String("No hay ninguna criatura.");
         return d;
     }
-    return aplicar(criatura, petbits::acariciar(*criatura, ahora_ms));
+    return aplicar(c, petbits::acariciar(*c, ahora_ms));
 }
 
 // ---------------------------------------------------------------------------
@@ -326,13 +346,46 @@ Ref<Image> PetBitsCore::sprite(const String& seed, const String& etapa, const St
 }
 
 Ref<Image> PetBitsCore::sprite_actual(bool parpadeo) const {
-    if (!criatura.has_value()) return Ref<Image>();
+    const petbits::CreatureState* c = activa();
+    if (c == nullptr) return Ref<Image>();
 
     const petbits::Sprite s = petbits::generateSprite(
-        criatura->seed, criatura->etapa, criatura->forma,
+        c->seed, c->etapa, c->forma,
         parpadeo ? petbits::Expression::Parpadeo : petbits::Expression::Normal);
 
     return aImagen(s);
+}
+
+// ---------------------------------------------------------------------------
+// Guardado
+// ---------------------------------------------------------------------------
+
+String PetBitsCore::guardar(int64_t ahora_ms) const {
+    if (!partida.has_value()) return String();
+    return aGodot(petbits::guardarPartida(*partida, ahora_ms));
+}
+
+Dictionary PetBitsCore::cargar(const String& texto) {
+    Dictionary d;
+
+    const CharString bytes = aBytes(texto);
+    petbits::Partida cargada;
+    std::string error;
+
+    if (!petbits::cargarPartida(std::string(bytes.get_data(), static_cast<size_t>(bytes.length())),
+                                cargada, error)) {
+        d["ok"] = false;
+        d["mensaje"] = aGodot(error);
+        // La partida que ya estaba NO se toca. Si alguien abre un archivo roto,
+        // perder además lo que tenía cargado sería sumar un problema al que ya
+        // tiene.
+        return d;
+    }
+
+    partida = std::move(cargada);
+    d["ok"] = true;
+    d["mensaje"] = String("Partida cargada.");
+    return d;
 }
 
 String PetBitsCore::version() const {

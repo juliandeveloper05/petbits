@@ -38,6 +38,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # y solo los puede compilar SCons.
 add_library(petbits_nucleo STATIC
     src/actions.cpp
+    src/json.cpp
+    src/save_manager.cpp
     src/genome.cpp
     src/traits.cpp
     src/evolution.cpp
@@ -75,6 +77,12 @@ target_link_libraries(run_tests PRIVATE petbits_nucleo)
 # Visual Studio y ctest lo encuentran solos. El test no lee ningún archivo en
 # tiempo de ejecución —los vectores se compilan adentro— así que no le importa
 # desde dónde se lo invoque.
+
+# Produce un save para que lo valide el esquema de la web. Ver
+# gdext/tests/escribir_save.cpp: es la única prueba de que el nativo escribe
+# algo que la web puede leer.
+add_executable(escribir_save tests/escribir_save.cpp)
+target_link_libraries(escribir_save PRIVATE petbits_nucleo)
 
 enable_testing()
 add_test(NAME paridad COMMAND run_tests)

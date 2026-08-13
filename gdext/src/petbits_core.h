@@ -22,6 +22,7 @@
  * cualquier texto —tu nombre— que se convierte en un seed por hash.
  */
 
+#include "save_manager.h"
 #include "simulation.h"
 
 #include <godot_cpp/classes/image.hpp>
@@ -42,18 +43,24 @@ protected:
 
 private:
     /**
-     * La criatura viva, si hay una.
+     * La partida entera, si hay una: las criaturas, cuál está activa, y el
+     * codex y el inventario sin interpretar.
      *
-     * Se guarda acá en vez de que GDScript pase el estado entero en cada
-     * llamada. Serializar diecisiete campos de ida y de vuelta en cada tick
-     * sería un montón de código de traducción, y cada campo una oportunidad de
-     * que se pierda algo en el camino — que es exactamente el tipo de error que
-     * el resto del proyecto se ocupa de que no pase.
+     * Se guarda acá en vez de que GDScript pase el estado en cada llamada.
+     * Serializar diecisiete campos de ida y de vuelta en cada tick sería un
+     * montón de código de traducción, y cada campo una oportunidad de perder
+     * algo en el camino — que es exactamente el tipo de error que el resto del
+     * proyecto se ocupa de que no pase.
      *
-     * El día que haya que guardar la partida, el que serializa es el C++, que
-     * ya tiene el estado completo y de primera mano.
+     * Y guarda la Partida y no solo la criatura porque es lo que permite
+     * guardar sin tirar nada: el codex viaja adentro aunque este código todavía
+     * no sepa qué hacer con él.
      */
-    std::optional<petbits::CreatureState> criatura;
+    std::optional<petbits::Partida> partida;
+
+    /** La criatura activa, para escribirle. nullptr si no hay partida. */
+    petbits::CreatureState* activa();
+    const petbits::CreatureState* activa() const;
 
 public:
     /** "a3f0 91c4" → "A3F0-91C4-0000-0000". Devuelve "" si la entrada es vacía. */
@@ -140,6 +147,27 @@ public:
 
     /** El sprite de la criatura viva, con su etapa y su forma actuales. */
     Ref<Image> sprite_actual(bool parpadeo = false) const;
+
+    // -----------------------------------------------------------------------
+    // Guardado
+    // -----------------------------------------------------------------------
+
+    /**
+     * Serializa la partida al formato de la web.
+     *
+     * Devuelve "" si no hay criatura. El archivo resultante lo puede abrir el
+     * navegador: está verificado contra el validador real de la web con
+     * `npm run validar-save`.
+     */
+    String guardar(int64_t ahora_ms) const;
+
+    /**
+     * Carga una partida guardada. Devuelve { ok: bool, mensaje: String }.
+     *
+     * Cuando falla, `mensaje` dice qué campo está mal. Un save corrupto tiene
+     * que degradar a "empezá de nuevo", no dejar el juego a medio cargar.
+     */
+    Dictionary cargar(const String& texto);
 };
 
 } // namespace godot

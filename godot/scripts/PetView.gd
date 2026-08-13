@@ -60,13 +60,92 @@ func _ready() -> void:
 
 	_core = ClassDB.instantiate("PetBitsCore")
 	_construir_interfaz()
-
-	# Nace con un seed al azar. Cuando haya guardado, acá se carga la partida.
-	_core.nacer(_core.seed_al_azar(), _ahora_ms(), _tz_min())
+	_cargar_o_nacer()
 
 	_refrescar_sprite()
 	_refrescar_estado()
 	set_process(true)
+
+
+# ---------------------------------------------------------------------------
+# Guardado
+# ---------------------------------------------------------------------------
+
+## Dónde vive la partida.
+##
+## `user://` es la carpeta de datos del usuario que resuelve Godot en cada
+## sistema operativo. Nunca `res://`: eso es el proyecto, y en un juego exportado
+## viene dentro del paquete y es de solo lectura.
+const RUTA_SAVE := "user://partida.json"
+
+## Nombre del archivo cuando un save no se puede leer.
+##
+## El save roto NO se borra: se corre de lugar. Alguien puede haber perdido meses
+## de partida por un corte de luz a mitad de una escritura, y un archivo que no
+## carga hoy puede ser recuperable a mano mañana. Borrarlo es una decisión que le
+## toca al dueño, no al programa.
+const RUTA_CUARENTENA := "user://partida.rota.json"
+
+
+func _cargar_o_nacer() -> void:
+	if not FileAccess.file_exists(RUTA_SAVE):
+		_nacer_nueva()
+		return
+
+	var archivo := FileAccess.open(RUTA_SAVE, FileAccess.READ)
+	if archivo == null:
+		_anotar("No se pudo abrir la partida guardada. Empezamos de nuevo.", AVISO)
+		_nacer_nueva()
+		return
+
+	var texto := archivo.get_as_text()
+	archivo.close()
+
+	var r: Dictionary = _core.cargar(texto)
+	if not r["ok"]:
+		_anotar("La partida guardada no se pudo leer: %s" % r["mensaje"], AVISO)
+		_anotar("Se guardó una copia en %s por las dudas." % RUTA_CUARENTENA, TENUE)
+		DirAccess.rename_absolute(
+			ProjectSettings.globalize_path(RUTA_SAVE),
+			ProjectSettings.globalize_path(RUTA_CUARENTENA)
+		)
+		_nacer_nueva()
+		return
+
+	# El tiempo corrió mientras el juego estaba cerrado. Esta es la llamada que
+	# hace que la criatura haya vivido en serio durante la ausencia.
+	var sim: Dictionary = _core.simular(_ahora_ms())
+	_anotar("Volviste.", FOSFORO)
+	if sim.get("ticks", 0) > 0:
+		_anotar_eventos(sim)
+
+
+func _nacer_nueva() -> void:
+	_core.nacer(_core.seed_al_azar(), _ahora_ms(), _tz_min())
+	_anotar("Nació recién.", TENUE)
+	_guardar()
+
+
+func _guardar() -> void:
+	var texto: String = _core.guardar(_ahora_ms())
+	if texto == "":
+		return
+	var archivo := FileAccess.open(RUTA_SAVE, FileAccess.WRITE)
+	if archivo == null:
+		return
+	archivo.store_string(texto)
+	archivo.close()
+
+
+## Guardar al cerrar la ventana.
+##
+## Sin esto se perdería lo hecho desde el último tick guardado. El juego escribe
+## el archivo entero cada vez —son un par de kilobytes— así que no hay estado
+## parcial posible: o está el archivo viejo o está el nuevo.
+func _notification(que: int) -> void:
+	if que == NOTIFICATION_WM_CLOSE_REQUEST or que == NOTIFICATION_PREDELETE:
+		if _core != null:
+			_guardar()
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +191,10 @@ func _on_consultar() -> void:
 		# La etapa o la forma pueden haber cambiado con la evolución, y eso
 		# cambia el dibujo.
 		_refrescar_sprite()
+		# Se guarda solo cuando el tiempo avanzó de verdad. El reloj consulta
+		# una vez por segundo y un tick dura un minuto: escribir en cada consulta
+		# serían sesenta escrituras al pedo por cada una que sirve.
+		_guardar()
 	_refrescar_estado()
 
 
@@ -125,6 +208,8 @@ func _on_accion(resultado: Dictionary) -> void:
 	# igual que cualquier otro mensaje, solo que en ámbar.
 	_anotar(resultado["mensaje"], AVISO if not resultado["ok"] else TEXTO)
 	_refrescar_estado()
+	if resultado["ok"]:
+		_guardar()
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +241,6 @@ func _construir_interfaz() -> void:
 	_registro.add_theme_color_override("default_color", TENUE)
 	_registro.add_theme_font_size_override("normal_font_size", 9)
 	raiz.add_child(_registro)
-	_anotar("Nació recién.", TENUE)
 
 	# El reloj de la simulación. Se consulta seguido y barato.
 	var reloj := Timer.new()
