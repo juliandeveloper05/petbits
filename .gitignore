@@ -142,3 +142,13 @@ gdext/tests/save_del_cpp.json
 # personales, no código: quedan en el disco de cada uno y no en el repo.
 partida-web.json
 partida*.json
+
+# El mapa se regenera con un comando, igual que la hoja de contacto.
+godot/mapa.png
+
+# Y los .import que Godot les deja al lado. Normalmente un .import SÍ se versiona
+# —lleva el uid del recurso—, pero acá describen imágenes que no están en el
+# repo: sin el PNG al lado no sirven para nada y se regeneran solos.
+godot/mapa.png.import
+godot/hoja_de_contacto.png.import
+godot/assets/sprites/*.png.import

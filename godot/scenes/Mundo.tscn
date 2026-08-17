@@ -1,0 +1,10 @@
+; El mapa navegable. Igual que las otras escenas, todo lo arma el script en
+; _ready(): el tilemap se construye desde el atlas que genera el C++, así que
+; guardarlo como recurso sería una copia que se desincroniza.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/Mundo.gd" id="1_mundo"]
+
+[node name="Mundo" type="Node2D"]
+script = ExtResource("1_mundo")

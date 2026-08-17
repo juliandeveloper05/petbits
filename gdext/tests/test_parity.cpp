@@ -27,6 +27,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <array>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -42,6 +43,7 @@
 #include "../src/rng.h"
 #include "../src/simulation.h"
 #include "../src/sprite_gen.h"
+#include "../src/tileset_gen.h"
 #include "../src/traits.h"
 #include "vectores_generados.h"
 
@@ -796,6 +798,95 @@ static void probarSalidas() {
     }
 }
 
+/**
+ * El atlas de tiles del mundo.
+ *
+ * ATENCIÓN: esto NO es un test de paridad, y la diferencia importa.
+ *
+ * Todo lo demás en este archivo compara contra el TypeScript, que dice cuál es
+ * la respuesta correcta. El mundo navegable existe solo del lado nativo, así que
+ * acá no hay referencia: se comprueban PROPIEDADES —que los tiles sean opacos,
+ * que se distingan entre sí, que el atlas sea determinista— en vez de igualdad.
+ *
+ * Es una red más floja. Vale tenerlo presente: un tile feo pasa estos tests sin
+ * problema, y solo se ve mirándolo.
+ */
+static void probarAtlas() {
+    bloque("atlas de tiles (sin paridad — solo propiedades)");
+
+    const Atlas a = generarAtlas();
+    const int cantidad = static_cast<int>(Tile::CANTIDAD);
+
+    revisarEnteros(static_cast<uint64_t>(a.width), static_cast<uint64_t>(cantidad * TILE), "atlas",
+                   "ancho");
+    revisarEnteros(static_cast<uint64_t>(a.height), TILE, "atlas", "alto");
+    revisarEnteros(a.data.size(), static_cast<uint64_t>(a.width * a.height * 4), "atlas", "bytes");
+
+    // Todo píxel del suelo tiene que ser opaco. Un agujero transparente en un
+    // tile de pasto deja ver el vacío del fondo, y a 16×16 eso es un punto negro
+    // en medio del campo.
+    for (size_t i = 3; i < a.data.size(); i += 4) {
+        if (a.data[i] != 255) {
+            const size_t pixel = i / 4;
+            char detalle[128];
+            std::snprintf(detalle, sizeof(detalle), "el píxel (%zu,%zu) del tile %zu es transparente",
+                          pixel % static_cast<size_t>(a.width),
+                          pixel / static_cast<size_t>(a.width),
+                          (pixel % static_cast<size_t>(a.width)) / TILE);
+            revisar(false, "opacidad", detalle);
+            break;
+        }
+    }
+    revisar(true, "opacidad", "");
+
+    // Determinista: dos llamadas dan el mismo atlas. Si no, el mundo cambiaría
+    // de aspecto en cada arranque.
+    const Atlas b = generarAtlas();
+    revisar(a.data == b.data, "determinismo", "dos llamadas dieron atlas distintos");
+
+    // Y cada tile tiene que verse distinto de los demás. Es lo que atrapa que la
+    // tabla de recetas quede mal indexada: si dos tiles comparten receta, el
+    // mapa se vuelve ilegible aunque nada falle.
+    std::vector<std::array<int, 3>> promedios;
+    for (int t = 0; t < cantidad; ++t) {
+        long r = 0, g = 0, bl = 0;
+        for (int y = 0; y < TILE; ++y) {
+            for (int x = 0; x < TILE; ++x) {
+                const size_t i = static_cast<size_t>((y * a.width + t * TILE + x) * 4);
+                r += a.data[i];
+                g += a.data[i + 1];
+                bl += a.data[i + 2];
+            }
+        }
+        const int n = TILE * TILE;
+        promedios.push_back({static_cast<int>(r / n), static_cast<int>(g / n),
+                             static_cast<int>(bl / n)});
+    }
+
+    for (int i = 0; i < cantidad; ++i) {
+        for (int j = i + 1; j < cantidad; ++j) {
+            const int d = std::abs(promedios[i][0] - promedios[j][0]) +
+                          std::abs(promedios[i][1] - promedios[j][1]) +
+                          std::abs(promedios[i][2] - promedios[j][2]);
+            char detalle[160];
+            std::snprintf(detalle, sizeof(detalle),
+                          "los tiles %d y %d se parecen demasiado (distancia %d)", i, j, d);
+            revisar(d >= 12, "tiles distinguibles", detalle);
+        }
+    }
+
+    // Los sólidos son los que son. Equivocarse acá deja al jugador caminando
+    // sobre el agua o chocando contra el pasto.
+    revisar(esSolido(Tile::Agua), "solidez", "el agua tendría que frenar");
+    revisar(esSolido(Tile::Piedra), "solidez", "la piedra tendría que frenar");
+    revisar(esSolido(Tile::Arbol), "solidez", "los árboles tendrían que frenar");
+    revisar(!esSolido(Tile::Pasto), "solidez", "por el pasto se camina");
+    revisar(!esSolido(Tile::Camino), "solidez", "por el camino se camina");
+    revisar(!esSolido(Tile::PastoAlto), "solidez", "por el pasto alto se camina");
+    revisar(!esSolido(Tile::Arena), "solidez", "por la arena se camina");
+    revisar(!esSolido(Tile::Musgo), "solidez", "por el musgo se camina");
+}
+
 /** El JSON tiene que aguantar entradas rotas sin reventar el arranque. */
 static void probarJsonRoto() {
     bloque("guardados corruptos");
@@ -921,7 +1012,7 @@ int main() {
     std::printf("\nPetBits — paridad TypeScript <-> C++\n");
     std::printf("%zu genomas, %zu crianzas, %zu parseos, %zu hashes, %zu simulaciones,\n"
                 "%zu rampas de color, %zu sprites, %zu escenarios de acciones,\n"
-                "%zu guardados\n\n",
+                "%zu guardados, %zu botines de expedición\n\n",
                 sizeof(vectores::GENOMAS) / sizeof(vectores::GENOMAS[0]),
                 sizeof(vectores::EVOLUCIONES) / sizeof(vectores::EVOLUCIONES[0]),
                 sizeof(vectores::PARSEOS) / sizeof(vectores::PARSEOS[0]),
@@ -947,6 +1038,7 @@ int main() {
     probarDespensa();
     probarBotines();
     probarSalidas();
+    probarAtlas();
     probarJsonRoto();
     probarParticion();
     probarRelojAtras();

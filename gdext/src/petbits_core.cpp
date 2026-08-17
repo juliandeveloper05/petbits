@@ -8,6 +8,7 @@
 #include "actions.h"
 #include "expeditions.h"
 #include "sprite_gen.h"
+#include "tileset_gen.h"
 #include "traits.h"
 
 #include <godot_cpp/core/class_db.hpp>
@@ -88,6 +89,10 @@ void PetBitsCore::_bind_methods() {
                          &PetBitsCore::sprite, DEFVAL(false));
     ClassDB::bind_method(D_METHOD("sprite_actual", "parpadeo"), &PetBitsCore::sprite_actual,
                          DEFVAL(false));
+
+    ClassDB::bind_method(D_METHOD("atlas_tiles"), &PetBitsCore::atlas_tiles);
+    ClassDB::bind_method(D_METHOD("cantidad_tiles"), &PetBitsCore::cantidad_tiles);
+    ClassDB::bind_method(D_METHOD("tile_solido", "indice"), &PetBitsCore::tile_solido);
 
     ClassDB::bind_method(D_METHOD("guardar", "ahora_ms"), &PetBitsCore::guardar);
     ClassDB::bind_method(D_METHOD("cargar", "texto"), &PetBitsCore::cargar);
@@ -507,6 +512,29 @@ Ref<Image> PetBitsCore::sprite_actual(bool parpadeo) const {
         parpadeo ? petbits::Expression::Parpadeo : petbits::Expression::Normal);
 
     return aImagen(s);
+}
+
+// ---------------------------------------------------------------------------
+// Mundo
+// ---------------------------------------------------------------------------
+
+Ref<Image> PetBitsCore::atlas_tiles() const {
+    const petbits::Atlas a = petbits::generarAtlas();
+
+    PackedByteArray bytes;
+    bytes.resize(static_cast<int64_t>(a.data.size()));
+    std::memcpy(bytes.ptrw(), a.data.data(), a.data.size());
+
+    return Image::create_from_data(a.width, a.height, false, Image::FORMAT_RGBA8, bytes);
+}
+
+int64_t PetBitsCore::cantidad_tiles() const {
+    return static_cast<int64_t>(petbits::Tile::CANTIDAD);
+}
+
+bool PetBitsCore::tile_solido(int64_t indice) const {
+    if (indice < 0 || indice >= cantidad_tiles()) return true;
+    return petbits::esSolido(static_cast<petbits::Tile>(indice));
 }
 
 // ---------------------------------------------------------------------------

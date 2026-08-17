@@ -71,7 +71,7 @@ entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
 botines de expedición contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **50.959 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **51.000 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -184,10 +184,44 @@ TypeScript y se compara el buffer completo.
 hay una implementación de verdad y conviene borrarlo antes de que alguien lo
 use creyendo que sirve.
 
-### Fase 3 — Mundo navegable ⬜
+### Fase 3 — Mundo navegable 🚧
 
-Seis zonas: Pueblo, El Patio, El Bosque, Las Ruinas, El Criadero, El Codex.
-Tilemap 16×16, transiciones, NPCs con diálogo.
+| | |
+|---|---|
+| `tileset_gen.cpp` — los 8 tiles, generados por código | ✅ |
+| El pueblo: caminos, plaza, estanque, borde de árboles | ✅ |
+| Caminar con colisiones | ✅ |
+| `mapa_a_png.gd` — compone el mundo en un PNG para poder mirarlo | ✅ |
+| Mandar a la criatura desde la entrada de cada zona | ⬜ |
+| Las otras cinco zonas como mapas propios | ⬜ |
+| Transiciones entre zonas | ⬜ |
+| NPCs con diálogo | ⬜ |
+
+**La decisión de diseño que ordena esta fase.** Tres de las zonas —patio, bosque,
+ruinas— ya existen como mecánica: son destinos de expedición y tardan quince
+minutos, hora y media o cuatro horas de tiempo real, mientras el juego está
+cerrado.
+
+Si caminar hasta el bosque tardara tres segundos, esa mecánica moriría: irías,
+agarrarías el botín y volverías. Así que **el mapa reemplaza al menú, no a la
+espera**. Llegás caminando hasta la entrada y ahí la mandás; la expedición sigue
+tardando lo que tarda. El mundo vuelve tangible una elección que hoy es una
+lista de botones.
+
+**Los tiles no tienen contraparte en la web**, y eso cambia cómo se verifican.
+Todo lo demás en `gdext/` es un port con un TypeScript que dice cuál es la
+respuesta correcta; acá no hay contra qué comparar. Sus tests comprueban
+propiedades —que los tiles sean opacos, que se distingan entre sí, que el atlas
+sea determinista— en vez de igualdad. Es una red más floja, y conviene tenerlo
+presente: un tile feo pasa esos tests sin problema.
+
+Por eso está `mapa_a_png.gd`. Godot en modo headless no dibuja nada —pedirle una
+captura devuelve negro— así que el mapa se compone a mano, tile por tile, con
+las mismas imágenes que usa el juego:
+
+```bash
+godot --headless --path godot --script res://scripts/mapa_a_png.gd
+```
 
 ### Fase 4 — Combate por turnos ⬜
 

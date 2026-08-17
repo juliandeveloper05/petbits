@@ -178,6 +178,25 @@ public:
     Ref<Image> sprite_actual(bool parpadeo = false) const;
 
     // -----------------------------------------------------------------------
+    // Mundo
+    // -----------------------------------------------------------------------
+
+    /**
+     * El atlas de tiles del mundo: todos en una fila, 16×16 cada uno.
+     *
+     * Generado por código como todo lo demás, y con la misma maquinaria OKLCH
+     * que las paletas de las criaturas — por eso el pasto y un cuerpo de linaje
+     * Musgo se ven de la misma familia en vez de convivir a la fuerza.
+     */
+    Ref<Image> atlas_tiles() const;
+
+    /** Cuántos tipos de tile hay. */
+    int64_t cantidad_tiles() const;
+
+    /** ¿Ese tile frena al que camina? */
+    bool tile_solido(int64_t indice) const;
+
+    // -----------------------------------------------------------------------
     // Guardado
     // -----------------------------------------------------------------------
 
