@@ -146,6 +146,10 @@ partida*.json
 # El mapa se regenera con un comando, igual que la hoja de contacto.
 godot/mapa.png
 
+# Y la muestra de la tipografía, por lo mismo.
+godot/fuente.png
+godot/fuente.png.import
+
 # Y los .import que Godot les deja al lado. Normalmente un .import SÍ se versiona
 # —lleva el uid del recurso—, pero acá describen imágenes que no están en el
 # repo: sin el PNG al lado no sirven para nada y se regeneran solos.

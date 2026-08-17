@@ -36,6 +36,8 @@
 
 extends Node
 
+const Tipografia = preload("res://scripts/Tipografia.gd")
+
 ## Algo pasó en el mundo y las pantallas tienen que redibujarse.
 signal cambio
 
@@ -88,6 +90,19 @@ var ruta_cuarentena := RUTA_CUARENTENA
 
 var core: RefCounted = null
 
+## La tipografía del juego, armada desde el atlas que genera el C++.
+##
+## Queda a mano para las pantallas que quieran pedirle medidas —cuánto mide un
+## texto antes de dibujarlo— pero no hace falta asignarla a nada: `instalar()` la
+## deja como fuente por defecto del motor.
+var fuente: FontFile = null
+
+## El alto de la caja de la fuente, que es su tamaño nativo.
+##
+## Las pantallas lo usan en vez de números sueltos. Pedirle 9 o 12 a una bitmap
+## font de 11 la escala, y a este tamaño escalar es romperla.
+var tam_fuente := 11
+
 ## Todo lo anotado desde que arrancó el programa: [{ texto, tono }].
 var bitacora: Array = []
 
@@ -108,6 +123,13 @@ func iniciar() -> bool:
 		return false
 
 	core = ClassDB.instantiate("PetBitsCore")
+
+	# La tipografía va antes que nada: se instala como fuente por defecto del
+	# motor, así que cualquier pantalla que se arme después ya nace con ella.
+	# Hacerlo al revés dejaría el primer cuadro dibujado con la fuente de Godot.
+	fuente = Tipografia.instalar(core)
+	tam_fuente = int(core.fuente_metricas()["alto"])
+
 	_cargar_o_nacer()
 
 	_reloj = Timer.new()

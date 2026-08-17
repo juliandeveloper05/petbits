@@ -8,6 +8,7 @@
 #include "actions.h"
 #include "expeditions.h"
 #include "sprite_gen.h"
+#include "font_gen.h"
 #include "tileset_gen.h"
 #include "traits.h"
 
@@ -93,6 +94,10 @@ void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("atlas_tiles"), &PetBitsCore::atlas_tiles);
     ClassDB::bind_method(D_METHOD("cantidad_tiles"), &PetBitsCore::cantidad_tiles);
     ClassDB::bind_method(D_METHOD("tile_solido", "indice"), &PetBitsCore::tile_solido);
+
+    ClassDB::bind_method(D_METHOD("atlas_fuente"), &PetBitsCore::atlas_fuente);
+    ClassDB::bind_method(D_METHOD("fuente_glifos"), &PetBitsCore::fuente_glifos);
+    ClassDB::bind_method(D_METHOD("fuente_metricas"), &PetBitsCore::fuente_metricas);
 
     ClassDB::bind_method(D_METHOD("guardar", "ahora_ms"), &PetBitsCore::guardar);
     ClassDB::bind_method(D_METHOD("cargar", "texto"), &PetBitsCore::cargar);
@@ -535,6 +540,43 @@ int64_t PetBitsCore::cantidad_tiles() const {
 bool PetBitsCore::tile_solido(int64_t indice) const {
     if (indice < 0 || indice >= cantidad_tiles()) return true;
     return petbits::esSolido(static_cast<petbits::Tile>(indice));
+}
+
+// ---------------------------------------------------------------------------
+// Tipografía
+// ---------------------------------------------------------------------------
+
+Ref<Image> PetBitsCore::atlas_fuente() const {
+    const petbits::ImagenFuente f = petbits::fuenteAtlas();
+
+    PackedByteArray bytes;
+    bytes.resize(static_cast<int64_t>(f.rgba.size()));
+    std::memcpy(bytes.ptrw(), f.rgba.data(), f.rgba.size());
+
+    return Image::create_from_data(f.ancho, f.alto, false, Image::FORMAT_RGBA8, bytes);
+}
+
+Array PetBitsCore::fuente_glifos() const {
+    Array salida;
+    const std::vector<petbits::Glifo>& lista = petbits::fuenteGlifos();
+    for (size_t i = 0; i < lista.size(); ++i) {
+        Dictionary d;
+        d["codigo"] = static_cast<int64_t>(lista[i].codigo);
+        d["x"] = static_cast<int64_t>(i % petbits::Fuente::COLUMNAS) * petbits::Fuente::ANCHO;
+        d["y"] = static_cast<int64_t>(i / petbits::Fuente::COLUMNAS) * petbits::Fuente::ALTO;
+        salida.push_back(d);
+    }
+    return salida;
+}
+
+Dictionary PetBitsCore::fuente_metricas() const {
+    Dictionary d;
+    d["ancho"] = petbits::Fuente::ANCHO;
+    d["alto"] = petbits::Fuente::ALTO;
+    d["avance"] = petbits::Fuente::AVANCE;
+    d["ascenso"] = petbits::Fuente::ASCENSO;
+    d["descenso"] = petbits::Fuente::DESCENSO;
+    return d;
 }
 
 // ---------------------------------------------------------------------------

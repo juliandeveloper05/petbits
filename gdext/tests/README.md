@@ -113,11 +113,12 @@ la despensa se gasta
 botín de expediciones
 reglas de las expediciones
 atlas de tiles (sin paridad — solo propiedades)
+tipografía (sin paridad — solo propiedades)
 guardados corruptos
 invariante de partición
 reloj hacia atrás
 
-51000 comprobaciones, 0 fallas
+52668 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
@@ -144,6 +145,7 @@ script.
 | `inventory.cpp` | Se gasta de a una, no baja de cero, y solo cobra si la acción salió bien | 1 bloque |
 | `expeditions.cpp` | El botín, alimento por alimento y en orden, más la frase | 108 botines |
 | `tileset_gen.cpp` | **Sin paridad.** Opacidad, determinismo y que los tiles se distingan | propiedades |
+| `font_gen.cpp` | **Sin paridad.** Cobertura del castellano, que ningún glifo se repita | propiedades |
 
 Los sprites se comparan por hash y no píxel por píxel porque cada uno son 4096
 bytes: ponerlos crudos en el header serían megabytes. Junto al hash va el conteo

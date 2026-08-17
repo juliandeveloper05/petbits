@@ -139,10 +139,10 @@ func _construir_carteles() -> void:
 func _etiqueta(donde: Vector2, color: Color) -> Label:
 	var etiqueta := Label.new()
 	etiqueta.position = donde
-	etiqueta.add_theme_font_size_override("font_size", 10)
+	etiqueta.add_theme_font_size_override("font_size", Partida.tam_fuente)
 	etiqueta.add_theme_color_override("font_color", color)
 	etiqueta.add_theme_color_override("font_outline_color", SOMBRA)
-	etiqueta.add_theme_constant_override("outline_size", 4)
+	etiqueta.add_theme_constant_override("outline_size", 2)
 	add_child(etiqueta)
 	return etiqueta
 

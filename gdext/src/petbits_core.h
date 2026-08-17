@@ -197,6 +197,38 @@ public:
     bool tile_solido(int64_t indice) const;
 
     // -----------------------------------------------------------------------
+    // Tipografía
+    // -----------------------------------------------------------------------
+
+    /**
+     * El atlas de la fuente: tinta blanca opaca sobre transparente.
+     *
+     * Blanca y no verde a propósito. Godot multiplica la textura por el color de
+     * la fuente, así que el mismo atlas sirve para el fósforo del registro, el
+     * ámbar de los avisos y el rojo de las alertas. Si viniera coloreado habría
+     * que generar uno por color.
+     */
+    Ref<Image> atlas_fuente() const;
+
+    /**
+     * Dónde vive cada glifo y cuánto ocupa, para que GDScript pueda armar el
+     * `FontFile`: [{ codigo, x, y }], ordenado por punto de código.
+     *
+     * El recorte es siempre del mismo tamaño (`ancho` × `alto` de las métricas),
+     * así que no hace falta mandarlo glifo por glifo.
+     */
+    Array fuente_glifos() const;
+
+    /**
+     * Las medidas de la caja: { ancho, alto, avance, ascenso, descenso }.
+     *
+     * Van juntas y desde el C++ porque son un conjunto coherente: si el alto
+     * cambia sin que cambie el ascenso, el texto queda pegado al borde de arriba
+     * y no hay nada que avise.
+     */
+    Dictionary fuente_metricas() const;
+
+    // -----------------------------------------------------------------------
     // Guardado
     // -----------------------------------------------------------------------
 

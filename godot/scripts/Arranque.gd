@@ -86,7 +86,7 @@ func _reportar_falta(raiz: VBoxContainer) -> void:
 func _titulo(padre: Node, texto: String) -> void:
 	var etiqueta := Label.new()
 	etiqueta.text = texto
-	etiqueta.add_theme_font_size_override("font_size", 20)
+	etiqueta.add_theme_font_size_override("font_size", Partida.tam_fuente * 2)
 	etiqueta.add_theme_color_override("font_color", VERDE)
 	padre.add_child(etiqueta)
 	print(texto)

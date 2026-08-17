@@ -137,7 +137,7 @@ func _construir_interfaz() -> void:
 	_registro = RichTextLabel.new()
 	_registro.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_registro.add_theme_color_override("default_color", TENUE)
-	_registro.add_theme_font_size_override("normal_font_size", 9)
+	_registro.add_theme_font_size_override("normal_font_size", Partida.tam_fuente)
 	raiz.add_child(_registro)
 
 
@@ -160,9 +160,9 @@ func _construir_ficha(padre: Node) -> void:
 	ficha.add_theme_constant_override("separation", 1)
 	fila.add_child(ficha)
 
-	_etiquetas["seed"] = _linea(ficha, FOSFORO, 12)
-	_etiquetas["quien"] = _linea(ficha, TEXTO, 10)
-	_etiquetas["etapa"] = _linea(ficha, TENUE, 9)
+	_etiquetas["seed"] = _linea(ficha, FOSFORO)
+	_etiquetas["quien"] = _linea(ficha, TEXTO)
+	_etiquetas["etapa"] = _linea(ficha, TENUE)
 
 	var aire := Control.new()
 	aire.custom_minimum_size = Vector2(0, 4)
@@ -212,7 +212,7 @@ func _boton(padre: Node, texto: String, al_apretar: Callable) -> Button:
 	var boton := Button.new()
 	boton.text = texto
 	boton.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	boton.add_theme_font_size_override("font_size", 9)
+	boton.add_theme_font_size_override("font_size", Partida.tam_fuente)
 	boton.pressed.connect(al_apretar)
 	padre.add_child(boton)
 	return boton
@@ -251,10 +251,15 @@ func _refrescar_despensa() -> void:
 		boton.modulate = Color(1, 1, 1) if cantidad > 0 else Color(0.55, 0.55, 0.55)
 
 
-func _linea(padre: Node, color: Color, tamano: int) -> Label:
+## Una línea de texto de la ficha.
+##
+## `escala` es un MULTIPLICADOR entero, no un tamaño en píxeles. La fuente es una
+## bitmap de 11 px: a 1 se dibuja tal cual y a 2 se duplica cada píxel. Cualquier
+## otro número la interpola y le rompe los trazos, así que ni se ofrece.
+func _linea(padre: Node, color: Color, escala: int = 1) -> Label:
 	var etiqueta := Label.new()
 	etiqueta.add_theme_color_override("font_color", color)
-	etiqueta.add_theme_font_size_override("font_size", tamano)
+	etiqueta.add_theme_font_size_override("font_size", Partida.tam_fuente * escala)
 	padre.add_child(etiqueta)
 	return etiqueta
 
@@ -273,7 +278,7 @@ func _barra(padre: Node, clave: String) -> Dictionary:
 	nombre.text = clave.capitalize()
 	nombre.custom_minimum_size = Vector2(48, 0)
 	nombre.add_theme_color_override("font_color", TENUE)
-	nombre.add_theme_font_size_override("font_size", 9)
+	nombre.add_theme_font_size_override("font_size", Partida.tam_fuente)
 	fila.add_child(nombre)
 
 	var barra := ProgressBar.new()
@@ -287,7 +292,7 @@ func _barra(padre: Node, clave: String) -> Dictionary:
 	valor.custom_minimum_size = Vector2(24, 0)
 	valor.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	valor.add_theme_color_override("font_color", TEXTO)
-	valor.add_theme_font_size_override("font_size", 9)
+	valor.add_theme_font_size_override("font_size", Partida.tam_fuente)
 	fila.add_child(valor)
 
 	return {"barra": barra, "valor": valor}

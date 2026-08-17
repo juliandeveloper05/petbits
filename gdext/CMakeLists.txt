@@ -50,6 +50,7 @@ add_library(petbits_nucleo STATIC
     src/palette.cpp
     src/sprite_gen.cpp
     src/tileset_gen.cpp
+    src/font_gen.cpp
 )
 target_include_directories(petbits_nucleo PUBLIC src)
 

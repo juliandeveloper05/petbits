@@ -43,6 +43,7 @@
 #include "../src/rng.h"
 #include "../src/simulation.h"
 #include "../src/sprite_gen.h"
+#include "../src/font_gen.h"
 #include "../src/tileset_gen.h"
 #include "../src/traits.h"
 #include "vectores_generados.h"
@@ -887,6 +888,245 @@ static void probarAtlas() {
     revisar(!esSolido(Tile::Musgo), "solidez", "por el musgo se camina");
 }
 
+/**
+ * La tipografía. TAMPOCO tiene paridad — se comprueban propiedades.
+ *
+ * Igual que con los tiles no hay un TypeScript que diga cuál es la respuesta
+ * correcta, así que estos tests no pueden decir si la fuente es LINDA. Lo que sí
+ * pueden decir, y es la mitad del trabajo, es si está completa y si es
+ * coherente: que no falte ningún carácter que el juego imprima, que no haya dos
+ * letras dibujadas igual, y que ninguna se salga de la caja.
+ *
+ * El de cobertura es el que importa. Una fuente a la que le falta la "n con
+ * tilde" no falla ruidosamente: dibuja un cuadrado vacío, y eso aparece en
+ * producción, no acá.
+ */
+static void probarFuente() {
+    bloque("tipografía (sin paridad — solo propiedades)");
+
+    const std::vector<Glifo>& glifos = fuenteGlifos();
+
+    // -- cobertura ----------------------------------------------------------
+    // Todo el ASCII imprimible, más lo que el castellano necesita, más los
+    // cuatro símbolos que la interfaz usa de verdad. Esta lista es un contrato:
+    // si alguien escribe un mensaje con un carácter que no está acá, el test no
+    // se entera — pero al menos garantiza el piso.
+    static const char32_t REQUERIDOS[] = {
+        U'á', U'é', U'í', U'ó', U'ú', U'ü', U'ñ',
+        U'Á', U'É', U'Í', U'Ó', U'Ú', U'Ü', U'Ñ', U'Â',
+        U'¿', U'¡', U'·', U'—', U'→', U'◆',
+    };
+
+    for (char32_t c = U' '; c <= U'~'; ++c) {
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "ASCII U+%04X", static_cast<unsigned>(c));
+        int x = 0, y = 0;
+        revisar(fuenteUbicacion(c, x, y), ctx, "falta el glifo");
+    }
+    for (char32_t c : REQUERIDOS) {
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "U+%04X", static_cast<unsigned>(c));
+        int x = 0, y = 0;
+        revisar(fuenteUbicacion(c, x, y), ctx, "falta el glifo");
+    }
+
+    // -- el espacio es el único vacío ---------------------------------------
+    for (const Glifo& g : glifos) {
+        if (g.codigo == U' ') {
+            revisar(g.vacio(), "espacio", "el espacio tendría que estar en blanco");
+            continue;
+        }
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "U+%04X", static_cast<unsigned>(g.codigo));
+        revisar(!g.vacio(), ctx, "el glifo está en blanco");
+    }
+
+    // -- nada se sale de la caja --------------------------------------------
+    // Cada fila usa cinco bits. Un bit de más significa tinta pisando el glifo
+    // de al lado en el atlas, que en pantalla se ve como una letra con basura.
+    const uint8_t mascara = static_cast<uint8_t>((1u << Fuente::ANCHO) - 1u);
+    for (const Glifo& g : glifos) {
+        for (int f = 0; f < Fuente::ALTO; ++f) {
+            char ctx[64];
+            std::snprintf(ctx, sizeof(ctx), "U+%04X fila %d", static_cast<unsigned>(g.codigo), f);
+            revisar((g.filas[f] & ~mascara) == 0, ctx, "hay tinta fuera de las cinco columnas");
+        }
+    }
+
+    // -- no hay dos glifos iguales ------------------------------------------
+    // Este es el que caza los errores de copiar y pegar. Una fuente escrita a
+    // mano tiene noventa entradas casi iguales; que la O y el 0 salgan
+    // idénticos es el accidente más fácil de cometer y el más difícil de ver.
+    bool repetidos = false;
+    for (size_t i = 0; i < glifos.size(); ++i) {
+        if (glifos[i].codigo == U' ') continue;
+        for (size_t j = i + 1; j < glifos.size(); ++j) {
+            if (glifos[j].codigo == U' ') continue;
+            bool iguales = true;
+            for (int f = 0; f < Fuente::ALTO && iguales; ++f) {
+                if (glifos[i].filas[f] != glifos[j].filas[f]) iguales = false;
+            }
+            if (iguales) {
+                char ctx[80];
+                std::snprintf(ctx, sizeof(ctx), "U+%04X y U+%04X",
+                              static_cast<unsigned>(glifos[i].codigo),
+                              static_cast<unsigned>(glifos[j].codigo));
+                revisar(false, ctx, "dos glifos dibujados igual");
+                repetidos = true;
+            }
+        }
+    }
+    revisar(!repetidos, "glifos", "hay glifos repetidos");
+
+    // -- las acentuadas son su base más algo --------------------------------
+    // Si acentuar() no hiciera nada, todo lo de arriba pasaría igual: la "a con
+    // tilde" sería una "a" y nadie se enteraría hasta ver la pantalla. Esto
+    // comprueba que la marca está, que está ARRIBA del cuerpo, y que no borró
+    // nada.
+    struct Par { char32_t acentuada; char32_t base; };
+    static const Par PARES[] = {
+        {U'á', U'a'}, {U'é', U'e'}, {U'ó', U'o'}, {U'ú', U'u'},
+        {U'ñ', U'n'}, {U'ü', U'u'},
+        {U'Á', U'A'}, {U'É', U'E'}, {U'Ó', U'O'}, {U'Ú', U'U'}, {U'Ñ', U'N'},
+    };
+    for (const Par& par : PARES) {
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "U+%04X", static_cast<unsigned>(par.acentuada));
+
+        const Glifo* con = nullptr;
+        const Glifo* sin = nullptr;
+        for (const Glifo& g : glifos) {
+            if (g.codigo == par.acentuada) con = &g;
+            if (g.codigo == par.base) sin = &g;
+        }
+        if (con == nullptr || sin == nullptr) {
+            revisar(false, ctx, "falta la acentuada o su base");
+            continue;
+        }
+
+        bool distinta = false;
+        bool cuerpoIntacto = true;
+        int primeraBase = Fuente::ALTO;
+        for (int f = 0; f < Fuente::ALTO; ++f) {
+            if (con->filas[f] != sin->filas[f]) distinta = true;
+            // El cuerpo no se toca: donde la base tiene tinta, la acentuada
+            // también.
+            if ((sin->filas[f] & con->filas[f]) != sin->filas[f]) cuerpoIntacto = false;
+            if (sin->filas[f] != 0 && primeraBase == Fuente::ALTO) primeraBase = f;
+        }
+        // Y la marca tiene que estar por encima de donde empieza la base.
+        bool marcaArriba = false;
+        for (int f = 0; f < primeraBase; ++f) {
+            if (con->filas[f] != 0) marcaArriba = true;
+        }
+        revisar(distinta, ctx, "salió igual que su base: la marca no se aplicó");
+        revisar(cuerpoIntacto, ctx, "la marca le comió tinta al cuerpo");
+        revisar(marcaArriba, ctx, "la marca no quedó por encima del cuerpo");
+    }
+
+    // -- la i con tilde no conserva su punto --------------------------------
+    // El error tipográfico clásico: poner la tilde arriba y dejarle el punto
+    // abajo. Se ve mal y se ve enseguida.
+    {
+        const Glifo* punto = nullptr;
+        const Glifo* tildada = nullptr;
+        for (const Glifo& g : glifos) {
+            if (g.codigo == U'i') punto = &g;
+            if (g.codigo == U'í') tildada = &g;
+        }
+        revisar(punto != nullptr && tildada != nullptr, "i con tilde", "faltan los glifos");
+        if (punto != nullptr && tildada != nullptr) {
+            int conTinta = 0;
+            for (int f = 0; f < Fuente::ALTO; ++f) {
+                if (tildada->filas[f] != 0) ++conTinta;
+            }
+            // Cuerpo (5) + marca (2) = 7. Si conservara el punto habría 8 o más.
+            revisar(conTinta <= 7, "i con tilde", "parece conservar el punto de la i");
+        }
+    }
+
+    // -- los signos de apertura son sus pares dados vuelta -------------------
+    struct Vuelta { char32_t abre; char32_t cierra; };
+    static const Vuelta VUELTAS[] = {{U'¿', U'?'}, {U'¡', U'!'}};
+    for (const Vuelta& v : VUELTAS) {
+        const Glifo* abre = nullptr;
+        const Glifo* cierra = nullptr;
+        for (const Glifo& g : glifos) {
+            if (g.codigo == v.abre) abre = &g;
+            if (g.codigo == v.cierra) cierra = &g;
+        }
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "U+%04X", static_cast<unsigned>(v.abre));
+        revisar(abre != nullptr && cierra != nullptr, ctx, "faltan los glifos");
+        if (abre == nullptr || cierra == nullptr) continue;
+
+        bool ok = true;
+        for (int f = 0; f < Fuente::ALTO && ok; ++f) {
+            uint8_t esperado = 0;
+            const uint8_t origen = cierra->filas[Fuente::ALTO - 1 - f];
+            for (int b = 0; b < Fuente::ANCHO; ++b) {
+                if (origen & (1u << b)) {
+                    esperado |= static_cast<uint8_t>(1u << (Fuente::ANCHO - 1 - b));
+                }
+            }
+            if (abre->filas[f] != esperado) ok = false;
+        }
+        revisar(ok, ctx, "no es el signo de cierre rotado 180 grados");
+    }
+
+    // -- el atlas ------------------------------------------------------------
+    const ImagenFuente img = fuenteAtlas();
+    revisarEnteros(static_cast<uint64_t>(img.ancho),
+                   static_cast<uint64_t>(Fuente::COLUMNAS * Fuente::ANCHO), "atlas de fuente",
+                   "ancho");
+    revisarEnteros(static_cast<uint64_t>(img.alto),
+                   static_cast<uint64_t>(fuenteFilasAtlas() * Fuente::ALTO), "atlas de fuente",
+                   "alto");
+    revisarEnteros(img.rgba.size(), static_cast<uint64_t>(img.ancho) * img.alto * 4,
+                   "atlas de fuente", "bytes");
+
+    // Tinta blanca o transparencia total: nada en el medio. Un píxel a media
+    // opacidad delataría antialiasing, que es justo lo que esta fuente no tiene.
+    bool limpia = true;
+    for (size_t i = 0; i + 3 < img.rgba.size() && limpia; i += 4) {
+        const uint8_t a = img.rgba[i + 3];
+        if (a != 0 && a != 255) limpia = false;
+        if (a == 255 && (img.rgba[i] != 255 || img.rgba[i + 1] != 255 || img.rgba[i + 2] != 255)) {
+            limpia = false;
+        }
+    }
+    revisar(limpia, "atlas de fuente", "hay tinta que no es blanca opaca");
+
+    // -- determinista --------------------------------------------------------
+    const ImagenFuente otra = fuenteAtlas();
+    revisar(img.rgba == otra.rgba, "atlas de fuente", "dos llamadas dieron atlas distintos");
+
+    // -- y cada glifo está donde dice estar ----------------------------------
+    // Une las dos mitades: fuenteUbicacion() le dice a GDScript de dónde
+    // recortar, y si eso no coincide con lo que se pintó, cada letra sale con un
+    // pedazo de la de al lado.
+    for (const Glifo& g : glifos) {
+        if (g.vacio()) continue;
+        int x = 0, y = 0;
+        if (!fuenteUbicacion(g.codigo, x, y)) continue;
+
+        bool coincide = true;
+        for (int f = 0; f < Fuente::ALTO && coincide; ++f) {
+            for (int c = 0; c < Fuente::ANCHO; ++c) {
+                const bool hayTinta = (g.filas[f] & (1u << (Fuente::ANCHO - 1 - c))) != 0;
+                const size_t p = (static_cast<size_t>(y + f) * img.ancho + (x + c)) * 4 + 3;
+                if (hayTinta != (img.rgba[p] == 255)) {
+                    coincide = false;
+                    break;
+                }
+            }
+        }
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "U+%04X", static_cast<unsigned>(g.codigo));
+        revisar(coincide, ctx, "el recorte del atlas no coincide con el glifo");
+    }
+}
+
 /** El JSON tiene que aguantar entradas rotas sin reventar el arranque. */
 static void probarJsonRoto() {
     bloque("guardados corruptos");
@@ -1039,6 +1279,7 @@ int main() {
     probarBotines();
     probarSalidas();
     probarAtlas();
+    probarFuente();
     probarJsonRoto();
     probarParticion();
     probarRelojAtras();

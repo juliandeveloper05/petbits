@@ -17,6 +17,8 @@
 
 extends SceneTree
 
+const Escritura = preload("res://scripts/Escritura.gd")
+
 const TILE := 16
 const ESCALA := 2
 
@@ -55,6 +57,13 @@ func _init() -> void:
 	var sprite: Image = core.sprite_actual(false)
 	_pegar_sprite(salida, sprite, Pueblo.ENTRADA.x - 8, Pueblo.ENTRADA.y - 8)
 
+	# Y los carteles, con la tipografía del juego. No es decoración: el texto
+	# sobre pasto y sobre camino es donde se ve si la fuente tiene contraste
+	# suficiente, y eso no se puede contestar mirando el atlas sobre negro.
+	var tipo: Dictionary = Escritura.preparar(core)
+	_cartel(salida, tipo, core.estado()["seed"], 6, 4, Color("#9bbc0f"))
+	_cartel(salida, tipo, "El patio — Enter para mandarla", 6, alto * TILE - 18, Color("#d6e6d0"))
+
 	var error := salida.save_png("res://mapa.png")
 	if error != OK:
 		print("No se pudo guardar: %d" % error)
@@ -64,6 +73,24 @@ func _init() -> void:
 	print("Mapa escrito en %s" % ProjectSettings.globalize_path("res://mapa.png"))
 	print("%d x %d tiles, %d x %d px" % [ancho, alto, salida.get_width(), salida.get_height()])
 	quit(0)
+
+
+## Un cartel del mapa: el texto con su contorno oscuro.
+##
+## El contorno hace el trabajo de una caja de diálogo sin ocupar el lugar de una.
+## Se dibuja pintando el texto ocho veces corrido un píxel en cada dirección y
+## después encima en el color bueno: es la forma barata, y a este tamaño es
+## indistinguible de la buena.
+func _cartel(destino: Image, tipo: Dictionary, texto: String, x: int, y: int, color: Color) -> void:
+	const SOMBRA := Color("#0a0e0a")
+	for dy in [-1, 0, 1]:
+		for dx in [-1, 0, 1]:
+			if dx == 0 and dy == 0:
+				continue
+			Escritura.escribir(
+				destino, tipo, texto, (x + dx) * ESCALA, (y + dy) * ESCALA, SOMBRA, ESCALA
+			)
+	Escritura.escribir(destino, tipo, texto, x * ESCALA, y * ESCALA, color, ESCALA)
 
 
 func _pegar_tile(destino: Image, indice: int, cx: int, cy: int) -> void:

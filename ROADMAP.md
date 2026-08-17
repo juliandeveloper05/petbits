@@ -71,7 +71,7 @@ entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
 botines de expedición contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **51.000 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **52.668 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -114,7 +114,8 @@ necesita dos criaturas adultas con vínculo alto para que se note.
 | `PetView.tscn` — sprite, barras, registro de eventos, parpadeo | ✅ corre; es la escena principal del proyecto |
 | `hoja_de_contacto.gd` — muchas criaturas de una, como `npm run sheet` | ✅ |
 | Acciones: alimentar, jugar, acariciar | ✅ con sus tradeoffs y el tope diario de vínculo |
-| Tipografía y caja de diálogo estilo Game Boy | ⬜ |
+| Tipografía estilo Game Boy, generada por código | ✅ 116 glifos |
+| Caja de diálogo | ⬜ |
 | Guardado, compatible con el de la web | ✅ |
 | Expediciones: la criatura sale y vuelve con comida | ✅ |
 
@@ -129,6 +130,55 @@ economía cerrada —si para conseguir comida hace falta comida, el jugador qued
 trabado— y hay un test que recorre cuarenta salidas comprobando que nunca vuelva
 con las manos vacías.
 
+**La tipografía también sale de código.** Es una bitmap de 5×7 en una caja de
+5×11, con el trazo de un píxel y sin antialiasing que tenían las fuentes de
+consola portátil. No es un `.ttf` descargado por dos razones: metería la
+licencia de un tercero en el repo por la única cosa que aparece en todas las
+pantallas, y una fuente vectorial escalada a once píxeles se ve blanda al lado
+de un sprite de 32×32. El texto y el pixel art tienen que estar en la misma
+grilla o la pantalla se parte en dos estéticas.
+
+Once filas y no ocho —que es lo que ocupaba una fuente de consola de la época—
+porque el castellano no entra en ocho. Con esa altura hay que elegir entre
+descendentes de un píxel, una `p` que parece una `o` con un palito, o acentos
+pegados a la letra. Tres filas más es lo que cuesta que "Nébula está de
+expedición" se lea bien.
+
+**Los acentos no se dibujan, se componen.** La `á` es la `a` con una tilde
+estampada dos filas por encima de donde empieza su cuerpo, y el `¿` es el `?`
+rotado 180°, que es literalmente lo que es. Dibujar cada variante a mano serían
+veinte glifos más y veinte oportunidades de que la tilde de la `ó` quede un
+píxel más alta que la de la `á`. La única excepción es la `í`, que primero
+pierde su punto y después recibe la tilde.
+
+**Y hubo que medir qué caracteres imprime el juego antes de dibujarlos.** Salió
+un censo de los literales del C++ y del GDScript: además del ASCII, el juego usa
+`á é í ó ú Á É Ó`, el punto medio como separador (`Musgo · Plácido`), la raya de
+diálogo, la flecha de los errores del lector de JSON y el rombo del arranque.
+Una fuente a la que le falte uno no falla ruidosamente: dibuja un cuadrado
+vacío, y eso aparece en producción.
+
+Los tests del C++ comprueban cobertura, que ningún glifo se repita —el error de
+copiar y pegar más fácil de cometer en una tabla de ciento dieciséis entradas— y
+que las acentuadas sean su base más algo, arriba y sin comerle tinta. Del lado
+de Godot hay otra verificación, porque entre el atlas y la pantalla hay una
+traducción entera que puede perder una letra sin avisar:
+
+```bash
+godot --headless --path godot res://scenes/VerificarFuente.tscn
+```
+
+Como la fuente es de ancho fijo, cualquier texto de N caracteres tiene que medir
+exactamente N × 6 píxeles. Si a Godot le falta un glifo, sustituye y la cuenta
+no da. Hay además un control negativo —un carácter que la fuente NO tiene tiene
+que romper esa cuenta—, sin el cual todo lo demás no probaría nada.
+
+Y para lo que ningún test contesta, que es si se LEE:
+
+```bash
+godot --headless --path godot --script res://scripts/fuente_a_png.gd
+```
+
 **El presupuesto de pantalla es 480×270** —resolución de consola portátil, que
 es la identidad visual del juego— y eso son 254 píxeles útiles de alto. La
 primera versión de `PetView` apilaba todo en una columna y pedía unos 400:
@@ -141,7 +191,9 @@ Ahora va en dos columnas y hay un script que lo mide en vez de mirarlo a ojo:
 godot --headless --path godot res://scenes/MedirLayout.tscn
 ```
 
-Devuelve 1 si el contenido se pasa. Hoy pide 177 px de los 270.
+Devuelve 1 si el contenido se pasa. Hoy pide 199 px de los 270 — subió al
+pasar todo al tamaño nativo de la bitmap font, que es el único que no la
+deforma.
 
 **El guardado es el formato de la web, y eso está verificado contra su propio
 validador**, no contra el criterio de este código:
