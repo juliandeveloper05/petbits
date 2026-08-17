@@ -71,7 +71,7 @@ entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
 botines de expedición contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **52.668 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **52.681 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -114,8 +114,8 @@ necesita dos criaturas adultas con vínculo alto para que se note.
 | `PetView.tscn` — sprite, barras, registro de eventos, parpadeo | ✅ corre; es la escena principal del proyecto |
 | `hoja_de_contacto.gd` — muchas criaturas de una, como `npm run sheet` | ✅ |
 | Acciones: alimentar, jugar, acariciar | ✅ con sus tradeoffs y el tope diario de vínculo |
-| Tipografía estilo Game Boy, generada por código | ✅ 116 glifos |
-| Caja de diálogo | ⬜ |
+| Tipografía estilo Game Boy, generada por código | ✅ 117 glifos |
+| Caja de diálogo con tipeo, paginado y marco | ✅ |
 | Guardado, compatible con el de la web | ✅ |
 | Expediciones: la criatura sale y vuelve con comida | ✅ |
 
@@ -274,8 +274,43 @@ captura devuelve negro— así que el mapa se compone a mano, tile por tile, con
 las mismas imágenes que usa el juego:
 
 ```bash
-godot --headless --path godot --script res://scripts/mapa_a_png.gd
+godot --headless --path godot res://scenes/MapaAPng.tscn
 ```
+
+**La caja de diálogo cierra la Fase 2.** Es el recurso más viejo del género y
+sigue siendo el mejor: escribe letra por letra, espera que le den Enter, pasa de
+página. Convierte un mensaje en un momento y le da al jugador el control de
+cuánto tarda en leerlo.
+
+Reemplaza a un Label suelto sobre el mapa, y la diferencia no es estética. Un
+cartel que siempre está no se lee: se vuelve parte del decorado. Una caja que
+aparece, escribe y se va convierte al texto en un evento — y de paso frena al
+jugador, que es lo que hace que un diálogo se sienta como una conversación y no
+como un cartel de ruta. Por eso, mientras habla, no se camina.
+
+**La caja no se roba el teclado.** Expone `abierta()` y `avanzar()`, y la
+pantalla que la contiene decide cuándo llamarlas. Si atajara Enter por su
+cuenta, `Mundo` tendría que adivinar si la tecla le llegó o no, y ese es el tipo
+de duda que después aparece como "a veces caminaba mientras hablaba".
+
+**El corte de línea se cuenta, no se mide.** La tipografía es de ancho fijo:
+seis píxeles por carácter, todos. Eso convierte "¿entra este texto?" en una
+cuenta de caracteres en vez de una medición contra el servidor de texto — exacta
+y comprobable sin abrir una ventana:
+
+```bash
+godot --headless --path godot res://scenes/VerificarDialogo.tscn
+```
+
+Treinta y seis frases a cuatro anchos distintos, comprobando que nada se salga
+del renglón, que ninguna palabra se pierda y que no queden espacios colgando en
+los bordes.
+
+Ese test falló siete veces la primera vez, y las siete tenía razón el código:
+rearmaba los renglones con espacios y comparaba contra el original, sin tener en
+cuenta que una palabra más larga que el renglón se parte a la fuerza e inventa
+un espacio que nunca estuvo. El invariante que vale para todos los anchos es que
+la secuencia de caracteres que no son espacio sea la misma.
 
 **Las dos pantallas tenían que ser un solo juego, y no lo eran.** Cada escena
 creaba su propio `PetBitsCore`. Con una sola pantalla no se notaba; con el mapa

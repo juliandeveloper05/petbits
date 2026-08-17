@@ -1,0 +1,11 @@
+; Corre mapa_a_png.gd. No tiene nodos: todo lo hace el script.
+;
+; Es escena y no `--script` porque usa el corte de línea de CajaDialogo, y ese
+; script menciona el autoload Partida — que con `--script` no existe.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/mapa_a_png.gd" id="1_tool"]
+
+[node name="MapaAPng" type="Node"]
+script = ExtResource("1_tool")

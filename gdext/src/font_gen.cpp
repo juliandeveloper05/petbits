@@ -163,6 +163,10 @@ const std::vector<Trazo>& trazos() {
         {U'—', 6, {"#####"}},
         {U'→', BAJA, {"..#..", "...#.", "#####", "...#.", "..#.."}},
         {U'◆', BAJA, {"..#..", ".###.", "#####", ".###.", "..#.."}},
+        // El triangulito de "seguí" de la caja de diálogo. Va macizo y no en
+        // contorno: parpadea, y una silueta hueca titilando se lee como un error
+        // de dibujado antes que como una invitación a apretar un botón.
+        {U'▼', BAJA, {"#####", "#####", ".###.", "..#..", "....."}},
     };
     return t;
 }

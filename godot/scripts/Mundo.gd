@@ -39,6 +39,7 @@ extends Node2D
 ## La forma del pueblo vive aparte, en un script sin dependencias. Esta escena la
 ## muestra; no la define. Ver el encabezado de PuebloMapa.gd para por qué.
 const Pueblo = preload("res://scripts/PuebloMapa.gd")
+const CajaDialogo = preload("res://scripts/CajaDialogo.gd")
 
 const TILE := Pueblo.TILE
 const ANCHO := Pueblo.ANCHO
@@ -59,6 +60,7 @@ var _capa: TileMapLayer = null
 var _criatura: Sprite2D = null
 var _cartel: Label = null
 var _estado: Label = null
+var _caja: Control = null
 
 ## Sobre qué zona está parada, o {} si está en el medio del campo.
 var _zona_cerca: Dictionary = {}
@@ -75,6 +77,7 @@ func _ready() -> void:
 	_construir_tilemap()
 	_construir_criatura()
 	_construir_carteles()
+	_construir_caja()
 
 	Partida.cambio.connect(_refrescar_estado)
 	_refrescar_estado()
@@ -127,9 +130,33 @@ func _construir_criatura() -> void:
 	add_child(_criatura)
 
 
+## Las dos líneas fijas: quién sos arriba, qué podés hacer abajo.
+##
+## No son la caja de diálogo y no tienen que serlo. Un aviso permanente y una
+## conversación son cosas distintas: el primero es parte del decorado y se lee de
+## reojo, la segunda interrumpe y pide respuesta. Meterlas en el mismo lugar hace
+## que ninguna de las dos funcione.
 func _construir_carteles() -> void:
 	_cartel = _etiqueta(Vector2(6, ALTO * TILE - 18), TEXTO)
 	_estado = _etiqueta(Vector2(6, 4), FOSFORO)
+
+
+func _construir_caja() -> void:
+	_caja = CajaDialogo.new()
+	add_child(_caja)
+
+	# El alto se lo pone la caja sola a partir de cuántos renglones lleva; acá
+	# solo se decide dónde va y cuánto mide a lo ancho.
+	#
+	# Se ancla al borde de abajo del VIEWPORT y no al del mapa: el mapa mide 272
+	# píxeles de alto y la ventana 270, así que la última fila de árboles queda
+	# apenas cortada. Anclar ahí dejaría la caja dos píxeles fuera de la pantalla.
+	var vp := Vector2(
+		ProjectSettings.get_setting("display/window/size/viewport_width"),
+		ProjectSettings.get_setting("display/window/size/viewport_height")
+	)
+	_caja.size = Vector2(vp.x - 8, _caja.custom_minimum_size.y)
+	_caja.position = Vector2(4, vp.y - _caja.size.y - 4)
 
 
 ## Texto legible sobre cualquier tile.
@@ -154,6 +181,16 @@ func _etiqueta(donde: Vector2, color: Color) -> Label:
 func _process(delta: float) -> void:
 	if _criatura == null:
 		return
+
+	# Mientras habla no se camina. Es la regla de todos los juegos del género y
+	# no es capricho: si te pudieras ir mientras la caja escribe, el texto
+	# quedaría diciéndole algo a nadie.
+	if _caja != null and _caja.abierta():
+		# Y el aviso de abajo se va: la caja se le apoya encima y quedarían dos
+		# textos peleando por el mismo lugar.
+		_cartel.visible = false
+		return
+	_cartel.visible = true
 
 	var dir := Vector2(
 		Input.get_axis("move_left", "move_right"),
@@ -227,11 +264,12 @@ func _anunciar_zona() -> void:
 		_cartel.text = "%s — todavía no está listo" % nombre
 		return
 
+
 	for d in Partida.core.destinos():
 		if d["id"] != destino:
 			continue
 		if d["puede"]:
-			_cartel.text = "%s — Enter para mandarla · %s" % [nombre, d["descripcion"]]
+			_cartel.text = "%s — Enter" % nombre
 		else:
 			_cartel.text = "%s — %s" % [nombre, d["motivo"]]
 		return
@@ -243,29 +281,55 @@ func _anunciar_zona() -> void:
 # Mandarla, y volver
 # ---------------------------------------------------------------------------
 
+## Enter y Esc, con la caja adelante de todo.
+##
+## La caja no ataja teclas por su cuenta: expone `abierta()` y `avanzar()` y acá
+## se decide. Si se las robara, esta pantalla tendría que adivinar si la tecla le
+## llegó o no, y esa duda aparece después como "a veces caminaba mientras
+## hablaba".
 func _unhandled_input(evento: InputEvent) -> void:
-	if evento.is_action_pressed("action_cancel"):
-		get_tree().change_scene_to_file("res://scenes/PetView.tscn")
+	if evento.is_action_pressed("action_confirm"):
+		if _caja.abierta():
+			_caja.avanzar()
+		else:
+			_enviar()
 		return
 
-	if evento.is_action_pressed("action_confirm"):
-		_enviar()
+	if evento.is_action_pressed("action_cancel"):
+		# Esc cierra la caja antes de irse de la pantalla. Salir del mapa a mitad
+		# de una frase es de esas cosas que se sienten como un bug aunque no lo
+		# sean.
+		if _caja.abierta():
+			_caja.cerrar()
+		else:
+			get_tree().change_scene_to_file("res://scenes/PetView.tscn")
 
 
 func _enviar() -> void:
 	if _zona_cerca.is_empty():
 		return
 
+	var nombre: String = _zona_cerca["nombre"]
 	var destino: String = _zona_cerca["destino"]
+
 	if destino == "":
+		_caja.decir_ya("%s. Todavía no está listo." % nombre)
 		return
+
+	# La descripción va primero y en su propia página: es la información con la
+	# que el jugador decide, y mezclarla con el resultado en un solo bloque hace
+	# que se lea una sola de las dos.
+	for d in Partida.core.destinos():
+		if d["id"] == destino:
+			_caja.decir_ya("%s. %s" % [nombre, d["descripcion"]])
+			break
 
 	# Exactamente la misma llamada que el botón de PetView, sobre el mismo core.
 	var r: Dictionary = Partida.actuar(func(): return Partida.core.enviar(destino, Partida.ahora_ms()))
-	_cartel.text = r["mensaje"]
+	_caja.decir(r["mensaje"])
 
 	# También va a la bitácora: si el jugador vuelve a PetView quiere ver ahí que
-	# la mandó, no tener que acordarse de un cartel que ya no está.
+	# la mandó, no tener que acordarse de una caja que ya se cerró.
 	if r["ok"]:
 		Partida.anotar(r["mensaje"], "bien")
 

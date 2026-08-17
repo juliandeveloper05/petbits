@@ -118,7 +118,7 @@ guardados corruptos
 invariante de partición
 reloj hacia atrás
 
-52668 comprobaciones, 0 fallas
+52681 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
