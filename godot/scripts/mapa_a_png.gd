@@ -37,20 +37,13 @@ func _init() -> void:
 	# cambió el mapa, no que salió otro bicho.
 	core.nacer("A3F0-91C4-77BE-2D08", 1786406400000, -180)
 
-	# Se instancia el script del mundo para no duplicar el mapa: si el pueblo se
-	# rediseña, esta herramienta muestra el nuevo sin tocar una línea.
-	#
-	# Es un Node2D que nunca entra en el árbol, así que nadie lo va a liberar: hay
-	# que hacerlo a mano. Sin eso Godot avisa de RIDs filtrados al salir y devuelve
-	# 1, y una herramienta que termina en error es una herramienta que no se puede
-	# encadenar con nada.
-	var mundo: Node2D = load("res://scripts/Mundo.gd").new()
-	mundo._construir_mapa()
-
-	var ancho: int = mundo.ANCHO
-	var alto: int = mundo.ALTO
-	var celdas: Array = mundo._mapa.duplicate(true)
-	mundo.free()
+	# El pueblo se lee de donde está definido, así que si se rediseña esta
+	# herramienta muestra el nuevo sin tocar una línea. Y no se instancia nada:
+	# `generar()` es estática y devuelve la grilla y ya.
+	var Pueblo = load("res://scripts/PuebloMapa.gd")
+	var ancho: int = Pueblo.ANCHO
+	var alto: int = Pueblo.ALTO
+	var celdas: Array = Pueblo.generar()
 
 	var salida := Image.create_empty(ancho * TILE * ESCALA, alto * TILE * ESCALA, false, Image.FORMAT_RGBA8)
 
@@ -60,7 +53,7 @@ func _init() -> void:
 
 	# La criatura, donde arranca.
 	var sprite: Image = core.sprite_actual(false)
-	_pegar_sprite(salida, sprite, 15.5 * TILE - 8, 8.5 * TILE - 8)
+	_pegar_sprite(salida, sprite, Pueblo.ENTRADA.x - 8, Pueblo.ENTRADA.y - 8)
 
 	var error := salida.save_png("res://mapa.png")
 	if error != OK:

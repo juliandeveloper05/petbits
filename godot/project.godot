@@ -19,6 +19,14 @@ config/use_custom_user_dir=true
 config/custom_user_dir_name="PetBits"
 config/features=PackedStringArray("4.7")
 
+[autoload]
+
+; La partida vive acá y no en las pantallas: el core, el guardado y el reloj de
+; la simulación son uno solo para todo el juego. Sin esto, ir al pueblo crearía
+; una segunda criatura al azar y mandarla de expedición no tendría efecto sobre
+; la partida que estás jugando. No se inicia solo — ver iniciar() en el script.
+Partida="*res://scripts/Partida.gd"
+
 [display]
 
 window/size/viewport_width=480

@@ -7,6 +7,10 @@
 ## muestra lo que contesta. Es a propósito: si el ánimo se decidiera acá, la web
 ## y el nativo tendrían dos reglas distintas y la promesa del proyecto se caería.
 ##
+## Y la partida tampoco vive acá: el core, el guardado y el reloj están en el
+## autoload `Partida`, que sobrevive al cambio de pantalla. Esta escena es una de
+## las dos ventanas a la misma criatura; la otra es el mapa.
+##
 ## ---
 ##
 ## EL PRESUPUESTO DE PANTALLA MANDA.
@@ -32,10 +36,6 @@ const TENUE := Color("#7e937a")
 const ALERTA := Color("#ff6b6b")
 const AVISO := Color("#ffc23d")
 
-## Un tick del juego es un minuto real. Preguntar más seguido no cambia nada
-## —simulate() solo avanza en ticks enteros— pero mantiene la pantalla al día.
-const INTERVALO_CONSULTA := 1.0
-
 ## Cada cuánto parpadea, y cuánto dura. Es la animación más barata que existe y
 ## la que más hace por que algo lea como vivo.
 const INTERVALO_PARPADEO := 4.2
@@ -43,7 +43,6 @@ const DURACION_PARPADEO := 0.16
 
 const LADO_SPRITE := 96
 
-var _core: RefCounted = null
 var _sprite: TextureRect = null
 var _barras := {}
 var _etiquetas := {}
@@ -56,13 +55,21 @@ var _proximo_parpadeo := INTERVALO_PARPADEO
 
 
 func _ready() -> void:
-	if not ClassDB.class_exists("PetBitsCore"):
+	if not Partida.iniciar():
 		_sin_extension()
 		return
 
-	_core = ClassDB.instantiate("PetBitsCore")
 	_construir_interfaz()
-	_cargar_o_nacer()
+
+	# La bitácora se rearma desde lo que ya estaba anotado. Ir al pueblo y volver
+	# no tiene por qué borrar el "mientras no estabas": el registro es del juego,
+	# no de esta pantalla.
+	for linea in Partida.bitacora:
+		_anotar(linea["texto"], _color_de_tono(linea["tono"]))
+
+	Partida.nota.connect(func(t, tono): _anotar(t, _color_de_tono(tono)))
+	Partida.avanzo.connect(func(_r): _refrescar_sprite())
+	Partida.cambio.connect(_refrescar_estado)
 
 	_refrescar_sprite()
 	_refrescar_estado()
@@ -70,113 +77,15 @@ func _ready() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Guardado
-# ---------------------------------------------------------------------------
-
-## Dónde vive la partida.
-##
-## `user://` es la carpeta de datos del usuario que resuelve Godot en cada
-## sistema operativo. Nunca `res://`: eso es el proyecto, y en un juego exportado
-## viene dentro del paquete y es de solo lectura.
-const RUTA_SAVE := "user://partida.json"
-
-## Nombre del archivo cuando un save no se puede leer.
-##
-## El save roto NO se borra: se corre de lugar. Alguien puede haber perdido meses
-## de partida por un corte de luz a mitad de una escritura, y un archivo que no
-## carga hoy puede ser recuperable a mano mañana. Borrarlo es una decisión que le
-## toca al dueño, no al programa.
-const RUTA_CUARENTENA := "user://partida.rota.json"
-
-
-func _cargar_o_nacer() -> void:
-	if not FileAccess.file_exists(RUTA_SAVE):
-		_nacer_nueva()
-		return
-
-	var archivo := FileAccess.open(RUTA_SAVE, FileAccess.READ)
-	if archivo == null:
-		_anotar("No se pudo abrir la partida guardada. Empezamos de nuevo.", AVISO)
-		_nacer_nueva()
-		return
-
-	var texto := archivo.get_as_text()
-	archivo.close()
-
-	var r: Dictionary = _core.cargar(texto)
-	if not r["ok"]:
-		_anotar("La partida guardada no se pudo leer: %s" % r["mensaje"], AVISO)
-		_anotar("Se guardó una copia en %s por las dudas." % RUTA_CUARENTENA, TENUE)
-		DirAccess.rename_absolute(
-			ProjectSettings.globalize_path(RUTA_SAVE),
-			ProjectSettings.globalize_path(RUTA_CUARENTENA)
-		)
-		_nacer_nueva()
-		return
-
-	# El tiempo corrió mientras el juego estaba cerrado. Esta es la llamada que
-	# hace que la criatura haya vivido en serio durante la ausencia.
-	var sim: Dictionary = _core.simular(_ahora_ms())
-	_anotar("Volviste.", FOSFORO)
-	if sim.get("ticks", 0) > 0:
-		_anotar_eventos(sim)
-
-
-func _nacer_nueva() -> void:
-	_core.nacer(_core.seed_al_azar(), _ahora_ms(), _tz_min())
-	_anotar("Nació recién.", TENUE)
-	_guardar()
-
-
-func _guardar() -> void:
-	var texto: String = _core.guardar(_ahora_ms())
-	if texto == "":
-		return
-	var archivo := FileAccess.open(RUTA_SAVE, FileAccess.WRITE)
-	if archivo == null:
-		return
-	archivo.store_string(texto)
-	archivo.close()
-
-
-## Guardar al cerrar la ventana.
-##
-## Sin esto se perdería lo hecho desde el último tick guardado. El juego escribe
-## el archivo entero cada vez —son un par de kilobytes— así que no hay estado
-## parcial posible: o está el archivo viejo o está el nuevo.
-func _notification(que: int) -> void:
-	if que == NOTIFICATION_WM_CLOSE_REQUEST or que == NOTIFICATION_PREDELETE:
-		if _core != null:
-			_guardar()
-
-
-# ---------------------------------------------------------------------------
 # Tiempo
 # ---------------------------------------------------------------------------
 
-## El reloj del sistema en milisegundos.
-##
-## Godot lo da en segundos y como float. Se redondea acá para que al C++ le
-## llegue un entero: la simulación cuenta ticks de un minuto y una parte decimal
-## en los milisegundos no aporta nada y sí puede correr una frontera.
+## El reloj lo lleva el autoload; esto es un atajo para no escribirlo diez veces.
 func _ahora_ms() -> int:
-	return int(Time.get_unix_time_from_system()) * 1000
-
-
-## Minutos de desfasaje horario respecto de UTC.
-##
-## Se lee UNA vez, al nacer, y después vive dentro del estado de la criatura. Si
-## se leyera en cada tick, mudarse de zona horaria movería la hora local de ticks
-## ya procesados y rompería el invariante de que simular por pedazos da lo mismo
-## que de corrido.
-func _tz_min() -> int:
-	return int(Time.get_time_zone_from_system().get("bias", 0))
+	return Partida.ahora_ms()
 
 
 func _process(delta: float) -> void:
-	if _core == null:
-		return
-
 	_proximo_parpadeo -= delta
 	if _proximo_parpadeo > 0.0:
 		return
@@ -186,51 +95,12 @@ func _process(delta: float) -> void:
 	_refrescar_sprite()
 
 
-func _on_consultar() -> void:
-	var r: Dictionary = _core.simular(_ahora_ms())
-	_revisar_regreso()
-	if r.get("ticks", 0) > 0:
-		_anotar_eventos(r)
-		# La etapa o la forma pueden haber cambiado con la evolución, y eso
-		# cambia el dibujo.
-		_refrescar_sprite()
-		# Se guarda solo cuando el tiempo avanzó de verdad. El reloj consulta
-		# una vez por segundo y un tick dura un minuto: escribir en cada consulta
-		# serían sesenta escrituras al pedo por cada una que sirve.
-		_guardar()
-	_refrescar_estado()
-
-
-## ¿Volvió de la expedición?
-##
-## Se pregunta en cada consulta y no con un temporizador propio: el juego puede
-## haber estado cerrado durante toda la salida, así que "volvió" no es un evento
-## que ocurra mientras mirás, es una condición que se comprueba.
-func _revisar_regreso() -> void:
-	var r: Dictionary = _core.recibir(_ahora_ms())
-	if not r.get("volvio", false):
-		return
-
-	_anotar("Volvió %s. %s" % [r["destino"], r["mensaje"]], FOSFORO)
-	if r["semilla"] != "":
-		_anotar("Encontró una semilla: %s" % r["semilla"], Color("#c07cff"))
-	_refrescar_despensa()
-	_refrescar_estado()
-	_guardar()
-
-
 # ---------------------------------------------------------------------------
 # Acciones
 # ---------------------------------------------------------------------------
 
-## Se pone al día ANTES de actuar, igual que catchUp() en la web.
-##
-## Si no, la acción se aplicaría sobre un estado viejo y el tiempo transcurrido
-## se descontaría después, pisándola. Con el reloj consultando cada segundo casi
-## nunca hay ticks pendientes, pero "casi nunca" no es una garantía.
 func _actuar(accion: Callable) -> void:
-	_core.simular(_ahora_ms())
-	_on_accion(accion.call())
+	_on_accion(Partida.actuar(accion))
 
 
 func _on_accion(resultado: Dictionary) -> void:
@@ -238,9 +108,6 @@ func _on_accion(resultado: Dictionary) -> void:
 	# energía para jugar" le dice al jugador qué hacer, y por eso se muestra
 	# igual que cualquier otro mensaje, solo que en ámbar.
 	_anotar(resultado["mensaje"], AVISO if not resultado["ok"] else TEXTO)
-	_refrescar_estado()
-	if resultado["ok"]:
-		_guardar()
 
 
 # ---------------------------------------------------------------------------
@@ -272,13 +139,6 @@ func _construir_interfaz() -> void:
 	_registro.add_theme_color_override("default_color", TENUE)
 	_registro.add_theme_font_size_override("normal_font_size", 9)
 	raiz.add_child(_registro)
-
-	# El reloj de la simulación. Se consulta seguido y barato.
-	var reloj := Timer.new()
-	reloj.wait_time = INTERVALO_CONSULTA
-	reloj.timeout.connect(_on_consultar)
-	reloj.autostart = true
-	add_child(reloj)
 
 
 ## Fila de arriba: el sprite a la izquierda, la ficha y las barras a la derecha.
@@ -319,14 +179,14 @@ func _construir_botones(padre: Node) -> void:
 
 	# El catálogo lo da el C++: si mañana se agrega un alimento, el botón aparece
 	# solo. Repetir la lista acá sería tener dos fuentes de verdad para lo mismo.
-	for alimento in _core.alimentos():
+	for alimento in Partida.core.alimentos():
 		var id: String = alimento["id"]
-		var boton := _boton(fila, alimento["nombre"], func(): _actuar(func(): return _core.alimentar(id, _ahora_ms())))
+		var boton := _boton(fila, alimento["nombre"], func(): _actuar(func(): return Partida.core.alimentar(id, _ahora_ms())))
 		# Se guarda para poder actualizarle el contador cuando el stock cambia.
 		_botones_comida[id] = { "boton": boton, "nombre": alimento["nombre"] }
 
-	_boton(fila, "Jugar", func(): _actuar(func(): return _core.jugar(_ahora_ms())))
-	_boton(fila, "Mimos", func(): _actuar(func(): return _core.acariciar(_ahora_ms())))
+	_boton(fila, "Jugar", func(): _actuar(func(): return Partida.core.jugar(_ahora_ms())))
+	_boton(fila, "Mimos", func(): _actuar(func(): return Partida.core.acariciar(_ahora_ms())))
 
 	# La expedición va en su propia fila: es la única acción que saca a la
 	# criatura de casa, y mezclarla con las de cuidado la haría parecer una más.
@@ -334,11 +194,15 @@ func _construir_botones(padre: Node) -> void:
 	fila_salidas.add_theme_constant_override("separation", 3)
 	padre.add_child(fila_salidas)
 
-	for destino in _core.destinos():
+	for destino in Partida.core.destinos():
 		var id: String = destino["id"]
 		_botones_salida[id] = _boton(
-			fila_salidas, destino["nombre"], func(): _actuar(func(): return _core.enviar(id, _ahora_ms()))
+			fila_salidas, destino["nombre"], func(): _actuar(func(): return Partida.core.enviar(id, _ahora_ms()))
 		)
+
+	# La puerta al mapa. Va con las salidas y no con las de cuidado porque hace
+	# lo mismo que una expedición: sacar a la criatura de esta pantalla.
+	_boton(fila_salidas, "Pueblo", func(): get_tree().change_scene_to_file("res://scenes/Mundo.tscn"))
 
 	_refrescar_despensa()
 	_refrescar_salidas()
@@ -354,18 +218,13 @@ func _boton(padre: Node, texto: String, al_apretar: Callable) -> Button:
 	return boton
 
 
-## Cuánto queda de cada comida, en el botón.
-##
-## El botón sigue habilitado con stock cero a propósito: apretarlo contesta "no
-## te queda de eso, mandala a buscar", que le dice al jugador qué hacer. Un botón
-## gris no explica nada, y encima esconde que el alimento existe.
 ## Los destinos, con su estado.
 ##
 ## El motivo del rechazo viene del C++ —"todavía está muy chica para ir tan
 ## lejos"— y se muestra como tooltip. La regla vive de un solo lado; acá solo se
 ## pinta.
 func _refrescar_salidas() -> void:
-	for destino in _core.destinos():
+	for destino in Partida.core.destinos():
 		var id: String = destino["id"]
 		if not _botones_salida.has(id):
 			continue
@@ -375,8 +234,13 @@ func _refrescar_salidas() -> void:
 		boton.modulate = Color(1, 1, 1) if puede else Color(0.55, 0.55, 0.55)
 
 
+## Cuánto queda de cada comida, en el botón.
+##
+## El botón sigue habilitado con stock cero a propósito: apretarlo contesta "no
+## te queda de eso, mandala a buscar", que le dice al jugador qué hacer. Un botón
+## gris no explica nada, y encima esconde que el alimento existe.
 func _refrescar_despensa() -> void:
-	for alimento in _core.alimentos():
+	for alimento in Partida.core.alimentos():
 		var id: String = alimento["id"]
 		if not _botones_comida.has(id):
 			continue
@@ -434,18 +298,18 @@ func _barra(padre: Node, clave: String) -> Dictionary:
 # ---------------------------------------------------------------------------
 
 func _refrescar_sprite() -> void:
-	var imagen: Image = _core.sprite_actual(_parpadeando)
+	var imagen: Image = Partida.core.sprite_actual(_parpadeando)
 	if imagen == null:
 		return
 	_sprite.texture = ImageTexture.create_from_image(imagen)
 
 
 func _refrescar_estado() -> void:
-	var e: Dictionary = _core.estado()
+	var e: Dictionary = Partida.core.estado()
 	if e.is_empty():
 		return
 
-	var genes: Dictionary = _core.decodificar(e["seed"])
+	var genes: Dictionary = Partida.core.decodificar(e["seed"])
 
 	_etiquetas["seed"].text = e["seed"]
 	_etiquetas["quien"].text = "%s · %s" % [genes["linaje"], genes["temperamento"]]
@@ -453,7 +317,7 @@ func _refrescar_estado() -> void:
 	var descripcion: String = e["etapa"].capitalize()
 	if e["forma"] != "Sin definir":
 		descripcion += " · " + e["forma"]
-	var falta: int = _core.falta_para_volver(_ahora_ms())
+	var falta: int = Partida.core.falta_para_volver(_ahora_ms())
 	if falta > 0:
 		# Minutos redondeados hacia arriba: decir "vuelve en 0 min" cuando todavía
 		# faltan cuarenta segundos es mentir.
@@ -487,23 +351,24 @@ func _color_de(clave: String, valor: float) -> Color:
 	return FOSFORO
 
 
+## Los tonos que emite `Partida`, en los colores de esta consola.
+##
+## El autoload no sabe de colores a propósito: emite "aviso" o "raro", y cada
+## pantalla decide. El mapa pinta sus carteles con otra paleta.
+func _color_de_tono(tono: String) -> Color:
+	match tono:
+		"bien": return FOSFORO
+		"aviso": return AVISO
+		"alerta": return ALERTA
+		"tenue": return TENUE
+		"raro": return Color("#c07cff")
+		_: return TEXTO
+
+
 func _anotar(texto: String, color: Color) -> void:
 	_registro.push_color(color)
 	_registro.append_text(texto + "\n")
 	_registro.pop()
-
-
-func _anotar_eventos(r: Dictionary) -> void:
-	for ev in r["eventos"]:
-		var color := TENUE
-		if ev["tipo"] == "evolucion":
-			color = FOSFORO
-		elif ev["tipo"] in ["salud", "letargo"]:
-			color = ALERTA
-		_anotar(ev["texto"], color)
-
-	if r.get("omitidos", 0) > 0:
-		_anotar("(y %d cosas más)" % r["omitidos"], TENUE)
 
 
 func _sin_extension() -> void:

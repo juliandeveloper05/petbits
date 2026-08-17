@@ -1,0 +1,12 @@
+; Corre verificar_mundo.gd. No tiene nodos: todo lo hace el script.
+;
+; Existe como escena y no como `--script` porque los autoloads solo se
+; instancian cuando Godot arranca con un main loop propio, y verificar_mundo.gd necesita
+; la partida.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/verificar_mundo.gd" id="1_tool"]
+
+[node name="VerificarMundo" type="Node"]
+script = ExtResource("1_tool")

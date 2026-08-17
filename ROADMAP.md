@@ -138,10 +138,10 @@ no avisa de eso, simplemente recorta.
 Ahora va en dos columnas y hay un script que lo mide en vez de mirarlo a ojo:
 
 ```bash
-godot --headless --path godot --script res://scripts/medir_layout.gd
+godot --headless --path godot res://scenes/MedirLayout.tscn
 ```
 
-Devuelve 1 si el contenido se pasa. Hoy pide 152 px de los 270.
+Devuelve 1 si el contenido se pasa. Hoy pide 177 px de los 270.
 
 **El guardado es el formato de la web, y eso está verificado contra su propio
 validador**, no contra el criterio de este código:
@@ -192,7 +192,9 @@ use creyendo que sirve.
 | El pueblo: caminos, plaza, estanque, borde de árboles | ✅ |
 | Caminar con colisiones | ✅ |
 | `mapa_a_png.gd` — compone el mundo en un PNG para poder mirarlo | ✅ |
-| Mandar a la criatura desde la entrada de cada zona | ⬜ |
+| Una sola partida para las dos pantallas (autoload `Partida`) | ✅ |
+| Mandar a la criatura desde la entrada de cada zona | ✅ |
+| Ir y volver entre el pueblo y PetView | ✅ |
 | Las otras cinco zonas como mapas propios | ⬜ |
 | Transiciones entre zonas | ⬜ |
 | NPCs con diálogo | ⬜ |
@@ -222,6 +224,40 @@ las mismas imágenes que usa el juego:
 ```bash
 godot --headless --path godot --script res://scripts/mapa_a_png.gd
 ```
+
+**Las dos pantallas tenían que ser un solo juego, y no lo eran.** Cada escena
+creaba su propio `PetBitsCore`. Con una sola pantalla no se notaba; con el mapa
+quedó a la vista: el pueblo mostraba una criatura al azar, no la tuya, y
+mandarla de expedición desde ahí no habría tocado la partida que estabas
+jugando. Dos cores son dos juegos corriendo a la vez.
+
+Ahora el core, el guardado, el reloj y la bitácora viven en un autoload
+(`Partida`), y las escenas se cuelgan de él. Cambiar de pantalla destruye nodos,
+no la partida — hasta el registro de "mientras no estabas" sobrevive al viaje de
+ida y vuelta.
+
+Eso también es lo que hace que el mapa sirva para algo: pararse en la entrada
+del patio y apretar Enter es **exactamente la misma llamada** que el botón de
+PetView, sobre el mismo estado y el mismo archivo.
+
+Y se comprueba, porque es justo el tipo de bug que una captura no muestra —una
+pantalla rota se ve igual de bien—:
+
+```bash
+godot --headless --path godot res://scenes/VerificarMundo.tscn
+```
+
+Diecisiete comprobaciones que siguen a una criatura desde PetView al pueblo,
+la mandan al patio caminando, releen el archivo con un core nuevo que no sabe
+nada de lo que acaba de pasar, y vuelven a PetView a confirmar que sigue afuera.
+
+Ese test encontró dos cosas de una. Que `add_child` durante `_ready()` falla con
+un error en consola en vez de una excepción: la pantalla nunca entraba al árbol
+y las afirmaciones daban verde igual, contra el autoload. Y que un script
+lanzado con `--script` **reemplaza el main loop**, así que los autoloads no se
+instancian y el script ni siquiera compila — por eso `medir_layout` y
+`VerificarMundo` son escenas y no `--script`, y por eso la forma del pueblo se
+mudó a `PuebloMapa.gd`, que no depende de nada.
 
 ### Fase 4 — Combate por turnos ⬜
 
