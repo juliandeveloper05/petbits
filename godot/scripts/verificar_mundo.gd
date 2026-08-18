@@ -147,6 +147,53 @@ func _correr() -> void:
 	)
 	_afirmar(Partida.bitacora.size() > 0, "la bitácora sobrevivió al cambio de pantalla")
 
+	# ---- El codex ----------------------------------------------------------
+	#
+	# Que el nativo ANOTE lo que descubrís, no solo que guarde el campo sin
+	# mirarlo. Es la diferencia que hizo falta portar codex.cpp: antes el bloque
+	# viajaba intacto y nadie lo escribía, así que podías llegar a una forma
+	# adulta acá y la misma partida abierta en la web mostraba menos de lo que
+	# habías conseguido.
+	var codex: Dictionary = Partida.core.codex()
+	_afirmar(not codex.is_empty(), "el codex existe")
+	_afirmar(int(codex["total_registradas"]) > 0, "nacer ya cuenta como un registro")
+	_afirmar(codex["linajes"].size() > 0, "el linaje de la criatura quedó anotado")
+
+	# La forma no: recién nacida es "indefinida", que es la ausencia de un
+	# descubrimiento y no uno.
+	_afirmar(codex["formas"].is_empty(), "una criatura sin forma no anota ninguna")
+
+	var progreso: Dictionary = codex["progreso"]
+	_afirmar(int(progreso["linajes"]["total"]) == 16, "los dieciséis linajes cuentan para el total")
+	_afirmar(int(progreso["formas"]["total"]) == 6, "las seis formas coleccionables")
+	_afirmar(int(progreso["rarezas"]["total"]) == 8, "las ocho rarezas")
+
+	# Y sobrevive el viaje por el archivo, leído con un core nuevo que no sabe
+	# nada de lo que pasó recién.
+	var antes: int = int(codex["total_registradas"])
+	Partida.guardar()
+	var f := FileAccess.open(RUTA, FileAccess.READ)
+	_afirmar(f != null, "el save existe para releer el codex")
+	if f != null:
+		var otro: RefCounted = ClassDB.instantiate("PetBitsCore")
+		var r: Dictionary = otro.cargar(f.get_as_text())
+		f.close()
+		if r["ok"]:
+			var releido: Dictionary = otro.codex()
+			# `cargar` registra la activa otra vez —es idempotente y sirve para
+			# los saves migrados desde v2, que traen el codex vacío a propósito—
+			# así que el total sube en uno y no puede aparecer nada nuevo.
+			_afirmar(
+				int(releido["total_registradas"]) == antes + 1,
+				"el total del codex sobrevivió el archivo (%d -> %d)" % [
+					antes, int(releido["total_registradas"])
+				]
+			)
+			_afirmar(
+				releido["linajes"].size() == codex["linajes"].size(),
+				"los linajes descubiertos sobrevivieron el archivo"
+			)
+
 	vuelta.queue_free()
 	await get_tree().process_frame
 

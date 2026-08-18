@@ -49,6 +49,8 @@ add_library(petbits_nucleo STATIC
     src/simulation.cpp
     src/palette.cpp
     src/sprite_gen.cpp
+    src/breeding.cpp
+    src/codex.cpp
     src/tileset_gen.cpp
     src/font_gen.cpp
 )

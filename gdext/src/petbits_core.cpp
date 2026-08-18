@@ -8,6 +8,7 @@
 #include "actions.h"
 #include "expeditions.h"
 #include "sprite_gen.h"
+#include "codex.h"
 #include "font_gen.h"
 #include "tileset_gen.h"
 #include "traits.h"
@@ -94,6 +95,8 @@ void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("atlas_tiles"), &PetBitsCore::atlas_tiles);
     ClassDB::bind_method(D_METHOD("cantidad_tiles"), &PetBitsCore::cantidad_tiles);
     ClassDB::bind_method(D_METHOD("tile_solido", "indice"), &PetBitsCore::tile_solido);
+
+    ClassDB::bind_method(D_METHOD("codex"), &PetBitsCore::codex);
 
     ClassDB::bind_method(D_METHOD("atlas_fuente"), &PetBitsCore::atlas_fuente);
     ClassDB::bind_method(D_METHOD("fuente_glifos"), &PetBitsCore::fuente_glifos);
@@ -189,6 +192,11 @@ bool PetBitsCore::nacer(const String& seed, int64_t ahora_ms, int64_t tz_min) {
 
     partida = petbits::partidaInicial(
         petbits::createCreature(valor, ahora_ms, static_cast<int>(tz_min)));
+
+    // Su linaje y sus rarezas ya son un descubrimiento: son visibles desde el
+    // primer segundo. La forma todavía no, y `registrar` la ignora justamente
+    // por eso — "indefinida" es la ausencia de un descubrimiento, no uno.
+    registrar_activa();
     return true;
 }
 
@@ -203,6 +211,19 @@ Dictionary PetBitsCore::simular(int64_t ahora_ms) {
 
     const petbits::SimResult r = petbits::simulate(*c, ahora_ms);
     *c = r.state;
+
+    // Si evolucionó, hay algo nuevo que anotar. Esta es LA llamada que faltaba
+    // mientras el codex viajaba sin interpretarse: podías llegar a una forma
+    // adulta en el nativo y el codex no se enteraba, así que la misma partida
+    // abierta en la web mostraba menos de lo que habías conseguido.
+    Array descubiertos;
+    for (const petbits::SimEvent& e : r.events) {
+        if (e.kind == petbits::SimEventKind::Evolucion) {
+            descubiertos = registrar_activa();
+            break;
+        }
+    }
+    salida["descubrimientos"] = descubiertos;
 
     salida["ticks"] = r.ticks;
     salida["omitidos"] = r.omitted;
@@ -580,6 +601,99 @@ Dictionary PetBitsCore::fuente_metricas() const {
 }
 
 // ---------------------------------------------------------------------------
+// Codex
+// ---------------------------------------------------------------------------
+
+Array PetBitsCore::registrar_activa() {
+    Array nuevos;
+    if (!partida.has_value()) return nuevos;
+
+    const petbits::CreatureState* c = activa();
+    if (c == nullptr) return nuevos;
+
+    const petbits::Registro r = petbits::registrar(partida->codex, c->seed, c->forma);
+    partida->codex = r.codex;
+
+    for (const petbits::Descubrimiento& d : r.nuevos) {
+        Dictionary dic;
+        dic["tipo"] = aGodot(petbits::nombreTipo(d.tipo));
+        dic["id"] = aGodot(d.id);
+        dic["nombre"] = aGodot(d.nombre);
+        nuevos.push_back(dic);
+    }
+    return nuevos;
+}
+
+Dictionary PetBitsCore::codex() const {
+    Dictionary d;
+    if (!partida.has_value()) return d;
+
+    const petbits::Codex& c = partida->codex;
+
+    // Los linajes van con su nombre al lado. Traducir el índice a nombre del
+    // lado de GDScript significaría tener el catálogo de los dieciséis linajes
+    // escrito dos veces, y esa es la clase de duplicación que se desincroniza.
+    Array linajes;
+    for (int indice : c.linajes) {
+        petbits::Genes g{};
+        g.lineage = static_cast<uint8_t>(indice);
+        Dictionary l;
+        l["indice"] = indice;
+        l["nombre"] = aGodot(petbits::lineageName(g));
+        linajes.push_back(l);
+    }
+    d["linajes"] = linajes;
+
+    Array formas;
+    for (petbits::Form f : c.formas) {
+        Dictionary fd;
+        fd["id"] = aGodot(petbits::formId(f));
+        fd["nombre"] = aGodot(petbits::formName(f));
+        formas.push_back(fd);
+    }
+    d["formas"] = formas;
+
+    Array rarezas;
+    for (const std::string& id : c.rarezas) {
+        Dictionary rd;
+        rd["id"] = aGodot(id);
+        rd["nombre"] = String();
+        rd["regla"] = String();
+        // El nombre y la regla salen del catálogo, que es donde viven.
+        for (const petbits::Trait& t : petbits::TRAIT_CATALOG) {
+            if (t.id == id) {
+                rd["nombre"] = aGodot(t.name);
+                rd["regla"] = aGodot(t.rule);
+                break;
+            }
+        }
+        rarezas.push_back(rd);
+    }
+    d["rarezas"] = rarezas;
+
+    d["total_registradas"] = c.totalRegistradas;
+
+    const petbits::ProgresoCodex p = petbits::progresoCodex(c);
+    Dictionary progreso;
+    Dictionary aLinajes;
+    aLinajes["vistos"] = p.linajes.vistos;
+    aLinajes["total"] = p.linajes.total;
+    progreso["linajes"] = aLinajes;
+    Dictionary aFormas;
+    aFormas["vistos"] = p.formas.vistos;
+    aFormas["total"] = p.formas.total;
+    progreso["formas"] = aFormas;
+    Dictionary aRarezas;
+    aRarezas["vistos"] = p.rarezas.vistos;
+    aRarezas["total"] = p.rarezas.total;
+    progreso["rarezas"] = aRarezas;
+    progreso["porcentaje"] = p.porcentaje;
+    d["progreso"] = progreso;
+
+    return d;
+}
+
+// ---------------------------------------------------------------------------
 // Guardado
 // ---------------------------------------------------------------------------
 
@@ -606,6 +720,14 @@ Dictionary PetBitsCore::cargar(const String& texto) {
     }
 
     partida = std::move(cargada);
+
+    // Se registra al cargar, no solo al nacer. Un save de la web ya trae su
+    // codex al día, pero uno migrado desde v2 lo trae vacío a propósito: el
+    // comentario de `migrations.ts` dice que se completa solo en la próxima
+    // carga, y esta es esa carga. Registrar es idempotente, así que hacerlo de
+    // más no cuesta nada.
+    registrar_activa();
+
     d["ok"] = true;
     d["mensaje"] = String("Partida cargada.");
     return d;

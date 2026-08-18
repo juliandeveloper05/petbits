@@ -31,8 +31,11 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { acariciar, alimentar, jugar } from "../src/core/actions.ts";
+import { cruzar, describirHerencia } from "../src/core/breeding.ts";
+import { codexInicial, progresoCodex, registrar } from "../src/core/codex.ts";
 import { type Crianza, resolverAdulto, resolverJuvenil } from "../src/core/evolution.ts";
 import { DESTINOS, describirBotin, resolverBotin } from "../src/core/expeditions.ts";
+import { GENOME_LAYOUT } from "../src/core/genome.ts";
 import { type Genes, decodeGenome, formatSeed, hashString, parseSeed } from "../src/core/genome.ts";
 import { buildRamp } from "../src/core/palette.ts";
 import { deriveSeed, mulberry32, splitmix64 } from "../src/core/rng.ts";
@@ -989,8 +992,13 @@ lineas.push("");
 // entender, y devolver intacto lo que no.
 //
 // El codex y el inventario van con contenido a propósito. Un save vacío no
-// probaría nada de lo que importa acá: lo que hay que verificar es que esos
-// campos, que el C++ todavía no interpreta, sobrevivan el viaje.
+// probaría nada de lo que importa acá.
+//
+// Las formas del codex vienen DESORDENADAS ("petreo" antes que "coloso") y eso
+// tampoco es casual: ninguna de las dos implementaciones ordena al cargar
+// —ordenar es cosa de `registrar`— y este fixture es lo que impide que alguien
+// agregue un sort "de prolijo" al lector y haga que el nativo escriba un archivo
+// distinto del que escribiría la web.
 const SAVES: readonly { nombre: string; save: unknown; seed: bigint }[] = (() => {
   const armar = (seed: bigint, ticks: number, nombre: string) => {
     const inicial = createCreature(seed, BASE_MS, -180);
@@ -1117,6 +1125,198 @@ for (const destino of DESTINOS) {
 
 lineas.push("};");
 lineas.push("");
+
+// --- cruza ---
+//
+// El hijo, cuántos bits mutaron, de dónde vino cada gen y la frase que describe
+// a quién salió. Los pares se eligen para cubrir los casos que el algoritmo
+// trata distinto y que a simple vista parecen iguales:
+//
+//   - a > b y a < b, porque la etiqueta "A"/"B" se decide comparando contra el
+//     primer argumento y no contra el menor de los dos;
+//   - un padre cruzado consigo mismo, donde TODOS los genes salen "A";
+//   - seeds de los bordes (0, todo unos, el bit 63 solo) contra seeds normales.
+//
+// Varios nonce por par: el nonce es lo único que mueve el azar, así que un solo
+// valor por par no distinguiría un PRNG bien sembrado de uno que ignora la
+// etiqueta.
+
+lineas.push("struct VectorCruza {");
+lineas.push("    Seed a;");
+lineas.push("    Seed b;");
+lineas.push("    int64_t nonce;");
+lineas.push("    Seed hijo;");
+lineas.push("    int mutaciones;");
+lineas.push("    /// Un carácter por campo, en el orden de GENOME_LAYOUT: A, B o M.");
+lineas.push("    const char* herencia;");
+lineas.push("    const char* descripcion;");
+lineas.push("};");
+lineas.push("");
+
+/**
+ * `seeds[i]`, con el índice comprobado.
+ *
+ * El proyecto compila con `noUncheckedIndexedAccess`, así que indexar un arreglo
+ * devuelve `bigint | undefined` y ese `undefined` se propaga a todo lo que se
+ * arme con él. Los otros bloques no lo sufren porque recorren con `for..of`.
+ */
+function seedEn(i: number): bigint {
+  const s = seeds[i];
+  if (s === undefined) throw new Error(`no hay seed en la posición ${i}`);
+  return s;
+}
+
+const PARES_CRUZA: readonly (readonly [bigint, bigint])[] = [
+  [seedEn(0), seedEn(1)],
+  [seedEn(1), seedEn(0)], // el mismo par al revés: tiene que dar el mismo hijo
+  [seedEn(2), seedEn(2)], // consigo mismo: todos los genes salen "A"
+  [seedEn(3), seedEn(4)],
+  [seedEn(5), seedEn(6)],
+  [0n, 0xffffffffffffffffn],
+  [0xffffffffffffffffn, 0n],
+  [0x8000000000000000n, 0x0000000000000001n],
+  [0xa3f091c477be2d08n, 0x1234567890abcdefn],
+  [seedEn(7), 0n],
+  [0n, seedEn(7)],
+  [seedEn(8), 0xffffffffffffffffn],
+];
+
+const NONCES_CRUZA: readonly number[] = [0, 1, 2, 7, 42, 1000];
+
+const CLAVE_ORIGEN: Record<string, string> = { A: "A", B: "B", mutado: "M" };
+
+lineas.push("inline const VectorCruza CRUZAS[] = {");
+for (const [a, b] of PARES_CRUZA) {
+  for (const nonce of NONCES_CRUZA) {
+    const cruza = cruzar(a, b, nonce);
+    // Un carácter por campo, en el orden del layout. Comparar la cadena entera
+    // dice de una si algún campo salió del padre equivocado.
+    // El `?? ""` no puede pasar: `cruzar` escribe una entrada por cada campo del
+    // layout. Está para que el compilador no arrastre el `undefined` que le da
+    // indexar un Record, y si alguna vez pasara, la cadena saldría corta y el
+    // test lo diría enseguida.
+    const herencia = GENOME_LAYOUT.map((f) => CLAVE_ORIGEN[cruza.herencia[f.key] ?? ""] ?? "").join(
+      "",
+    );
+    const campos = [
+      hex(a),
+      hex(b),
+      `${nonce}LL`,
+      hex(cruza.seed),
+      String(cruza.mutaciones),
+      JSON.stringify(herencia),
+      JSON.stringify(describirHerencia(cruza)),
+    ];
+    lineas.push(`    {${campos.join(", ")}},`);
+  }
+}
+lineas.push("};");
+lineas.push("");
+// --- codex ---
+//
+// Lo que se compara no es una llamada suelta: es el codex ACUMULADO después de
+// registrar una tanda de criaturas, una por una, en orden. Eso es lo único que
+// prueba los tres ordenamientos, que son donde está el riesgo: linajes por
+// número, formas por su id en texto y rarezas por id. Una sola llamada sobre un
+// codex vacío daría listas de un elemento, y una lista de un elemento está
+// ordenada de cualquier manera.
+//
+// Se registra la MISMA criatura dos veces a propósito: `totalRegistradas` tiene
+// que subir igual, pero no puede aparecer nada nuevo.
+
+lineas.push("struct VectorCodex {");
+lineas.push("    /// Cuántas criaturas se registraron hasta este punto.");
+lineas.push("    int registradas;");
+lineas.push("    /// Los índices de linaje, separados por coma, en el orden guardado.");
+lineas.push("    const char* linajes;");
+lineas.push("    /// Los ids de forma, separados por coma, en el orden guardado.");
+lineas.push("    const char* formas;");
+lineas.push("    /// Los ids de rareza, separados por coma, en el orden guardado.");
+lineas.push("    const char* rarezas;");
+lineas.push("    int64_t totalRegistradas;");
+lineas.push("    /// Cuántos descubrimientos nuevos trajo esta criatura.");
+lineas.push("    int nuevos;");
+lineas.push("    /// tipo:id de cada novedad, separados por coma y en orden.");
+lineas.push("    const char* detalleNuevos;");
+lineas.push("    int vistosLinajes;");
+lineas.push("    int vistosFormas;");
+lineas.push("    int vistosRarezas;");
+lineas.push("    int porcentaje;");
+lineas.push("};");
+lineas.push("");
+
+// Formas variadas, incluida "indefinida" —que NO es un descubrimiento— para que
+// el test note si alguien la empieza a contar.
+const FORMAS_CODEX = [
+  "indefinida",
+  "coloso",
+  "petreo",
+  "oraculo",
+  "vaporoso",
+  "guardian",
+  "errante",
+  "coloso",
+  "indefinida",
+  "petreo",
+] as const;
+
+// Los primeros treinta seeds generados más los bordes: alcanza para que se
+// repitan linajes y para juntar unas cuantas rarezas.
+const SEEDS_CODEX: readonly bigint[] = [...BORDES.slice(0, 6), ...seeds.slice(0, 30)];
+
+lineas.push("inline const VectorCodex CODEXS[] = {");
+{
+  let codex = codexInicial();
+  let registradas = 0;
+  for (let i = 0; i < SEEDS_CODEX.length; i++) {
+    const seed = SEEDS_CODEX[i] as bigint;
+    const forma = FORMAS_CODEX[i % FORMAS_CODEX.length] as string;
+    const r = registrar(codex, seed, forma as never);
+    codex = r.codex;
+    registradas++;
+
+    const p = progresoCodex(codex);
+    const campos = [
+      String(registradas),
+      JSON.stringify(codex.linajes.join(",")),
+      JSON.stringify(codex.formas.join(",")),
+      JSON.stringify(codex.rarezas.join(",")),
+      `${codex.totalRegistradas}LL`,
+      String(r.nuevos.length),
+      JSON.stringify(r.nuevos.map((n) => `${n.tipo}:${n.id}`).join(",")),
+      String(p.linajes.vistos),
+      String(p.formas.vistos),
+      String(p.rarezas.vistos),
+      String(p.porcentaje),
+    ];
+    lineas.push(`    {${campos.join(", ")}},`);
+
+    // La misma criatura otra vez: sube el total y no descubre nada.
+    if (i === 3 || i === 12) {
+      const otra = registrar(codex, seed, forma as never);
+      codex = otra.codex;
+      registradas++;
+      const p2 = progresoCodex(codex);
+      lineas.push(
+        `    {${[
+          String(registradas),
+          JSON.stringify(codex.linajes.join(",")),
+          JSON.stringify(codex.formas.join(",")),
+          JSON.stringify(codex.rarezas.join(",")),
+          `${codex.totalRegistradas}LL`,
+          String(otra.nuevos.length),
+          JSON.stringify(otra.nuevos.map((n) => `${n.tipo}:${n.id}`).join(",")),
+          String(p2.linajes.vistos),
+          String(p2.formas.vistos),
+          String(p2.rarezas.vistos),
+          String(p2.porcentaje),
+        ].join(", ")}},`,
+      );
+    }
+  }
+}
+lineas.push("};");
+lineas.push("");
 lineas.push("} // namespace petbits::vectores");
 lineas.push("");
 
@@ -1132,4 +1332,6 @@ console.log(`  ${SEEDS_SPRITE.length * 3 * FORMAS_TODAS.length + 40} sprites`);
 console.log(`  ${ACCIONES.length} escenarios de acciones`);
 console.log(`  ${SAVES.length} guardados`);
 console.log(`  ${DESTINOS.length * 6 * SALIDAS.length} botines de expedición`);
+console.log(`  ${PARES_CRUZA.length * NONCES_CRUZA.length} cruzas`);
+console.log(`  ${SEEDS_CODEX.length + 2} pasos de codex`);
 console.log("\nAhora compilá y corré los tests de C++ — ver gdext/tests/README.md");

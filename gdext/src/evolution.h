@@ -10,6 +10,7 @@
  */
 
 #include "genome.h"
+#include <array>
 #include <cstdint>
 #include <string_view>
 
@@ -81,6 +82,28 @@ Form resolverAdulto(const Crianza& c, const Genes& g, Form juvenil);
 // ---------------------------------------------------------------------------
 
 std::string_view formName(Form f);
+
+/**
+ * El identificador con el que la forma viaja en el guardado: "petreo", "coloso".
+ *
+ * Es distinto de `formName`, que devuelve el nombre con acentos para mostrar
+ * ("Pétreo"). Los dos existen a propósito: si el archivo guardara el nombre
+ * legible, cambiar una tilde rompería todas las partidas.
+ *
+ * Vive acá y no en el guardado porque el codex también lo necesita, y dos copias
+ * del mismo mapeo es una que se puede desincronizar.
+ */
+std::string_view formId(Form f);
+
+/** El inverso. Devuelve false si el id no corresponde a ninguna forma. */
+bool formFromId(std::string_view id, Form& salida);
+
+/**
+ * Las formas que cuentan para el codex.
+ *
+ * `Indefinida` queda afuera: no es un descubrimiento, es la ausencia de uno.
+ */
+const std::array<Form, 6>& formasColeccionables();
 std::string_view formDescription(Form f);
 std::string_view stageName(Stage s);
 

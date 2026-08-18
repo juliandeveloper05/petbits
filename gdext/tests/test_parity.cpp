@@ -43,6 +43,8 @@
 #include "../src/rng.h"
 #include "../src/simulation.h"
 #include "../src/sprite_gen.h"
+#include "../src/breeding.h"
+#include "../src/codex.h"
 #include "../src/font_gen.h"
 #include "../src/tileset_gen.h"
 #include "../src/traits.h"
@@ -584,20 +586,46 @@ static void probarGuardado() {
                       "ida y vuelta: sumaSalud");
         revisarEnteros(d->seed, c->seed, v.nombre, "ida y vuelta: seed");
 
-        // 3. Y lo que el C++ NO entiende tiene que seguir ahí. Es la parte que
-        //    hace seguro compartir el formato: abrir la partida en el nativo no
-        //    puede borrarte el codex.
-        const Json* codex = q.otros.buscar("codex");
-        if (codex == nullptr || !codex->esObjeto()) {
-            revisar(false, v.nombre, "se perdió el codex al guardar");
-        } else {
-            const Json* total = codex->buscar("totalRegistradas");
-            revisarEnteros(total != nullptr ? static_cast<uint64_t>(total->comoEntero()) : 0, 7,
-                           v.nombre, "codex.totalRegistradas preservado");
-            const Json* linajes = codex->buscar("linajes");
-            revisarEnteros(linajes != nullptr ? linajes->elementos().size() : 0, 3, v.nombre,
-                           "codex.linajes preservado");
+        // 3. El codex. Ya NO viaja dentro de `otros`: se interpreta, porque el
+        //    juego lo escribe. Eso convierte esta comprobacion en una mas fuerte
+        //    que la que habia antes — antes bastaba con que el bloque opaco
+        //    siguiera ahi, ahora hay que leer cada campo y volver a escribirlo
+        //    sin perder nada.
+        revisarEnteros(static_cast<uint64_t>(q.codex.totalRegistradas), 7, v.nombre,
+                       "codex.totalRegistradas tras ida y vuelta");
+        revisarEnteros(q.codex.linajes.size(), 3, v.nombre, "codex.linajes tras ida y vuelta");
+        revisarEnteros(q.codex.rarezas.size(), p.codex.rarezas.size(), v.nombre,
+                       "codex.rarezas tras ida y vuelta");
+        revisarEnteros(q.codex.formas.size(), p.codex.formas.size(), v.nombre,
+                       "codex.formas tras ida y vuelta");
+
+        // El orden que entro es el que sale. Leer NO ordena, ni aca ni en el TS:
+        // ordenar es cosa de `registrar`, que es cuando el codex cambia.
+        //
+        // La primera version de este test exigia que las listas salieran
+        // ordenadas y fallo, con razon. El fixture trae `["petreo", "coloso"]`
+        // justamente al reves a proposito, y ninguna de las dos implementaciones
+        // lo toca. Ordenar al cargar seria peor que inutil: el nativo
+        // "arreglaria" un archivo que la web deja como esta, y el diff entre los
+        // dos —que es la herramienta con la que se encontro el bug del
+        // inventario— empezaria a mostrar ruido que no significa nada.
+        {
+            std::vector<std::string> entraron;
+            for (Form f : p.codex.formas) entraron.push_back(std::string(formId(f)));
+            std::vector<std::string> salieron;
+            for (Form f : q.codex.formas) salieron.push_back(std::string(formId(f)));
+            revisar(entraron == salieron, v.nombre,
+                    "el codex reordeno las formas al pasar por el archivo");
+            revisar(p.codex.linajes == q.codex.linajes, v.nombre,
+                    "el codex reordeno los linajes al pasar por el archivo");
+            revisar(p.codex.rarezas == q.codex.rarezas, v.nombre,
+                    "el codex reordeno las rarezas al pasar por el archivo");
         }
+
+        // Y ya no puede quedar un "codex" colgado en el mapa de paso: si
+        // quedara, el archivo tendria la clave dos veces.
+        revisar(q.otros.buscar("codex") == nullptr, v.nombre,
+                "el codex quedo tambien en el mapa de campos sin interpretar");
 
         // El inventario NO va en `otros`: se interpreta, porque el juego lo
         // gasta. Que llegue acá con los valores del save es lo que hace que
@@ -1127,6 +1155,332 @@ static void probarFuente() {
     }
 }
 
+/**
+ * La cruza: dos genomas dan uno nuevo.
+ *
+ * Se comparan las cuatro salidas y no solo el hijo, porque cada una atrapa un
+ * error distinto:
+ *
+ *   - el `seed` atrapa un PRNG mal sembrado o campos en otro orden;
+ *   - la cadena de herencia atrapa que un gen venga del padre equivocado con el
+ *     hijo saliendo igual de casualidad;
+ *   - `mutaciones` atrapa un bucle que corta antes de los 64 bits;
+ *   - la frase atrapa los umbrales de `describirHerencia`.
+ *
+ * Y además se comprueba la SIMETRÍA, que no sale de los vectores: cruzar A con B
+ * tiene que dar exactamente lo mismo que cruzar B con A. Es una propiedad del
+ * algoritmo —por eso ordena los seeds antes de sembrar— y si se rompiera, el
+ * hijo dependería de en qué orden el jugador tocó las dos criaturas.
+ */
+static void probarCruzas() {
+    bloque("cruza");
+
+    for (const vectores::VectorCruza& v : vectores::CRUZAS) {
+        char ctx[128];
+        std::snprintf(ctx, sizeof(ctx), "cruza(%016llx, %016llx, %lld)",
+                      static_cast<unsigned long long>(v.a),
+                      static_cast<unsigned long long>(v.b),
+                      static_cast<long long>(v.nonce));
+
+        const Cruza c = cruzar(v.a, v.b, v.nonce);
+
+        revisarEnteros(c.seed, v.hijo, ctx, "hijo");
+        revisarEnteros(static_cast<uint64_t>(c.mutaciones),
+                       static_cast<uint64_t>(v.mutaciones), ctx, "mutaciones");
+
+        // Un carácter por campo: A, B o M. Comparar la cadena entera dice de una
+        // cuál campo salió del padre equivocado, en vez de "el hijo no coincide".
+        std::string herencia;
+        for (Origen o : c.herencia) {
+            herencia += (o == Origen::A) ? 'A' : (o == Origen::B) ? 'B' : 'M';
+        }
+        const std::string detalleH =
+            "herencia: C++ dio \"" + herencia + "\", el TS da \"" + v.herencia + "\"";
+        revisar(herencia == v.herencia, ctx, detalleH.c_str());
+
+        const std::string frase = describirHerencia(c);
+        const std::string detalleF =
+            "frase: C++ dio \"" + frase + "\", el TS da \"" + v.descripcion + "\"";
+        revisar(frase == v.descripcion, ctx, detalleF.c_str());
+
+        // La simetría. No viene de los vectores: es una propiedad.
+        const Cruza alReves = cruzar(v.b, v.a, v.nonce);
+        revisarEnteros(alReves.seed, c.seed, ctx, "hijo al cruzar en el otro orden");
+        revisarEnteros(static_cast<uint64_t>(alReves.mutaciones),
+                       static_cast<uint64_t>(c.mutaciones), ctx,
+                       "mutaciones al cruzar en el otro orden");
+    }
+
+    // Los catorce campos tienen que cubrir los 64 bits sin huecos ni solapes. Si
+    // no, un bit mutado no encontraría campo al que culpar y la cadena de
+    // herencia quedaría distinta de la del TS sin que el hijo cambie.
+    int cubiertos = 0;
+    for (int bit = 0; bit < 64; ++bit) {
+        int cuantos = 0;
+        for (const CampoGenoma& campo : camposGenoma()) {
+            if (bit >= campo.offset && bit < campo.offset + campo.bits) ++cuantos;
+        }
+        if (cuantos == 1) ++cubiertos;
+    }
+    revisarEnteros(static_cast<uint64_t>(cubiertos), 64, "layout",
+                   "bits cubiertos por exactamente un campo");
+
+    // -- elegibilidad ------------------------------------------------------
+    //
+    // El orden de los chequeos es lo que se prueba acá, no cada caso por
+    // separado: solo se informa el primer motivo, así que una criatura en
+    // letargo Y con poca salud tiene que decir lo del letargo. Invertir dos
+    // chequeos no cambia quién puede cruzar, cambia lo que se le explica al
+    // jugador — y eso no lo atrapa ningún vector.
+    const int64_t base = 1786406400000LL;
+    CreatureState adulta = createCreature(0xA3F091C477BE2D08ULL, base, -180);
+    adulta.etapa = Stage::Adulto;
+    adulta.stats.salud = 90.0;
+    adulta.stats.vinculo = 40.0;
+
+    revisar(elegibilidad(adulta, base).puede, "elegibilidad", "una adulta sana no puede cruzar");
+
+    {
+        CreatureState bebe = adulta;
+        bebe.etapa = Stage::Bebe;
+        bebe.letargico = true;
+        bebe.stats.salud = 10.0;
+        const Elegibilidad e = elegibilidad(bebe, base);
+        revisar(!e.puede, "elegibilidad", "una bebé no tendría que poder cruzar");
+        revisar(e.motivo == "Todavía no terminó de crecer.", "elegibilidad",
+                ("la etapa manda sobre el resto; dio: " + e.motivo).c_str());
+    }
+    {
+        CreatureState dormida = adulta;
+        dormida.letargico = true;
+        dormida.stats.salud = 10.0;
+        const Elegibilidad e = elegibilidad(dormida, base);
+        revisar(e.motivo == "Está en letargo. Primero hay que reconectar con ella.",
+                "elegibilidad", ("el letargo manda sobre la salud; dio: " + e.motivo).c_str());
+    }
+    {
+        CreatureState floja = adulta;
+        floja.stats.salud = 10.0;
+        floja.stats.vinculo = 0.0;
+        const Elegibilidad e = elegibilidad(floja, base);
+        revisar(e.motivo == "No está lo bastante sana.", "elegibilidad",
+                ("la salud manda sobre el vínculo; dio: " + e.motivo).c_str());
+    }
+    {
+        CreatureState distante = adulta;
+        distante.stats.vinculo = 5.0;
+        const Elegibilidad e = elegibilidad(distante, base);
+        revisar(e.motivo == "Todavía no hay suficiente vínculo con ella.", "elegibilidad",
+                ("faltaba el vínculo; dio: " + e.motivo).c_str());
+    }
+
+    // -- el cooldown, redondeado hacia arriba -------------------------------
+    //
+    // Con división entera, la última hora entera diría "faltan 0 h", que es
+    // mentirle al jugador. El TS usa Math.ceil y por eso acá va std::ceil sobre
+    // un double: los tres casos de abajo son justamente los que distinguen las
+    // dos implementaciones.
+    struct CasoCooldown { int64_t pasadoMs; const char* motivo; };
+    const CasoCooldown CASOS[] = {
+        {0, "Necesita descansar. Faltan 8 h."},
+        {CRUZA_COOLDOWN_MS - 1, "Necesita descansar. Faltan 1 h."},
+        {CRUZA_COOLDOWN_MS - 3600000, "Necesita descansar. Faltan 1 h."},
+        {CRUZA_COOLDOWN_MS - 3600001, "Necesita descansar. Faltan 2 h."},
+    };
+    for (const CasoCooldown& caso : CASOS) {
+        CreatureState cruzada = marcarCruzada(adulta, base);
+        const Elegibilidad e = elegibilidad(cruzada, base + caso.pasadoMs);
+        char ctxc[96];
+        std::snprintf(ctxc, sizeof(ctxc), "cooldown a los %lld ms",
+                      static_cast<long long>(caso.pasadoMs));
+        revisar(!e.puede, ctxc, "tendría que estar en cooldown");
+        revisar(e.motivo == caso.motivo, ctxc,
+                ("dio: \"" + e.motivo + "\", se esperaba: \"" + caso.motivo + "\"").c_str());
+    }
+
+    // Justo al cumplirse el cooldown ya puede: el TS compara con < y no con <=.
+    {
+        CreatureState cruzada = marcarCruzada(adulta, base);
+        revisar(elegibilidad(cruzada, base + CRUZA_COOLDOWN_MS).puede, "cooldown",
+                "al cumplirse las ocho horas tendría que poder cruzar");
+    }
+
+    // marcarCruzada no toca la original.
+    revisar(!adulta.ultimaCruzaMs.has_value(), "marcarCruzada",
+            "le escribió encima a la criatura original");
+
+    // -- el par ------------------------------------------------------------
+    {
+        CreatureState otra = adulta;
+        otra.id = "otra";
+        revisar(puedenCruzar(adulta, otra, base).puede, "puedenCruzar",
+                "dos adultas sanas y distintas tendrían que poder");
+
+        const Elegibilidad sola = puedenCruzar(adulta, adulta, base);
+        revisar(!sola.puede, "puedenCruzar", "no puede cruzar consigo misma");
+        revisar(sola.motivo == "Hace falta otra criatura.", "puedenCruzar",
+                ("dio: " + sola.motivo).c_str());
+
+        // El motivo tiene que ser el de la que falla, no uno genérico: es lo que
+        // le dice al jugador a cuál de las dos tiene que cuidar.
+        CreatureState floja = otra;
+        floja.stats.salud = 10.0;
+        const Elegibilidad e = puedenCruzar(adulta, floja, base);
+        revisar(e.motivo == "No está lo bastante sana.", "puedenCruzar",
+                ("no informó el motivo de la que falla; dio: " + e.motivo).c_str());
+    }
+}
+
+/**
+ * El codex, registrando criaturas una atrás de otra.
+ *
+ * Lo que se compara no es una llamada suelta sino el estado ACUMULADO: los tres
+ * ordenamientos —linajes por número, formas por su id en texto, rarezas por id—
+ * solo se pueden equivocar cuando hay más de un elemento, y una lista de uno
+ * está ordenada de cualquier manera.
+ *
+ * El orden de las formas es el que más fácil se rompe: el enum va Indefinida,
+ * Petreo, Vaporoso, Coloso… y alfabéticamente el primero es "coloso". Ordenar
+ * por el valor del enum produce un archivo distinto del que escribe la web, y
+ * ningún validador se quejaría — simplemente dejarían de coincidir.
+ */
+static void probarCodex() {
+    bloque("codex");
+
+    // Los mismos seeds y formas que usó el generador, en el mismo orden. Si esta
+    // lista se desincroniza del TS, los vectores dejan de tener sentido: por eso
+    // la primera comprobación de cada paso es `totalRegistradas`, que se rompe
+    // enseguida si las dos secuencias no van a la par.
+    static const Form FORMAS_CODEX[] = {
+        Form::Indefinida, Form::Coloso,   Form::Petreo,     Form::Oraculo, Form::Vaporoso,
+        Form::Guardian,   Form::Errante,  Form::Coloso,     Form::Indefinida, Form::Petreo,
+    };
+    const size_t CANT_FORMAS = sizeof(FORMAS_CODEX) / sizeof(FORMAS_CODEX[0]);
+
+    // El generador usa `[...BORDES.slice(0, 6), ...seeds.slice(0, 30)]`, y
+    // `generarSeeds` arranca justamente con los BORDES: por eso los primeros
+    // seis genomas del vector SON los seis primeros bordes, y alcanza con
+    // recorrer GENOMAS dos veces en vez de repetir la lista de bordes acá.
+    std::vector<Seed> semillas;
+    for (size_t i = 0; i < 6; ++i) semillas.push_back(vectores::GENOMAS[i].seed);
+    for (size_t i = 0; i < 30; ++i) semillas.push_back(vectores::GENOMAS[i].seed);
+
+    Codex codex;
+    size_t paso = 0;
+
+    // Une un vector de textos con comas, como el join() del TS.
+    auto unir = [](const std::vector<std::string>& xs) {
+        std::string salida;
+        for (size_t i = 0; i < xs.size(); ++i) {
+            if (i > 0) salida += ",";
+            salida += xs[i];
+        }
+        return salida;
+    };
+
+    auto comparar = [&](const Registro& r, int registradas) {
+        if (paso >= sizeof(vectores::CODEXS) / sizeof(vectores::CODEXS[0])) return;
+        const vectores::VectorCodex& v = vectores::CODEXS[paso++];
+
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "paso %d", registradas);
+
+        revisarEnteros(static_cast<uint64_t>(registradas),
+                       static_cast<uint64_t>(v.registradas), ctx, "criaturas registradas");
+        revisarEnteros(static_cast<uint64_t>(r.codex.totalRegistradas),
+                       static_cast<uint64_t>(v.totalRegistradas), ctx, "totalRegistradas");
+
+        std::vector<std::string> linajes;
+        for (int l : r.codex.linajes) linajes.push_back(std::to_string(l));
+        const std::string sl = unir(linajes);
+        revisar(sl == v.linajes, ctx,
+                ("linajes: C++ dio \"" + sl + "\", el TS da \"" + v.linajes + "\"").c_str());
+
+        std::vector<std::string> formas;
+        for (Form f : r.codex.formas) formas.push_back(std::string(formId(f)));
+        const std::string sf = unir(formas);
+        revisar(sf == v.formas, ctx,
+                ("formas: C++ dio \"" + sf + "\", el TS da \"" + v.formas + "\"").c_str());
+
+        const std::string sr = unir(r.codex.rarezas);
+        revisar(sr == v.rarezas, ctx,
+                ("rarezas: C++ dio \"" + sr + "\", el TS da \"" + v.rarezas + "\"").c_str());
+
+        revisarEnteros(static_cast<uint64_t>(r.nuevos.size()),
+                       static_cast<uint64_t>(v.nuevos), ctx, "descubrimientos nuevos");
+
+        std::vector<std::string> detalles;
+        for (const Descubrimiento& d : r.nuevos) {
+            detalles.push_back(std::string(nombreTipo(d.tipo)) + ":" + d.id);
+        }
+        const std::string sd = unir(detalles);
+        revisar(sd == v.detalleNuevos, ctx,
+                ("novedades: C++ dio \"" + sd + "\", el TS da \"" + v.detalleNuevos + "\"")
+                    .c_str());
+
+        const ProgresoCodex p = progresoCodex(r.codex);
+        revisarEnteros(static_cast<uint64_t>(p.linajes.vistos),
+                       static_cast<uint64_t>(v.vistosLinajes), ctx, "progreso: linajes vistos");
+        revisarEnteros(static_cast<uint64_t>(p.formas.vistos),
+                       static_cast<uint64_t>(v.vistosFormas), ctx, "progreso: formas vistas");
+        revisarEnteros(static_cast<uint64_t>(p.rarezas.vistos),
+                       static_cast<uint64_t>(v.vistosRarezas), ctx, "progreso: rarezas vistas");
+        revisarEnteros(static_cast<uint64_t>(p.porcentaje),
+                       static_cast<uint64_t>(v.porcentaje), ctx, "progreso: porcentaje");
+    };
+
+    int registradas = 0;
+    for (size_t i = 0; i < semillas.size(); ++i) {
+        const Registro r = registrar(codex, semillas[i], FORMAS_CODEX[i % CANT_FORMAS]);
+        codex = r.codex;
+        comparar(r, ++registradas);
+
+        // La misma criatura otra vez, en los mismos dos puntos que el generador:
+        // el total sube y no puede aparecer ninguna novedad.
+        if (i == 3 || i == 12) {
+            const Registro otra = registrar(codex, semillas[i], FORMAS_CODEX[i % CANT_FORMAS]);
+            codex = otra.codex;
+            revisar(otra.nuevos.empty(), "repetida",
+                    "registrar la misma criatura dos veces descubrió algo nuevo");
+            comparar(otra, ++registradas);
+        }
+    }
+
+    // -- propiedades que no salen de los vectores ---------------------------
+
+    // "Indefinida" no se anota nunca. Es la ausencia de un descubrimiento, no
+    // uno: si se colara, el codex diría que conseguiste una forma por el solo
+    // hecho de que la criatura nació.
+    {
+        const Registro r = registrar(Codex{}, 0xA3F091C477BE2D08ULL, Form::Indefinida);
+        revisar(r.codex.formas.empty(), "indefinida",
+                "la forma indefinida se anotó como descubrimiento");
+    }
+
+    // El total sube siempre, aunque no haya novedad: cuenta criaturas
+    // registradas, no descubrimientos.
+    {
+        Codex c;
+        for (int i = 0; i < 5; ++i) {
+            c = registrar(c, 0xA3F091C477BE2D08ULL, Form::Coloso).codex;
+        }
+        revisarEnteros(static_cast<uint64_t>(c.totalRegistradas), 5, "total",
+                       "cinco registros de la misma criatura");
+    }
+
+    // Y el codex nunca pierde nada: registrar solo agrega.
+    {
+        Codex c;
+        size_t antes = 0;
+        for (size_t i = 0; i < semillas.size(); ++i) {
+            c = registrar(c, semillas[i], FORMAS_CODEX[i % CANT_FORMAS]).codex;
+            const size_t ahora = c.linajes.size() + c.formas.size() + c.rarezas.size();
+            revisar(ahora >= antes, "monotonía", "el codex perdió algo que ya tenía");
+            antes = ahora;
+        }
+    }
+}
+
 /** El JSON tiene que aguantar entradas rotas sin reventar el arranque. */
 static void probarJsonRoto() {
     bloque("guardados corruptos");
@@ -1252,7 +1606,8 @@ int main() {
     std::printf("\nPetBits — paridad TypeScript <-> C++\n");
     std::printf("%zu genomas, %zu crianzas, %zu parseos, %zu hashes, %zu simulaciones,\n"
                 "%zu rampas de color, %zu sprites, %zu escenarios de acciones,\n"
-                "%zu guardados, %zu botines de expedición\n\n",
+                "%zu guardados, %zu botines de expedición, %zu cruzas,\n"
+                "%zu pasos de codex\n\n",
                 sizeof(vectores::GENOMAS) / sizeof(vectores::GENOMAS[0]),
                 sizeof(vectores::EVOLUCIONES) / sizeof(vectores::EVOLUCIONES[0]),
                 sizeof(vectores::PARSEOS) / sizeof(vectores::PARSEOS[0]),
@@ -1262,7 +1617,9 @@ int main() {
                 sizeof(vectores::SPRITES) / sizeof(vectores::SPRITES[0]),
                 sizeof(vectores::ACCIONES) / sizeof(vectores::ACCIONES[0]),
                 sizeof(vectores::SAVES) / sizeof(vectores::SAVES[0]),
-                sizeof(vectores::BOTINES) / sizeof(vectores::BOTINES[0]));
+                sizeof(vectores::BOTINES) / sizeof(vectores::BOTINES[0]),
+                sizeof(vectores::CRUZAS) / sizeof(vectores::CRUZAS[0]),
+                sizeof(vectores::CODEXS) / sizeof(vectores::CODEXS[0]));
 
     probarGenomas();
     probarParseo();
@@ -1280,6 +1637,8 @@ int main() {
     probarSalidas();
     probarAtlas();
     probarFuente();
+    probarCruzas();
+    probarCodex();
     probarJsonRoto();
     probarParticion();
     probarRelojAtras();

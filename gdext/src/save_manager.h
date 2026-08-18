@@ -21,6 +21,7 @@
  * Cuando esos módulos se porten, dejan de ser opacos y nada más cambia.
  */
 
+#include "codex.h"
 #include "inventory.h"
 #include "json.h"
 #include "simulation.h"
@@ -50,11 +51,25 @@ struct Partida {
     Inventario inventario;
 
     /**
-     * El resto del save, sin interpretar: codex, semillas y cualquier campo que
-     * una versión futura agregue.
+     * El codex. Se interpreta porque el juego lo ESCRIBE: al nacer, al cargar y
+     * cada vez que la simulación devuelve una evolución.
+     *
+     * Antes viajaba adentro de `otros`, sin mirar. El campo llegaba intacto y
+     * había tests que lo probaban, pero nadie lo anotaba: podías llegar a una
+     * forma adulta nueva en el nativo y el codex no se enteraba. Es el mismo
+     * error que tuvo el inventario, y por las mismas razones no lo atrapó ningún
+     * test — lo atrapa jugando.
+     */
+    Codex codex;
+
+    /**
+     * El resto del save, sin interpretar: las semillas y cualquier campo que una
+     * versión futura agregue.
      *
      * Se guarda el objeto entero y no una lista de claves conocidas a propósito:
-     * si el TS suma un campo nuevo, este código lo preserva sin enterarse.
+     * si el TS suma un campo nuevo, este código lo preserva sin enterarse. Eso es
+     * lo que hace seguro compartir un formato entre dos programas que no están
+     * igual de completos.
      */
     Json otros;
 };

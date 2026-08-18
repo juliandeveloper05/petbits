@@ -18,9 +18,6 @@ namespace petbits {
 // ---------------------------------------------------------------------------
 
 static const char* const ETAPAS[] = {"bebe", "juvenil", "adulto"};
-static const char* const FORMAS[] = {"indefinida", "petreo",  "vaporoso", "coloso",
-                                     "guardian",   "errante", "oraculo"};
-
 static bool etapaDesdeTexto(const std::string& t, Stage& salida) {
     for (size_t i = 0; i < 3; ++i) {
         if (t == ETAPAS[i]) {
@@ -31,15 +28,8 @@ static bool etapaDesdeTexto(const std::string& t, Stage& salida) {
     return false;
 }
 
-static bool formaDesdeTexto(const std::string& t, Form& salida) {
-    for (size_t i = 0; i < 7; ++i) {
-        if (t == FORMAS[i]) {
-            salida = static_cast<Form>(i);
-            return true;
-        }
-    }
-    return false;
-}
+// El mapeo forma <-> id vive en evolution.h: lo comparten el guardado y el
+// codex, y tenerlo dos veces es tenerlo mal una vez.
 
 /**
  * El genoma decimal de vuelta a número.
@@ -102,7 +92,7 @@ Json criaturaAJson(const CreatureState& c) {
     j.poner("durmiendo", Json::booleano(c.durmiendo));
     j.poner("ticksActivos", Json::numero(static_cast<double>(c.ticksActivos)));
     j.poner("etapa", Json::texto(ETAPAS[static_cast<size_t>(c.etapa)]));
-    j.poner("forma", Json::texto(FORMAS[static_cast<size_t>(c.forma)]));
+    j.poner("forma", Json::texto(std::string(formId(c.forma))));
     j.poner("crianza", std::move(crianza));
 
     if (c.ultimaCruzaMs.has_value()) {
@@ -215,7 +205,7 @@ bool criaturaDesdeJson(const Json& j, CreatureState& c, std::string& error) {
 
     const Json* forma = exigir(j, "forma", Json::Tipo::Texto, error);
     if (forma == nullptr) return false;
-    if (!formaDesdeTexto(forma->comoTexto(), c.forma)) {
+    if (!formFromId(forma->comoTexto(), c.forma)) {
         error = "forma desconocida: " + forma->comoTexto();
         return false;
     }
@@ -308,14 +298,7 @@ Partida partidaInicial(const CreatureState& criatura) {
 
     p.inventario = inventarioInicial();
 
-    Json codex = Json::objeto();
-    codex.poner("linajes", Json::arreglo());
-    codex.poner("formas", Json::arreglo());
-    codex.poner("rarezas", Json::arreglo());
-    codex.poner("totalRegistradas", Json::numero(0));
-
     p.otros = Json::objeto();
-    p.otros.poner("codex", std::move(codex));
     p.otros.poner("semillas", Json::arreglo());
 
     return p;
@@ -386,12 +369,50 @@ bool cargarPartida(const std::string& texto, Partida& salida, std::string& error
         }
     }
 
-    // Todo lo demás se guarda sin mirar. Es lo que permite que un save de la
-    // web pase por el nativo sin perder el codex.
+    // El codex.
+    //
+    // Un codex ausente o mal formado NO invalida la partida: se arranca con uno
+    // vacío. Es una lista de logros, no estado del juego — perderla duele, pero
+    // negarse a cargar una partida entera por eso duele mucho más. Las criaturas
+    // sí se exigen, y ahí sí se rechaza.
+    salida.codex = Codex{};
+    const Json* codex = raiz.buscar("codex");
+    if (codex != nullptr && codex->esObjeto()) {
+        const Json* linajes = codex->buscar("linajes");
+        if (linajes != nullptr && linajes->esArreglo()) {
+            for (const Json& v : linajes->elementos()) {
+                if (v.esNumero()) salida.codex.linajes.push_back(static_cast<int>(v.comoEntero()));
+            }
+        }
+        const Json* formas = codex->buscar("formas");
+        if (formas != nullptr && formas->esArreglo()) {
+            for (const Json& v : formas->elementos()) {
+                Form f = Form::Indefinida;
+                // Una forma que este build no conoce se descarta en vez de
+                // romper la carga: puede venir de una versión más nueva de la
+                // web, y el resto del codex sigue siendo bueno.
+                if (v.esTexto() && formFromId(v.comoTexto(), f)) salida.codex.formas.push_back(f);
+            }
+        }
+        const Json* rarezas = codex->buscar("rarezas");
+        if (rarezas != nullptr && rarezas->esArreglo()) {
+            for (const Json& v : rarezas->elementos()) {
+                if (v.esTexto()) salida.codex.rarezas.push_back(v.comoTexto());
+            }
+        }
+        const Json* total = codex->buscar("totalRegistradas");
+        if (total != nullptr && total->esNumero()) {
+            salida.codex.totalRegistradas = total->comoEntero();
+        }
+    }
+
+    // Todo lo demás se guarda sin mirar. Es lo que permite que un save de la web
+    // pase por el nativo sin perder las semillas ni un campo que todavía no
+    // exista.
     salida.otros = Json::objeto();
     for (const auto& [clave, valor] : raiz.campos()) {
         if (clave == "version" || clave == "guardadoMs" || clave == "criaturas" ||
-            clave == "activaId" || clave == "inventario") {
+            clave == "activaId" || clave == "inventario" || clave == "codex") {
             continue;
         }
         salida.otros.poner(clave, valor);
@@ -412,18 +433,51 @@ std::string guardarPartida(const Partida& p, int64_t nowMs) {
     raiz.poner("criaturas", std::move(criaturas));
     raiz.poner("activaId", Json::texto(p.activaId));
 
-    for (const auto& [clave, valor] : p.otros.campos()) {
-        raiz.poner(clave, valor);
+    // El orden de las claves es el del TS, a mano y a propósito:
+    //
+    //     version, guardadoMs, criaturas, activaId, codex, inventario, semillas
+    //
+    // No cambia el significado —ningún lector de JSON depende del orden— pero sí
+    // el diff entre un save de la web y uno del nativo, y ese diff es la
+    // herramienta con la que se encontró el bug del inventario. Un diff lleno de
+    // ruido de reordenamiento no sirve para nada.
+    //
+    // Antes el codex viajaba dentro de `otros` y la despensa se escribía al
+    // final, así que el nativo producía `codex, semillas, inventario`. El
+    // comentario que estaba acá afirmaba lo contrario; interpretar el codex
+    // permitió ponerlo donde va y arreglar las dos cosas de una.
+    Json codex = Json::objeto();
+    Json linajes = Json::arreglo();
+    for (int l : p.codex.linajes) {
+        linajes.agregar(Json::numero(static_cast<double>(l)));
     }
+    codex.poner("linajes", std::move(linajes));
 
-    // La despensa va después de `otros` para que quede donde la escribe el TS:
-    // entre el codex y las semillas. El orden no cambia el significado, pero sí
-    // el diff entre un save de la web y uno del nativo.
+    Json formas = Json::arreglo();
+    for (Form f : p.codex.formas) {
+        formas.agregar(Json::texto(std::string(formId(f))));
+    }
+    codex.poner("formas", std::move(formas));
+
+    Json rarezas = Json::arreglo();
+    for (const std::string& id : p.codex.rarezas) {
+        rarezas.agregar(Json::texto(id));
+    }
+    codex.poner("rarezas", std::move(rarezas));
+    codex.poner("totalRegistradas", Json::numero(static_cast<double>(p.codex.totalRegistradas)));
+    raiz.poner("codex", std::move(codex));
+
     Json inventario = Json::objeto();
     for (const auto& [id, cantidad] : p.inventario.items()) {
         inventario.poner(id, Json::numero(static_cast<double>(cantidad)));
     }
     raiz.poner("inventario", std::move(inventario));
+
+    // Y al final lo que no se interpreta: las semillas y lo que traiga una
+    // versión futura.
+    for (const auto& [clave, valor] : p.otros.campos()) {
+        raiz.poner(clave, valor);
+    }
 
     return raiz.escribir();
 }

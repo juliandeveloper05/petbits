@@ -22,6 +22,7 @@
  * cualquier texto —tu nombre— que se convierte en un seed por hash.
  */
 
+#include "codex.h"
 #include "save_manager.h"
 #include "simulation.h"
 
@@ -57,6 +58,16 @@ private:
      * no sepa qué hacer con él.
      */
     std::optional<petbits::Partida> partida;
+
+    /**
+     * Anota la criatura activa en el codex y devuelve lo que fue novedad.
+     *
+     * Se llama al nacer, al cargar y cada vez que la simulación reporta una
+     * evolución. Ese último es el que importa: es el momento en que aparece algo
+     * que el codex todavía no tenía, y era justo el que faltaba mientras el
+     * codex viajaba sin interpretarse.
+     */
+    Array registrar_activa();
 
     /** La criatura activa, para escribirle. nullptr si no hay partida. */
     petbits::CreatureState* activa();
@@ -227,6 +238,20 @@ public:
      * y no hay nada que avise.
      */
     Dictionary fuente_metricas() const;
+
+    // -----------------------------------------------------------------------
+    // Codex
+    // -----------------------------------------------------------------------
+
+    /**
+     * Lo descubierto: { linajes, formas, rarezas, total_registradas, progreso }.
+     *
+     * Los linajes y las formas vienen con su nombre legible además del id,
+     * porque la pantalla los muestra y traducir índices a nombres del lado de
+     * GDScript sería tener el catálogo de los dieciséis linajes escrito dos
+     * veces — y esa es la clase de duplicación que se desincroniza.
+     */
+    Dictionary codex() const;
 
     // -----------------------------------------------------------------------
     // Guardado

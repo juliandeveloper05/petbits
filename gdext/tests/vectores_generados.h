@@ -5807,4 +5807,151 @@ inline const VectorBotin BOTINES[] = {
     {0xFEDCBA9876543210ULL, "ruinas", 1LL, "larva:2,raiz:2", 0, 0ULL, "Trajo 2 larva, 2 raíz."},
 };
 
+struct VectorCruza {
+    Seed a;
+    Seed b;
+    int64_t nonce;
+    Seed hijo;
+    int mutaciones;
+    /// Un carácter por campo, en el orden de GENOME_LAYOUT: A, B o M.
+    const char* herencia;
+    const char* descripcion;
+};
+
+inline const VectorCruza CRUZAS[] = {
+    {0x0000000000000000ULL, 0x0000000000000001ULL, 0LL, 0x0800000000008101ULL, 3, "BAMMAAABBBBAAM", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0x0000000000000001ULL, 1LL, 0x0000000080000100ULL, 2, "AAMBABMAAAABAA", "Salió casi calcado al primero."},
+    {0x0000000000000000ULL, 0x0000000000000001ULL, 2LL, 0x0000000000000001ULL, 0, "BBBBBABBBABABA", "Salió casi calcado al segundo."},
+    {0x0000000000000000ULL, 0x0000000000000001ULL, 7LL, 0x2000000000000001ULL, 1, "BABBAABBBAAAAM", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0x0000000000000001ULL, 42LL, 0x4000001000000001ULL, 2, "BABABBABMBAAAM", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0x0000000000000001ULL, 1000LL, 0x0000002000000405ULL, 3, "MBMABBBAMABABA", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000001ULL, 0x0000000000000000ULL, 0LL, 0x0800000000008101ULL, 3, "ABMMBBBAAAABBM", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000001ULL, 0x0000000000000000ULL, 1LL, 0x0000000080000100ULL, 2, "BBMABAMBBBBABB", "Salió casi calcado al segundo."},
+    {0x0000000000000001ULL, 0x0000000000000000ULL, 2LL, 0x0000000000000001ULL, 0, "AAAAABAAABABAB", "Salió casi calcado al primero."},
+    {0x0000000000000001ULL, 0x0000000000000000ULL, 7LL, 0x2000000000000001ULL, 1, "ABAABBAAABBBBM", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000001ULL, 0x0000000000000000ULL, 42LL, 0x4000001000000001ULL, 2, "ABABAABAMABBBM", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000001ULL, 0x0000000000000000ULL, 1000LL, 0x0000002000000405ULL, 3, "MAMBAAABMBABAB", "Salió una mezcla pareja de los dos."},
+    {0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL, 0LL, 0xFEDFFFFFFFF7FFFFULL, 3, "AAAAMAAAAAAAMM", "Salió casi calcado al primero."},
+    {0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL, 1LL, 0xFBFFFDFDFD7FFFFFULL, 5, "AAAAAMMMAAMAAM", "Salió con bastante de suyo. Mutó mucho."},
+    {0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL, 2LL, 0xFFFFFFFF7FFFFF7FULL, 2, "AMAAAAMAAAAAAA", "Salió casi calcado al primero."},
+    {0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL, 7LL, 0xBFFFFFFFFFFBFFFDULL, 3, "MAAAMAAAAAAAAM", "Salió casi calcado al primero."},
+    {0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL, 42LL, 0xFFFBFFEFFFDFFFFFULL, 3, "AAAAAMAAMAAAMA", "Salió casi calcado al primero."},
+    {0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL, 1000LL, 0xFFFFFFFFFFFFFFFFULL, 0, "AAAAAAAAAAAAAA", "Salió casi calcado al primero."},
+    {0x5555555555555555ULL, 0xAAAAAAAAAAAAAAAAULL, 0LL, 0xAA8A56ADAAAB5555ULL, 4, "AAAAMBBABBMAMB", "Salió una mezcla pareja de los dos."},
+    {0x5555555555555555ULL, 0xAAAAAAAAAAAAAAAAULL, 1LL, 0x55AA55551D5A8A24ULL, 5, "MMBMBAMAAAAABA", "Salió con bastante de suyo. Mutó mucho."},
+    {0x5555555555555555ULL, 0xAAAAAAAAAAAAAAAAULL, 2LL, 0xAB5544AEAA52AAA5ULL, 4, "ABBBMABMBBAMAM", "Salió una mezcla pareja de los dos."},
+    {0x5555555555555555ULL, 0xAAAAAAAAAAAAAAAAULL, 7LL, 0xAAAA5CADAA5AAAAAULL, 1, "BBBBBABABBMABB", "Salió casi calcado al segundo."},
+    {0x5555555555555555ULL, 0xAAAAAAAAAAAAAAAAULL, 42LL, 0xAA5559525DB49AA5ULL, 6, "ABBMMMMBAAMAAB", "Salió con bastante de suyo. Mutó mucho."},
+    {0x5555555555555555ULL, 0xAAAAAAAAAAAAAAAAULL, 1000LL, 0x55AAA552AA7A51DAULL, 3, "BMMABMBBAAABBA", "Salió una mezcla pareja de los dos."},
+    {0xFEDCBA9876543210ULL, 0xA3F091C477BE2D08ULL, 0LL, 0xABDCB0807E543208ULL, 2, "BBAAAAMABABAAM", "Salió una mezcla pareja de los dos."},
+    {0xFEDCBA9876543210ULL, 0xA3F091C477BE2D08ULL, 1LL, 0xA7F07BDC7EBEB210ULL, 6, "AMAMBBMBABAMBM", "Salió con bastante de suyo. Mutó mucho."},
+    {0xFEDCBA9876543210ULL, 0xA3F091C477BE2D08ULL, 2LL, 0xA3F091F87EBE3208ULL, 2, "BBAABBMAMBBBBB", "Salió casi calcado al segundo."},
+    {0xFEDCBA9876543210ULL, 0xA3F091C477BE2D08ULL, 7LL, 0xA3F0B9C4777E720AULL, 5, "MBAMBMBBBBMABB", "Salió con bastante de suyo. Mutó mucho."},
+    {0xFEDCBA9876543210ULL, 0xA3F091C477BE2D08ULL, 42LL, 0xF6F2E09857BE2218ULL, 5, "BAABBBMAAABMMM", "Salió con bastante de suyo. Mutó mucho."},
+    {0xFEDCBA9876543210ULL, 0xA3F091C477BE2D08ULL, 1000LL, 0xA1F0B18477BE2D08ULL, 2, "BBBBBBBBBMBABM", "Salió casi calcado al segundo."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFFFULL, 0LL, 0xFF000FFF0802FFFFULL, 2, "BBBBMAMBBBBAAB", "Salió casi calcado al segundo."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFFFULL, 1LL, 0xBFFD0FFFEFFF0FFFULL, 3, "BBBABBMBBBBAMM", "Salió casi calcado al segundo."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFFFULL, 2LL, 0xFFFBF039FFF0000FULL, 2, "BAAAABBMBAABMB", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFFFULL, 7LL, 0x00000FF8C0FF0FFFULL, 2, "BBBABBMABBBAAA", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFFFULL, 42LL, 0x00FF0FFFFFB0FF0FULL, 1, "BABBAMBBBBBABA", "Salió casi calcado al segundo."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFFFULL, 1000LL, 0x00FF0044FF000FF0ULL, 2, "ABBAAABMAMAABA", "Salió una mezcla pareja de los dos."},
+    {0xFFFFFFFFFFFFFFFFULL, 0x0000000000000000ULL, 0LL, 0xFF000FFF0802FFFFULL, 2, "AAAAMBMAAAABBA", "Salió casi calcado al primero."},
+    {0xFFFFFFFFFFFFFFFFULL, 0x0000000000000000ULL, 1LL, 0xBFFD0FFFEFFF0FFFULL, 3, "AAABAAMAAAABMM", "Salió casi calcado al primero."},
+    {0xFFFFFFFFFFFFFFFFULL, 0x0000000000000000ULL, 2LL, 0xFFFBF039FFF0000FULL, 2, "ABBBBAAMABBAMA", "Salió una mezcla pareja de los dos."},
+    {0xFFFFFFFFFFFFFFFFULL, 0x0000000000000000ULL, 7LL, 0x00000FF8C0FF0FFFULL, 2, "AAABAAMBAAABBB", "Salió una mezcla pareja de los dos."},
+    {0xFFFFFFFFFFFFFFFFULL, 0x0000000000000000ULL, 42LL, 0x00FF0FFFFFB0FF0FULL, 1, "ABAABMAAAAABAB", "Salió casi calcado al primero."},
+    {0xFFFFFFFFFFFFFFFFULL, 0x0000000000000000ULL, 1000LL, 0x00FF0044FF000FF0ULL, 2, "BAABBBAMBMBBAB", "Salió una mezcla pareja de los dos."},
+    {0x8000000000000000ULL, 0x0000000000000001ULL, 0LL, 0x0100200010000001ULL, 3, "BAAABBMAAAAMAM", "Salió casi calcado al primero."},
+    {0x8000000000000000ULL, 0x0000000000000001ULL, 1LL, 0x8000200000000001ULL, 1, "BBABABBABBAMAA", "Salió una mezcla pareja de los dos."},
+    {0x8000000000000000ULL, 0x0000000000000001ULL, 2LL, 0x8040200010400021ULL, 5, "BMABBMMABAAMMA", "Salió con bastante de suyo. Mutó mucho."},
+    {0x8000000000000000ULL, 0x0000000000000001ULL, 7LL, 0x0000000080200001ULL, 2, "BAAABMMAAABAAB", "Salió una mezcla pareja de los dos."},
+    {0x8000000000000000ULL, 0x0000000000000001ULL, 42LL, 0x8000000000000000ULL, 0, "AABABABAABBBAA", "Salió una mezcla pareja de los dos."},
+    {0x8000000000000000ULL, 0x0000000000000001ULL, 1000LL, 0x0000000200000001ULL, 1, "BABBABAMABBABB", "Salió una mezcla pareja de los dos."},
+    {0xA3F091C477BE2D08ULL, 0x1234567890ABCDEFULL, 0LL, 0xAB3497FC77ABCD48ULL, 2, "AMBBBBAABABABM", "Salió una mezcla pareja de los dos."},
+    {0xA3F091C477BE2D08ULL, 0x1234567890ABCDEFULL, 1LL, 0xA334967C10BE2D2FULL, 2, "BMBAAAMABBBABA", "Salió una mezcla pareja de los dos."},
+    {0xA3F091C477BE2D08ULL, 0x1234567890ABCDEFULL, 2LL, 0xE3F0507C77BB2D08ULL, 1, "AABABAAABBABAM", "Salió una mezcla pareja de los dos."},
+    {0xA3F091C477BE2D08ULL, 0x1234567890ABCDEFULL, 7LL, 0xE334967877BE2DE8ULL, 2, "ABBAAMABBBBABM", "Salió una mezcla pareja de los dos."},
+    {0xA3F091C477BE2D08ULL, 0x1234567890ABCDEFULL, 42LL, 0x1234967C77BE2DEFULL, 0, "BBBAAAAABBBABB", "Salió una mezcla pareja de los dos."},
+    {0xA3F091C477BE2D08ULL, 0x1234567890ABCDEFULL, 1000LL, 0x063057C477ABCD08ULL, 3, "AAABBBAAAABBMM", "Salió una mezcla pareja de los dos."},
+    {0xFFFFFFFFFFFFFFC5ULL, 0x0000000000000000ULL, 0LL, 0xFF0401FB08FF0FC7ULL, 4, "MAABAAMMAABBMA", "Salió casi calcado al primero."},
+    {0xFFFFFFFFFFFFFFC5ULL, 0x0000000000000000ULL, 1LL, 0xFFFF81C0FFFF7F07ULL, 3, "MBAMAAABBABMAA", "Salió una mezcla pareja de los dos."},
+    {0xFFFFFFFFFFFFFFC5ULL, 0x0000000000000000ULL, 2LL, 0x0800FFFFFF0F0000ULL, 1, "BBBBABAAAAAABM", "Salió una mezcla pareja de los dos."},
+    {0xFFFFFFFFFFFFFFC5ULL, 0x0000000000000000ULL, 7LL, 0xFFFF0FFFFF00F005ULL, 0, "ABBABBAAAAABAA", "Salió una mezcla pareja de los dos."},
+    {0xFFFFFFFFFFFFFFC5ULL, 0x0000000000000000ULL, 42LL, 0xF700F02FFF0FF705ULL, 3, "ABMAABAAMBBABM", "Salió una mezcla pareja de los dos."},
+    {0xFFFFFFFFFFFFFFC5ULL, 0x0000000000000000ULL, 1000LL, 0xFF800E3800010FC5ULL, 2, "AAABMBBBABABMA", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFC5ULL, 0LL, 0xFF0401FB08FF0FC7ULL, 4, "MBBABBMMBBAAMB", "Salió casi calcado al segundo."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFC5ULL, 1LL, 0xFFFF81C0FFFF7F07ULL, 3, "MABMBBBAABAMBB", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFC5ULL, 2LL, 0x0800FFFFFF0F0000ULL, 1, "AAAABABBBBBBAM", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFC5ULL, 7LL, 0xFFFF0FFFFF00F005ULL, 0, "BAABAABBBBBABB", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFC5ULL, 42LL, 0xF700F02FFF0FF705ULL, 3, "BAMBBABBMAABAM", "Salió una mezcla pareja de los dos."},
+    {0x0000000000000000ULL, 0xFFFFFFFFFFFFFFC5ULL, 1000LL, 0xFF800E3800010FC5ULL, 2, "BBBAMAAABABAMB", "Salió una mezcla pareja de los dos."},
+    {0x00000000000001FFULL, 0xFFFFFFFFFFFFFFFFULL, 0LL, 0x00000A82FDFFEFFFULL, 5, "AABMBBMMAMMAAA", "Salió con bastante de suyo. Mutó mucho."},
+    {0x00000000000001FFULL, 0xFFFFFFFFFFFFFFFFULL, 1LL, 0xFFFF01C0001FF1FFULL, 1, "BAABBMAAABAABB", "Salió una mezcla pareja de los dos."},
+    {0x00000000000001FFULL, 0xFFFFFFFFFFFFFFFFULL, 2LL, 0xFF0001C780F0FEFFULL, 2, "AAMBABMBABAAAB", "Salió una mezcla pareja de los dos."},
+    {0x00000000000001FFULL, 0xFFFFFFFFFFFFFFFFULL, 7LL, 0xFFFBF038FF76FFFBULL, 5, "MABBMMBABAABMB", "Salió con bastante de suyo. Mutó mucho."},
+    {0x00000000000001FFULL, 0xFFFFFFFFFFFFFFFFULL, 42LL, 0x20800FFAFFDFF3FFULL, 6, "BBMBBMBMBBBAMM", "Salió con bastante de suyo. Mutó mucho."},
+    {0x00000000000001FFULL, 0xFFFFFFFFFFFFFFFFULL, 1000LL, 0x00FFF00740F0B77DULL, 5, "MMMMABMBAAABBA", "Salió con bastante de suyo. Mutó mucho."},
+};
+
+struct VectorCodex {
+    /// Cuántas criaturas se registraron hasta este punto.
+    int registradas;
+    /// Los índices de linaje, separados por coma, en el orden guardado.
+    const char* linajes;
+    /// Los ids de forma, separados por coma, en el orden guardado.
+    const char* formas;
+    /// Los ids de rareza, separados por coma, en el orden guardado.
+    const char* rarezas;
+    int64_t totalRegistradas;
+    /// Cuántos descubrimientos nuevos trajo esta criatura.
+    int nuevos;
+    /// tipo:id de cada novedad, separados por coma y en orden.
+    const char* detalleNuevos;
+    int vistosLinajes;
+    int vistosFormas;
+    int vistosRarezas;
+    int porcentaje;
+};
+
+inline const VectorCodex CODEXS[] = {
+    {1, "0", "", "espejo,uroboros,vacio", 1LL, 4, "linaje:0,rareza:vacio,rareza:uroboros,rareza:espejo", 1, 0, 3, 13},
+    {2, "0,1", "coloso", "espejo,uroboros,vacio", 2LL, 2, "linaje:1,forma:coloso", 2, 1, 3, 20},
+    {3, "0,1,15", "coloso,petreo", "espejo,racha,saturado,uroboros,vacio", 3LL, 4, "linaje:15,forma:petreo,rareza:saturado,rareza:racha", 3, 2, 5, 33},
+    {4, "0,1,5,15", "coloso,oraculo,petreo", "equilibrado,espejo,racha,saturado,uroboros,vacio", 4LL, 3, "linaje:5,forma:oraculo,rareza:equilibrado", 4, 3, 6, 43},
+    {5, "0,1,5,15", "coloso,oraculo,petreo", "equilibrado,espejo,racha,saturado,uroboros,vacio", 5LL, 0, "", 4, 3, 6, 43},
+    {6, "0,1,5,10,15", "coloso,oraculo,petreo,vaporoso", "equilibrado,espejo,racha,saturado,uroboros,vacio", 6LL, 2, "linaje:10,forma:vaporoso", 5, 4, 6, 50},
+    {7, "0,1,5,10,15", "coloso,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,racha,saturado,uroboros,vacio", 7LL, 2, "forma:guardian,rareza:pangrama", 5, 5, 7, 57},
+    {8, "0,1,5,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,racha,saturado,uroboros,vacio", 8LL, 1, "forma:errante", 5, 6, 7, 60},
+    {9, "0,1,5,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,racha,saturado,uroboros,vacio", 9LL, 0, "", 5, 6, 7, 60},
+    {10, "0,1,5,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,racha,saturado,uroboros,vacio", 10LL, 0, "", 5, 6, 7, 60},
+    {11, "0,1,5,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,racha,saturado,uroboros,vacio", 11LL, 0, "", 5, 6, 7, 60},
+    {12, "0,1,5,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,racha,saturado,uroboros,vacio", 12LL, 0, "", 5, 6, 7, 60},
+    {13, "0,1,5,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,racha,saturado,uroboros,vacio", 13LL, 0, "", 5, 6, 7, 60},
+    {14, "0,1,5,8,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,racha,saturado,uroboros,vacio", 14LL, 1, "linaje:8", 6, 6, 7, 63},
+    {15, "0,1,5,8,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,racha,saturado,uroboros,vacio", 15LL, 0, "", 6, 6, 7, 63},
+    {16, "0,1,5,8,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 16LL, 1, "rareza:primordial", 6, 6, 8, 67},
+    {17, "0,1,5,8,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 17LL, 0, "", 6, 6, 8, 67},
+    {18, "0,1,5,8,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 18LL, 0, "", 6, 6, 8, 67},
+    {19, "0,1,4,5,8,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 19LL, 1, "linaje:4", 7, 6, 8, 70},
+    {20, "0,1,4,5,8,10,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 20LL, 0, "", 7, 6, 8, 70},
+    {21, "0,1,4,5,8,10,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 21LL, 1, "linaje:14", 8, 6, 8, 73},
+    {22, "0,1,3,4,5,8,10,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 22LL, 1, "linaje:3", 9, 6, 8, 77},
+    {23, "0,1,3,4,5,8,10,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 23LL, 0, "", 9, 6, 8, 77},
+    {24, "0,1,3,4,5,8,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 24LL, 1, "linaje:12", 10, 6, 8, 80},
+    {25, "0,1,3,4,5,8,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 25LL, 0, "", 10, 6, 8, 80},
+    {26, "0,1,3,4,5,8,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 26LL, 0, "", 10, 6, 8, 80},
+    {27, "0,1,2,3,4,5,8,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 27LL, 1, "linaje:2", 11, 6, 8, 83},
+    {28, "0,1,2,3,4,5,8,9,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 28LL, 1, "linaje:9", 12, 6, 8, 87},
+    {29, "0,1,2,3,4,5,8,9,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 29LL, 0, "", 12, 6, 8, 87},
+    {30, "0,1,2,3,4,5,8,9,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 30LL, 0, "", 12, 6, 8, 87},
+    {31, "0,1,2,3,4,5,8,9,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 31LL, 0, "", 12, 6, 8, 87},
+    {32, "0,1,2,3,4,5,8,9,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 32LL, 0, "", 12, 6, 8, 87},
+    {33, "0,1,2,3,4,5,8,9,10,12,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 33LL, 0, "", 12, 6, 8, 87},
+    {34, "0,1,2,3,4,5,8,9,10,12,13,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 34LL, 1, "linaje:13", 13, 6, 8, 90},
+    {35, "0,1,2,3,4,5,8,9,10,12,13,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 35LL, 0, "", 13, 6, 8, 90},
+    {36, "0,1,2,3,4,5,8,9,10,12,13,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 36LL, 0, "", 13, 6, 8, 90},
+    {37, "0,1,2,3,4,5,8,9,10,12,13,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 37LL, 0, "", 13, 6, 8, 90},
+    {38, "0,1,2,3,4,5,8,9,10,12,13,14,15", "coloso,errante,guardian,oraculo,petreo,vaporoso", "equilibrado,espejo,pangrama,primordial,racha,saturado,uroboros,vacio", 38LL, 0, "", 13, 6, 8, 90},
+};
+
 } // namespace petbits::vectores

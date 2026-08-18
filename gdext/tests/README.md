@@ -114,11 +114,13 @@ botín de expediciones
 reglas de las expediciones
 atlas de tiles (sin paridad — solo propiedades)
 tipografía (sin paridad — solo propiedades)
+cruza
+codex
 guardados corruptos
 invariante de partición
 reloj hacia atrás
 
-52681 comprobaciones, 0 fallas
+53610 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
@@ -144,6 +146,8 @@ script.
 | `save_manager.cpp` | Lee saves de la web, los reescribe y no pierde nada | 3 saves + 11 corruptos |
 | `inventory.cpp` | Se gasta de a una, no baja de cero, y solo cobra si la acción salió bien | 1 bloque |
 | `expeditions.cpp` | El botín, alimento por alimento y en orden, más la frase | 108 botines |
+| `breeding.cpp` | El hijo, la herencia campo por campo, las mutaciones y la frase | 72 cruzas |
+| `codex.cpp` | El codex acumulado paso a paso, con sus tres ordenamientos | 38 pasos |
 | `tileset_gen.cpp` | **Sin paridad.** Opacidad, determinismo y que los tiles se distingan | propiedades |
 | `font_gen.cpp` | **Sin paridad.** Cobertura del castellano, que ningún glifo se repita | propiedades |
 

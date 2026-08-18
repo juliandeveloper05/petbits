@@ -41,19 +41,18 @@ int main(int argc, char** argv) {
     Partida p = partidaInicial(c);
 
     // Se le mete contenido al codex y al inventario para que el archivo ejercite
-    // también las partes que el C++ no interpreta.
-    Json codex = Json::objeto();
-    Json linajes = Json::arreglo();
-    linajes.agregar(Json::numero(2));
-    linajes.agregar(Json::numero(8));
-    Json formas = Json::arreglo();
-    formas.agregar(Json::texto("petreo"));
-    Json rarezas = Json::arreglo();
-    rarezas.agregar(Json::texto("primordial"));
-    codex.poner("linajes", std::move(linajes));
-    codex.poner("formas", std::move(formas));
-    codex.poner("rarezas", std::move(rarezas));
-    codex.poner("totalRegistradas", Json::numero(4));
+    // también esas partes y no solo la criatura.
+    //
+    // El codex se arma como STRUCT y no como JSON crudo. Antes se metía a mano
+    // dentro de `otros`, y cuando el C++ pasó a interpretarlo eso quedó
+    // escribiendo por el camino viejo: el archivo salía bien igual —`poner`
+    // pisaba la clave en su lugar— así que la validación contra el esquema de la
+    // web pasaba sin haber ejercitado el escritor nuevo ni una vez. Un arnés que
+    // prueba el código que ya no corre es peor que no tenerlo.
+    p.codex.linajes = {2, 8};
+    p.codex.formas = {Form::Petreo};
+    p.codex.rarezas = {"primordial"};
+    p.codex.totalRegistradas = 4;
 
     Json inventario = Json::objeto();
     inventario.poner("baya", Json::numero(3));
@@ -64,7 +63,6 @@ int main(int argc, char** argv) {
     // ser exacto. Si en algún tramo se convirtiera a número, volvería redondeado.
     semillas.agregar(Json::texto("11814994175403368200"));
 
-    p.otros.poner("codex", std::move(codex));
     p.otros.poner("inventario", std::move(inventario));
     p.otros.poner("semillas", std::move(semillas));
 

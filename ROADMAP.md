@@ -45,8 +45,8 @@ no llega a producción.
 
 ### Fase 1 — Port del núcleo a C++ 🚧
 
-Doce módulos de trece. Todos los portados tienen paridad verificada contra
-vectores generados ejecutando el TypeScript.
+Los catorce módulos, todos con paridad verificada contra vectores generados
+ejecutando el TypeScript.
 
 | Módulo | Estado |
 |---|---|
@@ -63,7 +63,8 @@ vectores generados ejecutando el TypeScript.
 | `json.cpp` — lector y escritor, con orden de claves estable | ✅ portado, compilado y verificado |
 | `save_manager.cpp` — leer y escribir los saves de la web | ✅ validado con el esquema real de la web |
 | `expeditions.cpp` — destinos, botín determinista | ✅ portado, compilado y verificado |
-| `breeding.cpp` — cruza por gen | ⬜ ni empezado |
+| `breeding.cpp` — cruza por gen | ✅ portado, compilado y verificado |
+| `codex.cpp` — linajes, formas y rarezas descubiertas | ✅ portado, compilado y verificado |
 
 **Los tests de paridad** (`gdext/tests/`) comparan 2010 genomas, 80 crianzas, 21
 entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
@@ -71,7 +72,7 @@ entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
 botines de expedición contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **52.681 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **53.610 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -102,8 +103,43 @@ String con el constructor desde `const char*`, que no interpreta UTF-8, y el "·
 salía como "Â·". El resto del puente usaba el helper correcto; el error estaba
 justo en la línea que no pasaba por él.
 
-Falta `breeding`, que es el único sistema de meta que queda y no bloquea nada:
-necesita dos criaturas adultas con vínculo alto para que se note.
+**La cruza tenía cuatro trampas** y las cuatro son de las que no fallan
+ruidosamente: si te equivocás, el hijo sale distinto y nada más se rompe.
+
+La primera es que la etiqueta con la que se siembra el PRNG lleva el seed en
+DECIMAL, porque en JavaScript interpolar un `bigint` rinde base diez. La segunda
+es que la etiqueta "A"/"B" de cada gen se decide comparando contra el primer
+argumento y no contra el menor de los dos, así que con `seedA > seedB` la "A"
+sale cuando el gen vino del mayor — y con dos padres de genoma idéntico, todos
+los campos salen "A". La tercera es que el bucle de mutación recorre los 64 bits
+siempre, porque cada vuelta consume un número del PRNG y cortar antes correría
+la secuencia. La cuarta es que el texto del cooldown redondea hacia arriba: con
+división entera, la última hora entera diría "faltan 0 h".
+
+Las cuatro están escritas en `breeding.h`, arriba de todo, porque son
+exactamente las que alguien va a querer "corregir".
+
+**El codex no estaba en la lista de módulos y era un agujero igual.** El C++ lo
+leía y lo volvía a escribir tal cual, dentro del bloque de campos sin
+interpretar. Con tests que lo probaban: el campo viajaba intacto, un save de la
+web pasaba por el nativo y volvía sin perder nada.
+
+Y estaba mal por la misma razón por la que estuvo mal el inventario: **nadie lo
+escribía**. Podías llegar a una forma adulta nueva en el nativo y el codex no se
+enteraba, porque enterarse era trabajo del código que no existía. Ahora
+`registrar` se llama al nacer, al cargar y cada vez que la simulación reporta una
+evolución — esa última es la que faltaba.
+
+Sus tres ordenamientos son distintos entre sí y ninguno es el obvio: los linajes
+van por número, las rarezas por id, y las formas **por su id en texto y no por
+el valor del enum**, que va en otro orden completamente. Ordenar por enum produce
+un archivo distinto del que escribe el navegador y ningún validador se quejaría.
+
+Interpretarlo permitió además poner las claves donde el TS las pone —
+`codex` antes de `inventario`, y no al final— y de paso corregir un comentario
+que afirmaba que ya era así cuando no lo era. El orden no cambia el significado,
+pero sí el diff entre un save de la web y uno del nativo, y ese diff es la
+herramienta con la que se encontró el bug del inventario.
 
 ### Fase 2 — Criatura en pantalla 🚧
 

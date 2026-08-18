@@ -3,7 +3,10 @@
  */
 
 #include "evolution.h"
+
+#include <array>
 #include <cassert>
+#include <iterator>
 
 namespace petbits {
 
@@ -73,6 +76,33 @@ Form resolverAdulto(const Crianza& c, const Genes& g, Form juvenil) {
 // ---------------------------------------------------------------------------
 // Presentación
 // ---------------------------------------------------------------------------
+
+namespace {
+/// En el orden del enum, para poder indexar por su valor.
+constexpr std::string_view IDS_FORMA[] = {"indefinida", "petreo",  "vaporoso", "coloso",
+                                          "guardian",   "errante", "oraculo"};
+} // namespace
+
+std::string_view formId(Form f) {
+    const size_t i = static_cast<size_t>(f);
+    return i < std::size(IDS_FORMA) ? IDS_FORMA[i] : IDS_FORMA[0];
+}
+
+bool formFromId(std::string_view id, Form& salida) {
+    for (size_t i = 0; i < std::size(IDS_FORMA); ++i) {
+        if (IDS_FORMA[i] == id) {
+            salida = static_cast<Form>(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+const std::array<Form, 6>& formasColeccionables() {
+    static const std::array<Form, 6> formas = {Form::Petreo,   Form::Vaporoso, Form::Coloso,
+                                               Form::Guardian, Form::Errante,  Form::Oraculo};
+    return formas;
+}
 
 std::string_view formName(Form f) {
     switch (f) {
