@@ -30,9 +30,13 @@ extends Node
 
 const Escritura = preload("res://scripts/Escritura.gd")
 const CajaDialogo = preload("res://scripts/CajaDialogo.gd")
+const Mapas = preload("res://scripts/Mapas.gd")
 
 const TILE := 16
 const ESCALA := 2
+
+## Aire entre un mapa y el siguiente, en píxeles del juego.
+const SEPARACION := 10
 
 var _atlas: Image = null
 
@@ -51,37 +55,57 @@ func _ready() -> void:
 	# cambió el mapa, no que salió otro bicho.
 	core.nacer("A3F0-91C4-77BE-2D08", 1786406400000, -180)
 
-	# El pueblo se lee de donde está definido, así que si se rediseña esta
-	# herramienta muestra el nuevo sin tocar una línea. Y no se instancia nada:
-	# `generar()` es estática y devuelve la grilla y ya.
-	var Pueblo = load("res://scripts/PuebloMapa.gd")
-	var ancho: int = Pueblo.ANCHO
-	var alto: int = Pueblo.ALTO
-	var celdas: Array = Pueblo.generar()
-
-	var salida := Image.create_empty(ancho * TILE * ESCALA, alto * TILE * ESCALA, false, Image.FORMAT_RGBA8)
-
-	for y in alto:
-		for x in ancho:
-			_pegar_tile(salida, celdas[y][x], x, y)
-
-	# La criatura, donde arranca.
-	var sprite: Image = core.sprite_actual(false)
-	_pegar_sprite(salida, sprite, Pueblo.ENTRADA.x - 8, Pueblo.ENTRADA.y - 8)
-
-	# Y los carteles, con la tipografía del juego. No es decoración: el texto
-	# sobre pasto y sobre camino es donde se ve si la fuente tiene contraste
-	# suficiente, y eso no se puede contestar mirando el atlas sobre negro.
+	# Los mapas se leen de donde están definidos, así que si alguno se rediseña
+	# esta herramienta muestra el nuevo sin tocar una línea. Y no se instancia
+	# nada: `generar()` es estática y devuelve la grilla y ya.
 	var tipo: Dictionary = Escritura.preparar(core)
-	_cartel(salida, tipo, core.estado()["seed"], 6, 4, Color("#9bbc0f"))
-	_cartel(salida, tipo, "El bosque — Enter", 6, 232, Color("#d6e6d0"))
+	var ids: Array = Mapas.todos()
 
-	# Y la caja de diálogo diciendo algo, que es lo que de verdad hay que mirar:
-	# si el marco pisa el mapa, si el texto respira, si tres renglones alcanzan.
+	# Los tres van uno debajo del otro, en una sola imagen. Verlos juntos es lo
+	# que dice si conviven: el pueblo es verde y frío y los interiores son
+	# madera, y esa diferencia es la que hace que entrar a un lugar se sienta
+	# como entrar a un lugar sin necesidad de ninguna transición.
+	var ancho_total := 0
+	var alto_total := 0
+	for id in ids:
+		var def = Mapas.script_de(id)
+		ancho_total = maxi(ancho_total, def.ANCHO * TILE)
+		alto_total += def.ALTO * TILE + SEPARACION
+
+	var salida := Image.create_empty(
+		ancho_total * ESCALA, alto_total * ESCALA, false, Image.FORMAT_RGBA8
+	)
+	salida.fill(Color("#0a0e0a"))
+
+	var y0 := 0
+	for id in ids:
+		var def = Mapas.script_de(id)
+		var celdas: Array = def.generar()
+
+		for y in def.ALTO:
+			for x in def.ANCHO:
+				_pegar_tile(salida, celdas[y][x], x, y + y0 / TILE)
+
+		# La criatura, donde arranca en ese mapa.
+		var sprite: Image = core.sprite_actual(false)
+		_pegar_sprite(salida, sprite, def.ENTRADA.x - 8, y0 + def.ENTRADA.y - 8)
+
+		# Y el nombre del mapa arriba a la izquierda, con la tipografía del
+		# juego. No es decoración: el texto sobre pasto y sobre madera es donde se
+		# ve si la fuente tiene contraste suficiente, y eso no se puede contestar
+		# mirando el atlas sobre negro.
+		_cartel(salida, tipo, id, 6, y0 + 4, Color("#9bbc0f"))
+
+		y0 += def.ALTO * TILE + SEPARACION
+
+	# Y la caja de diálogo sobre el último mapa, que es lo que de verdad hay que
+	# mirar: si el marco pisa el mapa, si el texto respira, si tres renglones
+	# alcanzan.
 	_caja(
 		salida, tipo,
 		"El bosque. Hay cosas raras entre los árboles, pero está lejos:"
-		+ " hora y media de ida y vuelta."
+		+ " hora y media de ida y vuelta.",
+		alto_total - SEPARACION
 	)
 
 	var error := salida.save_png("res://mapa.png")
@@ -91,7 +115,8 @@ func _ready() -> void:
 		return
 
 	print("Mapa escrito en %s" % ProjectSettings.globalize_path("res://mapa.png"))
-	print("%d x %d tiles, %d x %d px" % [ancho, alto, salida.get_width(), salida.get_height()])
+	print("%d mapas: %s" % [ids.size(), ", ".join(ids)])
+	print("%d x %d px" % [salida.get_width(), salida.get_height()])
 	get_tree().quit(0)
 
 
@@ -102,7 +127,7 @@ func _ready() -> void:
 ## llamadas del marco —un relleno y dos rectángulos— y hasta eso lee sus colores
 ## y sus márgenes de las constantes de la caja, así que no puede irse quedando
 ## vieja sin que se note.
-func _caja(destino: Image, tipo: Dictionary, texto: String) -> void:
+func _caja(destino: Image, tipo: Dictionary, texto: String, abajo_de: int) -> void:
 	var alto_fuente := int(tipo["m"]["alto"])
 	var margen := CajaDialogo.MARGEN
 
@@ -115,7 +140,7 @@ func _caja(destino: Image, tipo: Dictionary, texto: String) -> void:
 	var w: int = vp.x - 8
 	var h: int = CajaDialogo.RENGLONES * (alto_fuente + 2) + margen * 2
 	var x0 := 4
-	var y0: int = vp.y - h - 4
+	var y0: int = abajo_de - h - 4
 
 	_rect(destino, x0, y0, w, h, CajaDialogo.FONDO, true)
 	_rect(destino, x0, y0, w, h, CajaDialogo.BORDE, false)

@@ -24,6 +24,8 @@ bool esSolido(Tile t) {
         case Tile::Agua:
         case Tile::Piedra:
         case Tile::Arbol:
+        case Tile::Pared:
+        case Tile::Pedestal:
             return true;
         default:
             return false;
@@ -55,6 +57,13 @@ static constexpr Receta RECETAS[static_cast<size_t>(Tile::CANTIDAD)] = {
     /* PastoAlto */ {130, 0.55, 0.095, 0.050},
     /* Arena     */ {80, 0.80, 0.060, 0.030},
     /* Musgo     */ {158, 0.52, 0.070, 0.045},
+    // Los interiores son más cálidos y menos saturados que el exterior: la
+    // madera contra el pasto es lo que hace que entrar a un lugar se sienta
+    // como entrar a un lugar, sin necesidad de una transición.
+    /* Piso      */ {58, 0.64, 0.038, 0.022},
+    /* Pared     */ {40, 0.33, 0.030, 0.020},
+    /* Alfombra  */ {28, 0.48, 0.085, 0.030},
+    /* Pedestal  */ {250, 0.62, 0.012, 0.035},
 };
 
 /** Pinta el tile entero con el color base y su moteado. */
@@ -153,6 +162,66 @@ static void dibujarTile(PixelBuffer& buffer, Tile t) {
                 buffer.set(x0 + 7, y, tronco);
                 buffer.set(x0 + 8, y, tronco);
             }
+            break;
+        }
+
+        case Tile::Piso: {
+            // Tablas horizontales, y NADA de juntas verticales.
+            //
+            // La primera versión las tenía, corridas entre hiladas para que no
+            // se leyera como una grilla — y el efecto fue el contrario: con las
+            // verticales el piso se leía como mampostería, igual que la pared, y
+            // adentro de una sala no se distinguía por dónde se podía caminar.
+            // Dos líneas horizontales suaves alcanzan para que haya textura sin
+            // que compita con la alfombra ni con los muebles.
+            const Rgb junta = oklchToRgb(r.luz - 0.055, r.croma, r.hue - 4);
+            for (int x = 0; x < TILE; ++x) {
+                buffer.set(x0 + x, 5, junta);
+                buffer.set(x0 + x, 11, junta);
+            }
+            break;
+        }
+
+        case Tile::Pared: {
+            // Un zócalo claro arriba: sin él, una pared oscura al lado de otra
+            // se lee como un agujero y no como un muro.
+            const Rgb luz = oklchToRgb(r.luz + 0.14, r.croma * 0.8, r.hue + 4);
+            const Rgb junta = oklchToRgb(r.luz - 0.12, r.croma, r.hue);
+            for (int x = 0; x < TILE; ++x) {
+                buffer.set(x0 + x, 0, luz);
+                buffer.set(x0 + x, 1, luz);
+                buffer.set(x0 + x, 8, junta);
+            }
+            for (int y = 2; y < 8; ++y) buffer.set(x0 + 6, y, junta);
+            for (int y = 9; y < TILE; ++y) buffer.set(x0 + 12, y, junta);
+            break;
+        }
+
+        case Tile::Alfombra: {
+            // Borde en dos tonos. Como se pone en tiras, el borde marca el
+            // recorrido y el centro queda liso.
+            const Rgb borde = oklchToRgb(r.luz - 0.14, r.croma * 1.1, r.hue - 8);
+            const Rgb hilo = oklchToRgb(r.luz + 0.12, r.croma * 0.7, r.hue + 10);
+            for (int i2 = 0; i2 < TILE; ++i2) {
+                buffer.set(x0 + i2, 0, borde);
+                buffer.set(x0 + i2, TILE - 1, borde);
+                buffer.set(x0 + i2, 2, hilo);
+                buffer.set(x0 + i2, TILE - 3, hilo);
+            }
+            break;
+        }
+
+        case Tile::Pedestal: {
+            // Un bloque con la cara superior clara. Es sólido: la criatura se
+            // para al lado, no encima.
+            const Rgb cara = oklchToRgb(r.luz + 0.16, r.croma, r.hue);
+            const Rgb canto = oklchToRgb(r.luz - 0.18, r.croma, r.hue);
+            for (int y = 3; y < TILE - 1; ++y) {
+                for (int x = 2; x < TILE - 2; ++x) {
+                    buffer.set(x0 + x, y, (y < 7) ? cara : canto);
+                }
+            }
+            for (int x = 2; x < TILE - 2; ++x) buffer.set(x0 + x, 3, canto);
             break;
         }
 

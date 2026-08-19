@@ -1,0 +1,8 @@
+; Corre verificar_interiores.gd. No tiene nodos: todo lo hace el script.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/verificar_interiores.gd" id="1_tool"]
+
+[node name="VerificarInteriores" type="Node"]
+script = ExtResource("1_tool")

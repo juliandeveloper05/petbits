@@ -22,6 +22,7 @@
  * cualquier texto —tu nombre— que se convierte en un seed por hash.
  */
 
+#include "breeding.h"
 #include "codex.h"
 #include "save_manager.h"
 #include "simulation.h"
@@ -238,6 +239,68 @@ public:
      * y no hay nada que avise.
      */
     Dictionary fuente_metricas() const;
+
+    // -----------------------------------------------------------------------
+    // La colección y la cruza
+    // -----------------------------------------------------------------------
+
+    /**
+     * Cuántas criaturas caben en una partida.
+     *
+     * Vive acá y no en `breeding.h` porque del lado web tampoco es una regla del
+     * núcleo: está en `main.ts`, en la capa de interfaz. Es un tope de
+     * presentación —seis fichas entran en pantalla— y no una ley del juego. Pero
+     * tiene que ser el MISMO número, o el nativo llenaría un criadero que la web
+     * considera lleno.
+     */
+    static constexpr int MAX_CRIATURAS = 6;
+
+    /**
+     * Todas las criaturas de la partida, para poder elegir dos.
+     *
+     * Cada una trae además si puede cruzar y por qué no, porque esa es la
+     * pregunta que la pantalla necesita contestar por criatura y calcularla del
+     * lado de GDScript significaría reimplementar las reglas.
+     */
+    Array criaturas(int64_t ahora_ms) const;
+
+    /** Cambia cuál es la activa. Devuelve false si ese id no existe. */
+    bool activar(const String& id);
+
+    /**
+     * Las semillas encontradas en expediciones y todavía sin incubar.
+     *
+     * Cada una: { seed, linaje, rarezas }. El linaje y las rarezas se calculan
+     * acá porque son lo único que se puede saber de una criatura antes de que
+     * nazca, y es con eso que el jugador decide cuál incubar.
+     */
+    Array semillas() const;
+
+    /**
+     * Incuba una semilla: nace una criatura y pasa a ser la activa.
+     *
+     * { ok, mensaje, seed }. La semilla se saca de la lista.
+     *
+     * Es lo que hace que el criadero sea alcanzable. Sin incubar, una partida
+     * nativa nunca tiene dos criaturas y la cruza queda como código que no se
+     * puede ejecutar jugando — que es la peor clase de código, porque parece
+     * terminado.
+     */
+    Dictionary incubar(const String& seed, int64_t ahora_ms, int64_t tz_min);
+
+    /** ¿Puede cruzar este par? { puede: bool, motivo: String }. */
+    Dictionary puede_cruzar(const String& id_a, const String& id_b, int64_t ahora_ms) const;
+
+    /**
+     * Los cruza. La cría nace, entra en la colección y pasa a ser la activa.
+     *
+     * { ok, mensaje, seed, descripcion, mutaciones, descubrimientos }
+     *
+     * `ahora_ms` hace de nonce, igual que en la web: es lo que hace que cruzar
+     * la misma pareja dos veces no dé siempre el mismo hijo. `cruzar()` en sí es
+     * determinista.
+     */
+    Dictionary cruzar(const String& id_a, const String& id_b, int64_t ahora_ms);
 
     // -----------------------------------------------------------------------
     // Codex

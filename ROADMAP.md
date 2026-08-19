@@ -283,9 +283,10 @@ use creyendo que sirve.
 | Una sola partida para las dos pantallas (autoload `Partida`) | ✅ |
 | Mandar a la criatura desde la entrada de cada zona | ✅ |
 | Ir y volver entre el pueblo y PetView | ✅ |
-| Las otras cinco zonas como mapas propios | ⬜ |
-| Transiciones entre zonas | ⬜ |
-| NPCs con diálogo | ⬜ |
+| El criadero y el codex como interiores caminables | ✅ |
+| Transiciones entre mapas, con fundido | ✅ |
+| Un NPC con diálogo en la plaza | ✅ |
+| Más NPCs y más para hacer en cada lugar | ⬜ |
 
 **La decisión de diseño que ordena esta fase.** Tres de las zonas —patio, bosque,
 ruinas— ya existen como mecánica: son destinos de expedición y tardan quince
@@ -297,6 +298,61 @@ agarrarías el botín y volverías. Así que **el mapa reemplaza al menú, no a 
 espera**. Llegás caminando hasta la entrada y ahí la mandás; la expedición sigue
 tardando lo que tarda. El mundo vuelve tangible una elección que hoy es una
 lista de botones.
+
+**Son DOS interiores y no cinco, y esa es la corrección.** El plan original
+decía "las otras cinco zonas como mapas propios", y contradecía la decisión que
+ordena la fase entera. Patio, bosque y ruinas son destinos de expedición: tardan
+quince minutos, hora y media o cuatro horas de tiempo real con el juego cerrado.
+Caminar hasta ellas en tres segundos mataría esa espera, que es media mecánica.
+Siguen siendo puertas donde la mandás.
+
+El criadero y el codex sí se volvieron lugares, por el motivo inverso: ahí no
+había espera que preservar. Eran un menú, y un menú se puede reemplazar entero
+por un lugar sin perder nada.
+
+**`Mundo.gd` dejó de ser "el pueblo" y pasó a ser "un mapa".** Con el pueblo
+adentro, cada mapa nuevo habría sido una escena con su copia de caminar, chocar,
+hablar y dibujar. Ahora la escena no sabe en cuál está: le pide el script a
+`Mapas`, arma el tilemap con su grilla y despacha sus puntos por `tipo`
+—"puerta", "expedicion", "cruzar", "estante", "npc"—. Agregar un mapa es agregar
+un archivo de datos.
+
+Los tiles de interior van **al final del enum** de `tileset_gen.cpp`, no en su
+lugar lógico entre los de afuera. El índice de cada tile es lo que guardan las
+grillas, así que insertar uno en el medio las reescribe todas en silencio: el
+pueblo seguiría cargando y el pasto sería agua.
+
+**Para que el criadero fuera alcanzable hubo que agregar `incubar`.** Una partida
+nativa nunca tenía dos criaturas, así que la cruza habría sido código que no se
+puede ejecutar jugando — la peor clase de código, porque parece terminado. El
+nativo ya guardaba las semillas que encuentra en las expediciones; lo que
+faltaba era convertirlas en criaturas, igual que hace la web.
+
+```bash
+godot --headless --path godot res://scenes/VerificarInteriores.tscn
+```
+
+Cuarenta comprobaciones: que las tres grillas estén completas y sin índices de
+tile inventados, que las entradas no caigan sobre un tile sólido, que a cada
+punto se pueda llegar, que las puertas lleven a algún lado, que salir te deje en
+la puerta por la que entraste, y que cruzar produzca una tercera criatura que
+sobreviva al archivo.
+
+Ese test resultó ser, sin que fuera la intención, **la partida mínima que hay
+que jugar para llegar al criadero**. Para cruzar hacen falta dos adultas sanas y
+con vínculo, y la tentación era agregarle al C++ un método que pusiera la
+criatura en adulta y listo — un backdoor en el código de producción para que
+pasara un test. En vez de eso el test cría de verdad: seis días de simulación,
+alimentando, acariciando dos veces por día para que no entre en letargo, y
+mandándola al patio a buscar comida porque la despensa inicial no da. Es decir
+que también prueba que la economía cierra.
+
+Y falló dos veces con razón. La primera simulaba hacia el pasado y no avanzaba
+un tick —la criatura acababa de nacer, su reloj ya estaba en "ahora"— y el
+síntoma era "todavía no terminó de crecer", que parecía un problema de la regla.
+La segunda solo acariciaba: llegó a adulta con vínculo 28 y **salud cero**, seis
+días sin comer. La simulación estaba haciendo bien su trabajo y el test estaba
+jugando mal.
 
 **Los tiles no tienen contraparte en la web**, y eso cambia cómo se verifican.
 Todo lo demás en `gdext/` es un port con un TypeScript que dice cuál es la
@@ -312,6 +368,19 @@ las mismas imágenes que usa el juego:
 ```bash
 godot --headless --path godot res://scenes/MapaAPng.tscn
 ```
+
+Compone los tres mapas en una sola imagen, uno debajo del otro. Verlos juntos es
+lo que dice si conviven: el pueblo es verde y frío, los interiores son madera, y
+esa diferencia es la que hace que entrar a un lugar se sienta como entrar a un
+lugar sin necesidad de ninguna transición.
+
+Y encontró algo que ningún test podía decir. Los interiores medían 20 × 13 tiles
+y se veían perfectos en el PNG —donde cada mapa se compone solo— pero el
+viewport del juego es 30 × 17: en pantalla habrían dejado un tercio en negro a
+la derecha. Todos los tests preguntaban por la grilla, y la grilla estaba
+impecable. También se vio que el piso de madera, con sus juntas verticales, se
+leía igual que la pared de ladrillo: adentro de una sala no se distinguía por
+dónde se podía caminar.
 
 **La caja de diálogo cierra la Fase 2.** Es el recurso más viejo del género y
 sigue siendo el mejor: escribe letra por letra, espera que le den Enter, pasa de

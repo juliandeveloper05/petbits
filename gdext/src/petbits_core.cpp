@@ -8,6 +8,7 @@
 #include "actions.h"
 #include "expeditions.h"
 #include "sprite_gen.h"
+#include "breeding.h"
 #include "codex.h"
 #include "font_gen.h"
 #include "tileset_gen.h"
@@ -95,6 +96,15 @@ void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("atlas_tiles"), &PetBitsCore::atlas_tiles);
     ClassDB::bind_method(D_METHOD("cantidad_tiles"), &PetBitsCore::cantidad_tiles);
     ClassDB::bind_method(D_METHOD("tile_solido", "indice"), &PetBitsCore::tile_solido);
+
+    ClassDB::bind_method(D_METHOD("criaturas", "ahora_ms"), &PetBitsCore::criaturas);
+    ClassDB::bind_method(D_METHOD("activar", "id"), &PetBitsCore::activar);
+    ClassDB::bind_method(D_METHOD("semillas"), &PetBitsCore::semillas);
+    ClassDB::bind_method(D_METHOD("incubar", "seed", "ahora_ms", "tz_min"),
+                         &PetBitsCore::incubar);
+    ClassDB::bind_method(D_METHOD("puede_cruzar", "id_a", "id_b", "ahora_ms"),
+                         &PetBitsCore::puede_cruzar);
+    ClassDB::bind_method(D_METHOD("cruzar", "id_a", "id_b", "ahora_ms"), &PetBitsCore::cruzar);
 
     ClassDB::bind_method(D_METHOD("codex"), &PetBitsCore::codex);
 
@@ -597,6 +607,216 @@ Dictionary PetBitsCore::fuente_metricas() const {
     d["avance"] = petbits::Fuente::AVANCE;
     d["ascenso"] = petbits::Fuente::ASCENSO;
     d["descenso"] = petbits::Fuente::DESCENSO;
+    return d;
+}
+
+// ---------------------------------------------------------------------------
+// La colección y la cruza
+// ---------------------------------------------------------------------------
+
+namespace {
+/** Busca por id dentro de la partida. nullptr si no está. */
+const petbits::CreatureState* buscarCriatura(const petbits::Partida& p, const std::string& id) {
+    for (const petbits::CreatureState& c : p.criaturas) {
+        if (c.id == id) return &c;
+    }
+    return nullptr;
+}
+} // namespace
+
+Array PetBitsCore::criaturas(int64_t ahora_ms) const {
+    Array salida;
+    if (!partida.has_value()) return salida;
+
+    for (const petbits::CreatureState& c : partida->criaturas) {
+        Dictionary d;
+        d["id"] = aGodot(c.id);
+        d["seed"] = aGodot(petbits::formatSeed(c.seed));
+        d["etapa"] = aGodot(petbits::stageName(c.etapa));
+        d["forma"] = aGodot(petbits::formName(c.forma));
+        d["linaje"] = aGodot(petbits::lineageName(petbits::decodeGenome(c.seed)));
+        d["activa"] = (c.id == partida->activaId);
+
+        // La elegibilidad viene calculada del C++, con su motivo. Del lado de
+        // GDScript habría que reimplementar cinco reglas y su orden — y el orden
+        // importa, porque solo se muestra el primer motivo que falla.
+        const petbits::Elegibilidad e = petbits::elegibilidad(c, ahora_ms);
+        d["puede_cruzar"] = e.puede;
+        d["motivo"] = aGodot(e.motivo);
+
+        salida.push_back(d);
+    }
+    return salida;
+}
+
+bool PetBitsCore::activar(const String& id) {
+    if (!partida.has_value()) return false;
+    const std::string buscado = std::string(aBytes(id).get_data());
+    if (buscarCriatura(*partida, buscado) == nullptr) return false;
+    partida->activaId = buscado;
+    return true;
+}
+
+Array PetBitsCore::semillas() const {
+    Array salida;
+    if (!partida.has_value()) return salida;
+
+    const petbits::Json* lista = partida->otros.buscar("semillas");
+    if (lista == nullptr || !lista->esArreglo()) return salida;
+
+    for (const petbits::Json& v : lista->elementos()) {
+        if (!v.esTexto()) continue;
+
+        petbits::Seed s = 0;
+        // Las semillas viajan como texto decimal porque el genoma no entra en un
+        // double sin perder precisión. Una que no se pueda leer se saltea en vez
+        // de romper la pantalla: puede venir de una versión más nueva.
+        if (!petbits::parseSeed(v.comoTexto(), s)) continue;
+
+        Dictionary d;
+        d["seed"] = aGodot(petbits::formatSeed(s));
+        d["linaje"] = aGodot(petbits::lineageName(petbits::decodeGenome(s)));
+
+        Array rarezas;
+        for (const petbits::Trait& t : petbits::detectTraits(s)) {
+            rarezas.push_back(aGodot(t.name));
+        }
+        d["rarezas"] = rarezas;
+
+        salida.push_back(d);
+    }
+    return salida;
+}
+
+Dictionary PetBitsCore::incubar(const String& seed, int64_t ahora_ms, int64_t tz_min) {
+    Dictionary d;
+    d["ok"] = false;
+    d["seed"] = String();
+
+    if (!partida.has_value()) {
+        d["mensaje"] = String("No hay partida.");
+        return d;
+    }
+    if (static_cast<int>(partida->criaturas.size()) >= MAX_CRIATURAS) {
+        d["mensaje"] = String("El criadero está lleno.");
+        return d;
+    }
+
+    petbits::Seed valor = 0;
+    if (!leerSeed(seed, valor)) {
+        d["mensaje"] = String("No pude interpretar esa semilla.");
+        return d;
+    }
+
+    const petbits::CreatureState cria =
+        petbits::createCreature(valor, ahora_ms, static_cast<int>(tz_min));
+    partida->criaturas.push_back(cria);
+    partida->activaId = cria.id;
+
+    // Y se saca de la lista de pendientes. Se compara por el seed ya
+    // normalizado y no por el texto: la misma semilla puede estar escrita en
+    // decimal o en hexadecimal según quién la haya guardado.
+    if (const petbits::Json* lista = partida->otros.buscar("semillas")) {
+        petbits::Json quedan = petbits::Json::arreglo();
+        bool saltada = false;
+        for (const petbits::Json& v : lista->elementos()) {
+            petbits::Seed s = 0;
+            if (!saltada && v.esTexto() && petbits::parseSeed(v.comoTexto(), s) && s == valor) {
+                saltada = true;
+                continue;
+            }
+            quedan.agregar(v);
+        }
+        partida->otros.poner("semillas", std::move(quedan));
+    }
+
+    d["ok"] = true;
+    d["seed"] = aGodot(petbits::formatSeed(cria.seed));
+    d["mensaje"] = String("Incubada. Ahora es tuya.");
+    d["descubrimientos"] = registrar_activa();
+    return d;
+}
+
+Dictionary PetBitsCore::puede_cruzar(const String& id_a, const String& id_b,
+                                     int64_t ahora_ms) const {
+    Dictionary d;
+    d["puede"] = false;
+
+    if (!partida.has_value()) {
+        d["motivo"] = String("No hay partida.");
+        return d;
+    }
+
+    const petbits::CreatureState* a =
+        buscarCriatura(*partida, std::string(aBytes(id_a).get_data()));
+    const petbits::CreatureState* b =
+        buscarCriatura(*partida, std::string(aBytes(id_b).get_data()));
+    if (a == nullptr || b == nullptr) {
+        d["motivo"] = String("Falta alguna de las dos.");
+        return d;
+    }
+
+    // El tope se pregunta ANTES que la elegibilidad de la pareja: si el criadero
+    // está lleno, que las dos criaturas estén perfectas no cambia nada, y decir
+    // "no está lo bastante sana" sería mandar al jugador a cuidar a una criatura
+    // que no era el problema.
+    if (static_cast<int>(partida->criaturas.size()) >= MAX_CRIATURAS) {
+        d["motivo"] = String("El criadero está lleno.");
+        return d;
+    }
+
+    const petbits::Elegibilidad e = petbits::puedenCruzar(*a, *b, ahora_ms);
+    d["puede"] = e.puede;
+    d["motivo"] = aGodot(e.motivo);
+    return d;
+}
+
+Dictionary PetBitsCore::cruzar(const String& id_a, const String& id_b, int64_t ahora_ms) {
+    Dictionary d;
+    d["ok"] = false;
+    d["seed"] = String();
+    d["descripcion"] = String();
+    d["mutaciones"] = 0;
+    d["descubrimientos"] = Array();
+
+    const Dictionary veredicto = puede_cruzar(id_a, id_b, ahora_ms);
+    if (!static_cast<bool>(veredicto["puede"])) {
+        d["mensaje"] = veredicto["motivo"];
+        return d;
+    }
+
+    const std::string ida = std::string(aBytes(id_a).get_data());
+    const std::string idb = std::string(aBytes(id_b).get_data());
+    const petbits::CreatureState* a = buscarCriatura(*partida, ida);
+    const petbits::CreatureState* b = buscarCriatura(*partida, idb);
+
+    // El mismo orden que `doCruzar` en la web, y no es casual: el nonce sale del
+    // reloj, así que cruzar la misma pareja dos veces da hijos distintos aunque
+    // `cruzar()` sea determinista.
+    const petbits::Cruza cruza = petbits::cruzar(a->seed, b->seed, ahora_ms);
+
+    // La cría hereda la zona horaria de la madre y no la del sistema: si se
+    // leyera el reloj local acá, una partida abierta en otro huso daría otra
+    // criatura y se rompería el invariante de composición de la simulación.
+    const petbits::CreatureState cria =
+        petbits::createCreature(cruza.seed, ahora_ms, a->tzOffsetMin);
+
+    // Los padres quedan en descanso.
+    for (petbits::CreatureState& c : partida->criaturas) {
+        if (c.id == ida || c.id == idb) {
+            c = petbits::marcarCruzada(c, ahora_ms);
+        }
+    }
+
+    partida->criaturas.push_back(cria);
+    partida->activaId = cria.id;
+
+    d["ok"] = true;
+    d["seed"] = aGodot(petbits::formatSeed(cria.seed));
+    d["descripcion"] = aGodot(petbits::describirHerencia(cruza));
+    d["mutaciones"] = cruza.mutaciones;
+    d["mensaje"] = aGodot(std::string("Nació. ") + petbits::describirHerencia(cruza));
+    d["descubrimientos"] = registrar_activa();
     return d;
 }
 

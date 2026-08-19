@@ -102,10 +102,10 @@ func _correr() -> void:
 	_afirmar(not mundo._choca(Vector2(15.5 * 16, 8.5 * 16)), "la plaza se camina")
 
 	# ---- Caminar hasta el patio -------------------------------------------
-	var patio: Dictionary = preload("res://scripts/PuebloMapa.gd").ZONAS[0]
+	var patio: Dictionary = preload("res://scripts/PuebloMapa.gd").PUNTOS[0]
 	mundo._criatura.position = Vector2((patio["x"] + 0.5) * 16, (patio["y"] + 0.5) * 16)
 	mundo._mirar_alrededor()
-	_afirmar(mundo._zona_cerca.get("destino", "") == "patio", "pararse en la entrada la reconoce")
+	_afirmar(mundo._cerca.get("destino", "") == "patio", "pararse en la entrada la reconoce")
 
 	# ---- Mandarla desde ahí ------------------------------------------------
 	_afirmar(Partida.core.falta_para_volver(Partida.ahora_ms()) == 0, "antes de mandarla, está en casa")

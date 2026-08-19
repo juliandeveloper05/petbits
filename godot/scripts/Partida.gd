@@ -88,6 +88,18 @@ const MAXIMO_BITACORA := 120
 var ruta_save := RUTA_SAVE
 var ruta_cuarentena := RUTA_CUARENTENA
 
+## En qué mapa estás, y de cuál venías.
+##
+## NO se guardan en el archivo, y eso es deliberado: el formato del save es el de
+## la web, y la web no tiene mapas. Agregar un campo propio rompería la promesa
+## de que los dos programas escriben lo mismo, y a cambio ahorraría reaparecer en
+## la plaza al abrir el juego — que es donde uno espera aparecer igual.
+##
+## `venir_de` es lo que hace que salir del criadero te deje en su puerta y no en
+## el medio del pueblo.
+var mapa := "pueblo"
+var venir_de := ""
+
 var core: RefCounted = null
 
 ## La tipografía del juego, armada desde el atlas que genera el C++.

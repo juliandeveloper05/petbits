@@ -47,6 +47,18 @@ enum class Tile : uint8_t {
     PastoAlto,
     Arena,
     Musgo,
+
+    // --- interiores ---
+    //
+    // Van AL FINAL y no en su lugar "lógico" entre los de afuera. El índice de
+    // cada tile es lo que guardan las grillas de los mapas, así que insertar uno
+    // en el medio los reescribe todos en silencio: el pueblo seguiría cargando y
+    // el pasto sería agua.
+    Piso,      ///< Tablas de madera. Se camina.
+    Pared,     ///< Sólida. Es el borde de un interior.
+    Alfombra,  ///< Se camina. Marca por dónde se pasa.
+    Pedestal,  ///< Sólido. Es donde se apoya una criatura para cruzar.
+
     CANTIDAD,
 };
 

@@ -28,22 +28,50 @@ const ALTO := 17
 ##
 ## El orden es un contrato: la grilla guarda índices, así que reordenar acá los
 ## rompe todos. Si se agrega un tile, va al final.
-enum T { PASTO, CAMINO, AGUA, PIEDRA, ARBOL, PASTO_ALTO, ARENA, MUSGO }
+enum T { PASTO, CAMINO, AGUA, PIEDRA, ARBOL, PASTO_ALTO, ARENA, MUSGO, PISO, PARED, ALFOMBRA, PEDESTAL }
 
 ## Dónde arranca la criatura, en píxeles: el centro de la plaza.
 const ENTRADA := Vector2(15.5 * TILE, 8.5 * TILE)
 
-## Dónde está cada zona y qué destino de expedición le corresponde.
+## Los puntos con los que se puede interactuar, y de qué tipo es cada uno.
 ##
-## Las que no tienen destino todavía no hacen nada: están puestas para que el
-## pueblo tenga forma de pueblo desde el principio, y para no tener que rehacer
-## el mapa cuando existan.
-const ZONAS := [
-	{"x": 4, "y": 3, "nombre": "El patio", "destino": "patio"},
-	{"x": 25, "y": 3, "nombre": "El bosque", "destino": "bosque"},
-	{"x": 25, "y": 13, "nombre": "Las ruinas", "destino": "ruinas"},
-	{"x": 4, "y": 13, "nombre": "El criadero", "destino": ""},
-	{"x": 15, "y": 2, "nombre": "El codex", "destino": ""},
+## Son de dos clases y la diferencia es la decisión de diseño que ordena toda
+## la fase:
+##
+##   - Las TRES ENTRADAS de expedición —patio, bosque, ruinas— no llevan a
+##     ningún lado. Son destinos que tardan quince minutos, hora y media o cuatro
+##     horas de tiempo real, con el juego cerrado. Si caminaras hasta el bosque
+##     en tres segundos esa espera dejaría de existir, y la espera es media
+##     mecánica. Llegás hasta la puerta y desde ahí la mandás.
+##
+##   - Las DOS PUERTAS —criadero y codex— sí abren a un mapa propio, y por el
+##     motivo inverso: no hay espera que preservar. Eran un menú, y un menú se
+##     puede reemplazar entero por un lugar sin perder nada.
+##
+## `tipo` es el mismo vocabulario en los tres mapas, así que `Mundo` despacha
+## una sola vez y no necesita saber en cuál está.
+const PUNTOS := [
+	{"x": 4, "y": 3, "nombre": "El patio", "tipo": "expedicion", "destino": "patio"},
+	{"x": 25, "y": 3, "nombre": "El bosque", "tipo": "expedicion", "destino": "bosque"},
+	{"x": 25, "y": 13, "nombre": "Las ruinas", "tipo": "expedicion", "destino": "ruinas"},
+	{"x": 4, "y": 13, "nombre": "El criadero", "tipo": "puerta", "mapa": "criadero"},
+	{"x": 15, "y": 2, "nombre": "El codex", "tipo": "puerta", "mapa": "codex"},
+
+	# El vecino de la plaza. Su seed es fijo: es siempre la misma criatura, y eso
+	# importa más de lo que parece. Un NPC con genoma al azar cambiaría de cara
+	# cada vez que abrís el juego, y dejaría de ser alguien para volver a ser una
+	# textura que habla.
+	{
+		"x": 12, "y": 9, "nombre": "Alguien del pueblo", "tipo": "npc",
+		"seed": "C0FE-1DEA-5EED-B10C",
+		"dice": [
+			"Ah, vos sos la que cuida a esa. Se nota.",
+			"Mirá: al patio la podés mandar cuando quieras, no le cuesta nada."
+			+ " Al bosque y a las ruinas, solo cuando esté lista.",
+			"Y tardan lo que tardan. Andá a hacer otra cosa mientras — está bien"
+			+ " que el juego siga sin vos.",
+		],
+	},
 ]
 
 
@@ -76,8 +104,9 @@ static func generar() -> Array:
 			mapa[y][x] = T.CAMINO
 
 	# Un caminito a cada zona.
-	for zona in ZONAS:
-		_trazar_camino(mapa, 15, 8, zona["x"], zona["y"])
+	for punto in PUNTOS:
+		if punto["tipo"] != "npc":
+			_trazar_camino(mapa, 15, 8, punto["x"], punto["y"])
 
 	# Un estanque, para que no sea todo verde y camino.
 	for y in range(11, 15):
@@ -91,9 +120,12 @@ static func generar() -> Array:
 	for p in [[7, 4], [8, 4], [7, 5], [21, 4], [22, 4], [21, 5], [22, 5]]:
 		mapa[p[1]][p[0]] = T.PASTO_ALTO
 
-	# Y las zonas, marcadas en piedra.
-	for zona in ZONAS:
-		mapa[zona["y"]][zona["x"]] = T.PIEDRA
+	# Y los puntos, marcados en piedra. El NPC no: es alguien parado ahí, no una
+	# entrada, y ponerle una piedra debajo lo convertiría en decorado.
+	for punto in PUNTOS:
+		if punto["tipo"] == "npc":
+			continue
+		mapa[punto["y"]][punto["x"]] = T.PIEDRA
 
 	return mapa
 
