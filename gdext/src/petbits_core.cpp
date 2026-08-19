@@ -10,6 +10,7 @@
 #include "sprite_gen.h"
 #include "breeding.h"
 #include "codex.h"
+#include "world_gen.h"
 #include "font_gen.h"
 #include "tileset_gen.h"
 #include "traits.h"
@@ -105,6 +106,13 @@ void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("puede_cruzar", "id_a", "id_b", "ahora_ms"),
                          &PetBitsCore::puede_cruzar);
     ClassDB::bind_method(D_METHOD("cruzar", "id_a", "id_b", "ahora_ms"), &PetBitsCore::cruzar);
+
+    ClassDB::bind_method(D_METHOD("semilla_del_mundo"), &PetBitsCore::semilla_del_mundo);
+    ClassDB::bind_method(D_METHOD("lado_de_chunk"), &PetBitsCore::lado_de_chunk);
+    ClassDB::bind_method(D_METHOD("mundo_chunk", "semilla", "cx", "cy"),
+                         &PetBitsCore::mundo_chunk);
+    ClassDB::bind_method(D_METHOD("mundo_tile", "semilla", "x", "y"), &PetBitsCore::mundo_tile);
+    ClassDB::bind_method(D_METHOD("mundo_bioma", "semilla", "x", "y"), &PetBitsCore::mundo_bioma);
 
     ClassDB::bind_method(D_METHOD("codex"), &PetBitsCore::codex);
 
@@ -911,6 +919,49 @@ Dictionary PetBitsCore::codex() const {
     d["progreso"] = progreso;
 
     return d;
+}
+
+// ---------------------------------------------------------------------------
+// El mundo infinito
+// ---------------------------------------------------------------------------
+
+String PetBitsCore::semilla_del_mundo() const {
+    if (!partida.has_value() || partida->criaturas.empty()) return String();
+    // La PRIMERA de la colección, que es con la que empezó la partida. Usar la
+    // activa haría que el mundo entero cambiara al incubar una semilla nueva.
+    return aGodot(petbits::formatSeed(partida->criaturas.front().seed));
+}
+
+int64_t PetBitsCore::lado_de_chunk() const {
+    return petbits::CHUNK;
+}
+
+PackedByteArray PetBitsCore::mundo_chunk(const String& semilla, int64_t cx, int64_t cy) const {
+    PackedByteArray salida;
+
+    petbits::Seed valor = 0;
+    if (!leerSeed(semilla, valor)) return salida;
+
+    const petbits::Chunk chunk = petbits::generarChunk(
+        valor, static_cast<int32_t>(cx), static_cast<int32_t>(cy));
+
+    salida.resize(static_cast<int64_t>(chunk.tiles.size()));
+    std::memcpy(salida.ptrw(), chunk.tiles.data(), chunk.tiles.size());
+    return salida;
+}
+
+int64_t PetBitsCore::mundo_tile(const String& semilla, int64_t x, int64_t y) const {
+    petbits::Seed valor = 0;
+    if (!leerSeed(semilla, valor)) return static_cast<int64_t>(petbits::Tile::Pasto);
+    return static_cast<int64_t>(
+        petbits::tileEnMundo(valor, static_cast<int32_t>(x), static_cast<int32_t>(y)));
+}
+
+String PetBitsCore::mundo_bioma(const String& semilla, int64_t x, int64_t y) const {
+    petbits::Seed valor = 0;
+    if (!leerSeed(semilla, valor)) return String();
+    return aGodot(petbits::nombreBioma(
+        petbits::biomaEn(valor, static_cast<int32_t>(x), static_cast<int32_t>(y))));
 }
 
 // ---------------------------------------------------------------------------

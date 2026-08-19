@@ -41,6 +41,11 @@ func _ready() -> void:
 	Partida.ruta_save = RUTA
 	Partida.ruta_cuarentena = "user://verificacion_interiores.rota.json"
 
+	# Semilla fija. Sin esto el test es un sorteo: la criatura nace de un genoma
+	# al azar, el metabolismo sale de ese genoma, y seis días del mismo cuidado
+	# dejan a una con salud 59 y a otra con 43. Pasaba tres veces de cada cuatro.
+	Partida.semilla_inicial = "A3F0-91C4-77BE-2D08"
+
 	print("\nPetBits — el criadero y el codex\n")
 
 	if not Partida.iniciar():
@@ -285,38 +290,37 @@ func _criar(id: String) -> void:
 	var ahora: int = Partida.ahora_ms()
 	const DIA := 24 * 60 * 60 * 1000
 
-	# Seis días alcanzan para llegar a adulta —son cuatro— y de paso el vínculo
-	# topa en 12 por día, así que con dos ya pasa de 20.
+	# Se la cría HASTA QUE PUEDA, no durante un número fijo de días.
 	#
-	# Pero no alcanza con acariciarla. La primera versión de este bucle solo
-	# acariciaba y la criatura llegaba adulta, con vínculo 28... y salud CERO:
-	# seis días sin comer. La simulación estaba haciendo bien su trabajo y el
-	# test estaba jugando mal.
+	# Las dos versiones anteriores fijaban la cantidad de días y las dos fueron
+	# flaky, cada una por su motivo. La primera dejaba nacer la criatura de un
+	# seed al azar: distintos metabolismos aguantan distinto el mismo cuidado, y
+	# el test pasaba tres de cada cuatro veces. Con la semilla fija seguía
+	# oscilando entre salud 47 y 52 —el umbral es 50— porque el reloj real mueve
+	# las fronteras del día local.
 	#
-	# Así que hay que jugar la partida entera, expediciones incluidas. La
-	# despensa inicial no da para seis días, y el patio es justamente el destino
-	# que no pide etapa ni cuesta energía porque si para conseguir comida hiciera
-	# falta comida el jugador quedaría trabado. Este bucle es, sin quererlo, la
-	# prueba de que esa economía cierra.
-	const MEDIA_HORA := 30 * 60 * 1000
-	for dia in range(7):
-		var t: int = ahora + dia * DIA
+	# Preguntarle al juego "¿ya puede?" saca las dos fuentes de ruido de encima y,
+	# de paso, deja de codificar un número que el balance puede cambiar mañana.
+	const PASO := 4 * 60 * 60 * 1000
+	const TOPE := 120
 
-		# A buscar comida, y a recibirla media hora después.
+	var pasos := 0
+	while pasos < TOPE:
+		if _puede_cruzar(id, ahora + pasos * PASO):
+			break
+		var t: int = ahora + pasos * PASO
 		Partida.core.simular(t)
 		Partida.core.recibir(t)
+		_dar_de_comer(t)
+		_dar_de_comer(t)
+		Partida.core.acariciar(t)
 		Partida.core.enviar("patio", t)
-		Partida.core.simular(t + MEDIA_HORA)
-		Partida.core.recibir(t + MEDIA_HORA)
+		pasos += 1
 
-		_dar_de_comer(t + MEDIA_HORA)
-		Partida.core.acariciar(t + MEDIA_HORA)
-
-		# Y de nuevo a media jornada, para no dejar 48 horas de hueco: ahí es
-		# cuando entra en letargo, y en letargo tampoco puede cruzar.
-		Partida.core.simular(t + DIA / 2)
-		_dar_de_comer(t + DIA / 2)
-		Partida.core.acariciar(t + DIA / 2)
+	if pasos >= TOPE:
+		# Que se agote el tope no es un detalle del test: significa que criar una
+		# criatura hasta que pueda cruzar dejó de ser posible con cuidado normal.
+		print("    OJO: %d pasos de cuidado y todavía no puede cruzar" % TOPE)
 
 	# Se imprime cómo quedó porque es información, no ruido: si mañana alguien
 	# cambia el balance y la criatura llega a los seis días con salud 40, este
@@ -337,6 +341,18 @@ func _dar_de_comer(cuando: int) -> void:
 		if int(alimento["cantidad"]) > 0:
 			Partida.core.alimentar(alimento["id"], cuando)
 			return
+
+
+## ¿Esta criatura ya cumple con lo que pide la cruza?
+##
+## La respuesta la da el C++, con su motivo. Reimplementar las cinco reglas acá
+## —y su orden, que importa— sería tener el criterio escrito dos veces, y el día
+## que cambie una el test dejaría de probar lo que cree.
+func _puede_cruzar(id: String, cuando: int) -> bool:
+	for c in Partida.core.criaturas(cuando):
+		if c["id"] == id:
+			return c["puede_cruzar"]
+	return false
 
 
 func _volver_adultas() -> void:

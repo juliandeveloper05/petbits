@@ -52,6 +52,7 @@ add_library(petbits_nucleo STATIC
     src/breeding.cpp
     src/codex.cpp
     src/tileset_gen.cpp
+    src/world_gen.cpp
     src/font_gen.cpp
 )
 target_include_directories(petbits_nucleo PUBLIC src)

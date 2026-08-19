@@ -1,0 +1,8 @@
+; Corre region_a_png.gd. No tiene nodos: todo lo hace el script.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/region_a_png.gd" id="1_tool"]
+
+[node name="RegionAPng" type="Node"]
+script = ExtResource("1_tool")

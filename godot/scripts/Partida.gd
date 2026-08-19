@@ -88,6 +88,26 @@ const MAXIMO_BITACORA := 120
 var ruta_save := RUTA_SAVE
 var ruta_cuarentena := RUTA_CUARENTENA
 
+## Con qué genoma nace la criatura si no hay partida guardada.
+##
+## Vacío significa al azar, que es lo que corresponde jugando. Los tests lo fijan
+## y por el mismo motivo que fijan la ruta del save: una criatura distinta en cada
+## corrida es un sujeto distinto en cada corrida.
+##
+## Esto no es una comodidad, es lo que separa un test de un sorteo. El de los
+## interiores cría durante seis días simulados hasta que la criatura pueda cruzar,
+## y el metabolismo —que sale del genoma— decide cuánta hambre pasa en el camino.
+## Con seed al azar pasaba tres veces de cada cuatro, y esa cuarta no significaba
+## nada.
+var semilla_inicial := ""
+
+
+func _nacer_nueva() -> void:
+	var seed: String = semilla_inicial if semilla_inicial != "" else core.seed_al_azar()
+	core.nacer(seed, ahora_ms(), _tz_min())
+	anotar("Nació recién.", "tenue")
+	guardar()
+
 ## En qué mapa estás, y de cuál venías.
 ##
 ## NO se guardan en el archivo, y eso es deliberado: el formato del save es el de
@@ -191,12 +211,6 @@ func _cargar_o_nacer() -> void:
 	anotar("Volviste.", "bien")
 	if sim.get("ticks", 0) > 0:
 		anotar_eventos(sim)
-
-
-func _nacer_nueva() -> void:
-	core.nacer(core.seed_al_azar(), ahora_ms(), _tz_min())
-	anotar("Nació recién.", "tenue")
-	guardar()
 
 
 func guardar() -> void:

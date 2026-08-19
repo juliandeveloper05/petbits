@@ -72,7 +72,7 @@ entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
 botines de expedición contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **53.610 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **54.267 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -450,6 +450,73 @@ lanzado con `--script` **reemplaza el main loop**, así que los autoloads no se
 instancian y el script ni siquiera compila — por eso `medir_layout` y
 `VerificarMundo` son escenas y no `--script`, y por eso la forma del pueblo se
 mudó a `PuebloMapa.gd`, que no depende de nada.
+
+### Fase 3.5 — El mundo infinito 🚧
+
+| | |
+|---|---|
+| `world_gen.cpp` — ruido de valor, biomas, chunks | ✅ |
+| Los cuatro tests: costura, determinismo, variedad, caminabilidad | ✅ |
+| `region_a_png.gd` — mirar el mundo antes de que sea jugable | ✅ |
+| Cámara y carga de chunks en `Mundo.gd` | ⬜ |
+| El pueblo adentro del mundo, con el borde abierto | ⬜ |
+| Recolectar, hitos y semillas perdidas | ⬜ |
+| `user://mundo.json` — dónde estabas | ⬜ |
+
+**El mundo sale del genoma de tu primera criatura.** Es la tesis del proyecto
+llevada hasta el final: la criatura ES la semilla, y ahora el mundo también. La
+primera y no la activa, para que incubar o cruzar no cambie el mundo debajo de
+tus pies.
+
+**Y caminar no reemplaza a las expediciones.** Es la misma decisión de la Fase 3
+sostenida ahora que caminar deja de tener límite: caminar da lo que se consigue
+estando ahí, las expediciones siguen siendo el modo idle. No compiten porque no
+dan lo mismo.
+
+**El ruido se escribe a mano, sobre `splitmix64`.** No se usa `FastNoiseLite`:
+eso dejaría la generación adentro del motor, sin tests que corran con un
+compilador y un comando, y con el mundo dependiendo de la versión de Godot
+instalada. Así, el mundo de una semilla es el mismo hoy, en otra máquina y dentro
+de tres versiones del motor.
+
+**Las costuras no se arreglan: no existen.** El ruido se muestrea en coordenadas
+de MUNDO, así que el tile (159, 40) se calcula igual esté al final de un chunk o
+al principio del siguiente. La forma natural de escribir un generador por chunks
+—un PRNG sembrado por chunk que se consume mientras se recorre la grilla— tiene
+exactamente el defecto contrario, y el primer test está para que eso siga siendo
+cierto.
+
+**Tres números salieron de medir, no de razonar**, y los tres se equivocaron
+primero:
+
+*El contraste.* Promediar octavas concentra el resultado cerca del medio —es el
+teorema central del límite haciendo su trabajo— así que los umbrales extremos
+casi nunca se cruzaban: 56% de pasto y CERO piedra. Se arregla devolviéndole al
+ruido el rango que el promedio le sacó, no moviendo los umbrales hacia el centro.
+
+*La densidad de árboles.* Empezó en 56% razonando que "poco más de la mitad"
+dejaría senderos, y el test contestó que desde el centro se llegaba al 17% del
+suelo. Hay una constante que lo explica: en una grilla cuadrada el espacio libre
+solo percola si supera alrededor del **59,3%** — el umbral de percolación de
+sitios. Con 56% de árboles los claros son el 44%, por debajo del umbral, y no se
+conectan. No es una cuestión de semilla: es una propiedad de la grilla. Con 34%
+los claros quedan en 66% y el bosque se sigue leyendo como bosque.
+
+*La tierra firme alrededor del origen.* Al renderizar las tres primeras semillas,
+DOS tenían el origen adentro de un lago: el pueblo habría quedado bajo el agua.
+Ningún test lo dijo, porque los cuatro preguntan por el mundo en general y
+ninguno por ese punto. Se levanta el terreno con una campana que se apaga sola —
+y el primer intento de eso metió el pueblo adentro de un roquedal, que tampoco se
+camina. El techo es la otra mitad del piso.
+
+```bash
+godot --headless --path godot res://scenes/RegionAPng.tscn
+```
+
+Dibuja tres semillas de 160 × 160 tiles, cada tile promediado a un color. A esa
+escala no se ve el detalle de un tile y se ven las formas: si los lagos tienen
+costa, si los bosques tienen claros, si los biomas se tocan de forma creíble. Y
+cuenta lo que hay alrededor del origen, que es lo único que hay que garantizar.
 
 ### Fase 4 — Combate por turnos ⬜
 

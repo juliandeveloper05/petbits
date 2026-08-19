@@ -24,6 +24,7 @@
 
 #include "breeding.h"
 #include "codex.h"
+#include "world_gen.h"
 #include "save_manager.h"
 #include "simulation.h"
 
@@ -207,6 +208,43 @@ public:
 
     /** ¿Ese tile frena al que camina? */
     bool tile_solido(int64_t indice) const;
+
+    // -----------------------------------------------------------------------
+    // El mundo infinito
+    // -----------------------------------------------------------------------
+
+    /**
+     * La semilla del mundo que le toca a esta partida.
+     *
+     * Es el genoma de la PRIMERA criatura de la colección — con la que
+     * empezaste, no la que estés cuidando hoy. Que sea la primera y no la activa
+     * es lo que hace que el mundo no cambie debajo de tus pies cada vez que
+     * incubás algo o cruzás.
+     *
+     * Devuelve "" si no hay partida.
+     */
+    String semilla_del_mundo() const;
+
+    /**
+     * Cuántos tiles de lado tiene un chunk. GDScript lo necesita para saber
+     * cuáles pedir, y tenerlo escrito de los dos lados es tenerlo mal de uno.
+     */
+    int64_t lado_de_chunk() const;
+
+    /**
+     * Un chunk entero, fila por fila, como índices de tile.
+     *
+     * Va como `PackedByteArray` y no como Array de enteros porque son mil
+     * veinticuatro valores por chunk y hasta nueve chunks a la vez: un Array de
+     * Variants sería un objeto por tile.
+     */
+    PackedByteArray mundo_chunk(const String& semilla, int64_t cx, int64_t cy) const;
+
+    /** Un tile suelto, para preguntar por dónde se puede caminar. */
+    int64_t mundo_tile(const String& semilla, int64_t x, int64_t y) const;
+
+    /** Cómo se llama el lugar donde estás parado: "el bosque", "la orilla". */
+    String mundo_bioma(const String& semilla, int64_t x, int64_t y) const;
 
     // -----------------------------------------------------------------------
     // Tipografía

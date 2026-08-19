@@ -47,6 +47,7 @@
 #include "../src/codex.h"
 #include "../src/font_gen.h"
 #include "../src/tileset_gen.h"
+#include "../src/world_gen.h"
 #include "../src/traits.h"
 #include "vectores_generados.h"
 
@@ -1481,6 +1482,272 @@ static void probarCodex() {
     }
 }
 
+/**
+ * El mundo infinito. SIN PARIDAD — propiedades, igual que los tiles.
+ *
+ * Cuatro cosas, y cada una atrapa una manera distinta de arruinarlo:
+ *
+ *   1. La costura, que atrapa un generador con estado.
+ *   2. El determinismo, que atrapa uno que dependa del orden en que se pregunta.
+ *   3. La variedad, que atrapa el mundo de pasto infinito.
+ *   4. La caminabilidad, que atrapa el mundo lindo e injugable.
+ *
+ * Las cuatro se pueden pasar con un mundo horrible. Para eso está el PNG.
+ */
+static void probarMundo() {
+    bloque("mundo infinito (sin paridad — solo propiedades)");
+
+    // Tres semillas distintas: una del ejemplo, una de bordes y una cualquiera.
+    // Un generador que ignore la semilla pasa todo lo demás sin despeinarse.
+    const Seed SEMILLAS[] = {0xA3F091C477BE2D08ULL, 0ULL, 0xFEDCBA9876543210ULL};
+
+    // -- 1. La costura -----------------------------------------------------
+    //
+    // El mismo tile del mundo, preguntado como parte de dos chunks vecinos.
+    // Si el generador guardara cualquier estado entre tile y tile, acá se
+    // partiría el mundo en cuadrículas visibles.
+    for (Seed semilla : SEMILLAS) {
+        for (int32_t cx = -2; cx <= 2; ++cx) {
+            for (int32_t cy = -2; cy <= 2; ++cy) {
+                const Chunk izq = generarChunk(semilla, cx, cy);
+                const Chunk der = generarChunk(semilla, cx + 1, cy);
+                const Chunk abajo = generarChunk(semilla, cx, cy + 1);
+
+                bool cierraX = true;
+                bool cierraY = true;
+                for (int i = 0; i < CHUNK; ++i) {
+                    // El tile justo a la derecha del borde derecho de `izq` es el
+                    // primero de `der`, y los dos tienen que coincidir con lo que
+                    // diga `tileEnMundo` para esa coordenada de mundo.
+                    const int32_t wx = (cx + 1) * CHUNK;
+                    const int32_t wy = cy * CHUNK + i;
+                    if (der.en(0, i) != static_cast<uint8_t>(tileEnMundo(semilla, wx, wy))) {
+                        cierraX = false;
+                    }
+
+                    const int32_t bx = cx * CHUNK + i;
+                    const int32_t by = (cy + 1) * CHUNK;
+                    if (abajo.en(i, 0) != static_cast<uint8_t>(tileEnMundo(semilla, bx, by))) {
+                        cierraY = false;
+                    }
+                }
+
+                char ctx[96];
+                std::snprintf(ctx, sizeof(ctx), "chunk (%d, %d)", cx, cy);
+                revisar(cierraX, ctx, "la costura vertical no cierra con el chunk de la derecha");
+                revisar(cierraY, ctx, "la costura horizontal no cierra con el de abajo");
+            }
+        }
+    }
+
+    // -- 2. Determinismo ----------------------------------------------------
+    //
+    // Y no solo "dos llamadas seguidas dan lo mismo": se pregunta la MISMA
+    // región en dos órdenes distintos. Un generador que acumule algo pasa la
+    // primera versión y falla esta.
+    for (Seed semilla : SEMILLAS) {
+        std::vector<uint8_t> derecho;
+        for (int32_t y = -40; y < 40; ++y) {
+            for (int32_t x = -40; x < 40; ++x) {
+                derecho.push_back(static_cast<uint8_t>(tileEnMundo(semilla, x, y)));
+            }
+        }
+
+        bool iguales = true;
+        size_t i = 0;
+        for (int32_t y = -40; y < 40 && iguales; ++y) {
+            for (int32_t x = -40; x < 40; ++x) {
+                if (derecho[i++] != static_cast<uint8_t>(tileEnMundo(semilla, x, y))) {
+                    iguales = false;
+                    break;
+                }
+            }
+        }
+        revisar(iguales, "determinismo", "la misma región dio distinto la segunda vez");
+
+        // Al revés, de la última coordenada a la primera.
+        bool alReves = true;
+        for (int32_t y = 39; y >= -40 && alReves; --y) {
+            for (int32_t x = 39; x >= -40; --x) {
+                const size_t pos = static_cast<size_t>(y + 40) * 80 + static_cast<size_t>(x + 40);
+                if (derecho[pos] != static_cast<uint8_t>(tileEnMundo(semilla, x, y))) {
+                    alReves = false;
+                    break;
+                }
+            }
+        }
+        revisar(alReves, "determinismo", "preguntar en otro orden dio otro mundo");
+    }
+
+    // Y semillas distintas tienen que dar mundos distintos. Un generador que se
+    // olvide de mezclar la semilla pasa TODO lo demás.
+    {
+        int diferencias = 0;
+        for (int32_t y = 0; y < 60; ++y) {
+            for (int32_t x = 0; x < 60; ++x) {
+                if (tileEnMundo(SEMILLAS[0], x, y) != tileEnMundo(SEMILLAS[1], x, y)) {
+                    ++diferencias;
+                }
+            }
+        }
+        revisar(diferencias > 600, "dos semillas",
+                "dos semillas distintas dieron casi el mismo mundo");
+    }
+
+    // -- 3. Variedad --------------------------------------------------------
+    //
+    // Sobre una región grande, ningún tile puede comerse el mundo ni faltar del
+    // todo. El fallo típico de un generador mal calibrado es pasto hasta el
+    // horizonte, y eso pasa la costura y el determinismo con nota perfecta.
+    for (Seed semilla : SEMILLAS) {
+        int cuenta[static_cast<size_t>(Tile::CANTIDAD)] = {};
+        const int LADO = 256;
+        for (int32_t y = 0; y < LADO; ++y) {
+            for (int32_t x = 0; x < LADO; ++x) {
+                ++cuenta[static_cast<size_t>(tileEnMundo(semilla, x, y))];
+            }
+        }
+        const int total = LADO * LADO;
+
+        // Los siete tiles de exterior tienen que aparecer todos.
+        const Tile ESPERADOS[] = {Tile::Pasto,  Tile::Agua,      Tile::Piedra,
+                                  Tile::Arbol,  Tile::PastoAlto, Tile::Arena,
+                                  Tile::Musgo};
+        for (Tile t : ESPERADOS) {
+            char ctx[64];
+            std::snprintf(ctx, sizeof(ctx), "tile %d", static_cast<int>(t));
+            revisar(cuenta[static_cast<size_t>(t)] > 0, ctx,
+                    "no aparece ni una vez en 256x256 tiles");
+        }
+
+        // Y ninguno puede pasar del 55% del mundo.
+        for (size_t t = 0; t < static_cast<size_t>(Tile::CANTIDAD); ++t) {
+            if (cuenta[t] * 100 <= total * 55) continue;
+            char detalle[128];
+            std::snprintf(detalle, sizeof(detalle), "el tile %zu ocupa el %d%% del mundo", t,
+                          cuenta[t] * 100 / total);
+            revisar(false, "variedad", detalle);
+        }
+        revisar(true, "variedad", "ningún tile domina");
+
+        // Los interiores NO pueden aparecer afuera: son de otro vocabulario.
+        const Tile ADENTRO[] = {Tile::Piso, Tile::Pared, Tile::Alfombra, Tile::Pedestal};
+        for (Tile t : ADENTRO) {
+            revisar(cuenta[static_cast<size_t>(t)] == 0, "variedad",
+                    "se generó un tile de interior a la intemperie");
+        }
+    }
+
+    // -- 4. Caminabilidad ---------------------------------------------------
+    //
+    // El que de verdad importa. Un mundo con lagos y roquedales bien puestos se
+    // ve precioso y puede estar partido en islas: llegás a un lago, lo rodeás, y
+    // te encontrás con que el bosque de al lado es una pared maciza.
+    //
+    // Se inunda desde el origen sobre una región grande y se cuenta cuánto del
+    // suelo caminable quedó alcanzable. Lo que no llega no es necesariamente un
+    // error —una isla en medio de un lago es legítima— pero si la mayor parte
+    // del suelo queda afuera, el mundo no se puede recorrer.
+    for (Seed semilla : SEMILLAS) {
+        const int LADO = 192;
+        const int MITAD = LADO / 2;
+
+        std::vector<uint8_t> solido(static_cast<size_t>(LADO) * LADO);
+        int caminables = 0;
+        for (int y = 0; y < LADO; ++y) {
+            for (int x = 0; x < LADO; ++x) {
+                const Tile t = tileEnMundo(semilla, x - MITAD, y - MITAD);
+                const bool s = esSolido(t);
+                solido[static_cast<size_t>(y) * LADO + static_cast<size_t>(x)] = s ? 1 : 0;
+                if (!s) ++caminables;
+            }
+        }
+
+        // Se arranca desde el primer tile caminable cerca del centro, que es
+        // donde va a estar el pueblo.
+        int inicio = -1;
+        for (int r = 0; r < MITAD && inicio < 0; ++r) {
+            for (int dy = -r; dy <= r && inicio < 0; ++dy) {
+                for (int dx = -r; dx <= r; ++dx) {
+                    const int x = MITAD + dx;
+                    const int y = MITAD + dy;
+                    if (x < 0 || y < 0 || x >= LADO || y >= LADO) continue;
+                    if (!solido[static_cast<size_t>(y) * LADO + static_cast<size_t>(x)]) {
+                        inicio = y * LADO + x;
+                        break;
+                    }
+                }
+            }
+        }
+        revisar(inicio >= 0, "caminabilidad", "no hay ni un tile caminable cerca del centro");
+        if (inicio < 0) continue;
+
+        std::vector<uint8_t> visto(static_cast<size_t>(LADO) * LADO, 0);
+        std::vector<int> pila;
+        pila.push_back(inicio);
+        visto[static_cast<size_t>(inicio)] = 1;
+        int alcanzados = 0;
+
+        while (!pila.empty()) {
+            const int actual = pila.back();
+            pila.pop_back();
+            ++alcanzados;
+
+            const int x = actual % LADO;
+            const int y = actual / LADO;
+            const int VECINOS[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+            for (const auto& v : VECINOS) {
+                const int nx = x + v[0];
+                const int ny = y + v[1];
+                if (nx < 0 || ny < 0 || nx >= LADO || ny >= LADO) continue;
+                const size_t idx = static_cast<size_t>(ny) * LADO + static_cast<size_t>(nx);
+                if (visto[idx] || solido[idx]) continue;
+                visto[idx] = 1;
+                pila.push_back(static_cast<int>(idx));
+            }
+        }
+
+        const int porcentaje = caminables > 0 ? alcanzados * 100 / caminables : 0;
+        char detalle[160];
+        std::snprintf(detalle, sizeof(detalle),
+                      "desde el centro se llega al %d%% del suelo caminable (%d de %d)",
+                      porcentaje, alcanzados, caminables);
+        revisar(porcentaje >= 80, "caminabilidad", detalle);
+
+        // Y el suelo caminable tiene que ser la mayor parte del mundo: un mundo
+        // que es 70% agua se recorre entero y no se puede jugar igual.
+        char d2[128];
+        std::snprintf(d2, sizeof(d2), "solo el %d%% del mundo se camina",
+                      caminables * 100 / (LADO * LADO));
+        revisar(caminables * 100 / (LADO * LADO) >= 55, "caminabilidad", d2);
+    }
+
+    // -- Las coordenadas de chunk, incluidas las negativas -------------------
+    //
+    // `-1 / 32` da 0 en C++, no -1: si `chunkDe` no corrigiera eso, el chunk 0
+    // mediría el doble y el mundo quedaría partido justo en el origen.
+    struct CasoChunk { int32_t coord; int32_t chunk; int32_t dentro; };
+    static const CasoChunk CASOS[] = {
+        {0, 0, 0},    {31, 0, 31},   {32, 1, 0},   {33, 1, 1},
+        {-1, -1, 31}, {-32, -1, 0},  {-33, -2, 31}, {-64, -2, 0},
+    };
+    for (const CasoChunk& c : CASOS) {
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "coordenada %d", c.coord);
+        revisarEnteros(static_cast<uint64_t>(static_cast<uint32_t>(chunkDe(c.coord))),
+                       static_cast<uint64_t>(static_cast<uint32_t>(c.chunk)), ctx, "chunk");
+        revisarEnteros(static_cast<uint64_t>(dentroDelChunk(c.coord)),
+                       static_cast<uint64_t>(c.dentro), ctx, "posición dentro del chunk");
+    }
+
+    // Y las dos funciones tienen que reconstruir la coordenada original.
+    for (int32_t c = -200; c <= 200; ++c) {
+        revisarEnteros(static_cast<uint64_t>(static_cast<uint32_t>(chunkDe(c) * CHUNK + dentroDelChunk(c))),
+                       static_cast<uint64_t>(static_cast<uint32_t>(c)), "ida y vuelta",
+                       "chunk y offset no reconstruyen la coordenada");
+    }
+}
+
 /** El JSON tiene que aguantar entradas rotas sin reventar el arranque. */
 static void probarJsonRoto() {
     bloque("guardados corruptos");
@@ -1639,6 +1906,7 @@ int main() {
     probarFuente();
     probarCruzas();
     probarCodex();
+    probarMundo();
     probarJsonRoto();
     probarParticion();
     probarRelojAtras();
