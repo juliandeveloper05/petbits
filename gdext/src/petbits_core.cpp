@@ -113,6 +113,9 @@ void PetBitsCore::_bind_methods() {
                          &PetBitsCore::mundo_chunk);
     ClassDB::bind_method(D_METHOD("mundo_tile", "semilla", "x", "y"), &PetBitsCore::mundo_tile);
     ClassDB::bind_method(D_METHOD("mundo_bioma", "semilla", "x", "y"), &PetBitsCore::mundo_bioma);
+    ClassDB::bind_method(D_METHOD("mundo_hallazgo", "semilla", "x", "y"),
+                         &PetBitsCore::mundo_hallazgo);
+    ClassDB::bind_method(D_METHOD("recolectar", "semilla", "x", "y"), &PetBitsCore::recolectar);
 
     ClassDB::bind_method(D_METHOD("codex"), &PetBitsCore::codex);
 
@@ -962,6 +965,89 @@ String PetBitsCore::mundo_bioma(const String& semilla, int64_t x, int64_t y) con
     if (!leerSeed(semilla, valor)) return String();
     return aGodot(petbits::nombreBioma(
         petbits::biomaEn(valor, static_cast<int32_t>(x), static_cast<int32_t>(y))));
+}
+
+Dictionary PetBitsCore::mundo_hallazgo(const String& semilla, int64_t x, int64_t y) const {
+    Dictionary d;
+    d["tipo"] = String("nada");
+    d["nombre"] = String();
+    d["alimento"] = String();
+    d["semilla"] = String();
+
+    petbits::Seed valor = 0;
+    if (!leerSeed(semilla, valor)) return d;
+
+    const int32_t wx = static_cast<int32_t>(x);
+    const int32_t wy = static_cast<int32_t>(y);
+
+    switch (petbits::hallazgoEn(valor, wx, wy)) {
+        case petbits::Hallazgo::Forraje:
+            d["tipo"] = String("forraje");
+            d["nombre"] = String("Pasto alto");
+            // Baya: el alimento dulce, que es el que da el pasto. Coincide con lo
+            // que devuelve el patio, así que caminar y mandarla alimentan la
+            // misma economía en vez de dos paralelas.
+            d["alimento"] = String("baya");
+            break;
+
+        case petbits::Hallazgo::Veta:
+            d["tipo"] = String("veta");
+            d["nombre"] = String("Una veta entre las piedras");
+            d["alimento"] = String("cristal");
+            break;
+
+        case petbits::Hallazgo::Hito:
+            d["tipo"] = String("hito");
+            d["nombre"] = String("Un círculo de piedras");
+            d["semilla"] = aGodot(petbits::formatSeed(petbits::semillaDeHito(valor, wx, wy)));
+            break;
+
+        case petbits::Hallazgo::Nada:
+            break;
+    }
+    return d;
+}
+
+Dictionary PetBitsCore::recolectar(const String& semilla, int64_t x, int64_t y) {
+    Dictionary d;
+    d["ok"] = false;
+    d["mensaje"] = String("Acá no hay nada.");
+
+    if (!partida.has_value()) return d;
+
+    const Dictionary hallazgo = mundo_hallazgo(semilla, x, y);
+    const String tipo = hallazgo["tipo"];
+
+    if (tipo == String("hito")) {
+        const String seed = hallazgo["semilla"];
+        petbits::Seed valor = 0;
+        if (!leerSeed(seed, valor)) return d;
+
+        // Va a la lista de semillas sin incubar, la misma a la que van las que
+        // traen las expediciones. Incubarla es una decisión aparte, y se toma en
+        // el criadero.
+        petbits::Json lista = petbits::Json::arreglo();
+        if (const petbits::Json* previa = partida->otros.buscar("semillas")) {
+            lista = *previa;
+        }
+        lista.agregar(petbits::Json::texto(petbits::seedADecimal(valor)));
+        partida->otros.poner("semillas", std::move(lista));
+
+        d["ok"] = true;
+        d["mensaje"] = aGodot(std::string("Alguien dejó una semilla acá: ") +
+                              std::string(seed.utf8().get_data()) + ".");
+        return d;
+    }
+
+    const String alimento = hallazgo["alimento"];
+    if (alimento.is_empty()) return d;
+
+    const std::string id(alimento.utf8().get_data());
+    partida->inventario.poner(id, partida->inventario.cuanto(id) + 1);
+
+    d["ok"] = true;
+    d["mensaje"] = aGodot(std::string("Juntaste 1 ") + id + ".");
+    return d;
 }
 
 // ---------------------------------------------------------------------------

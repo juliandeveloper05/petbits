@@ -30,6 +30,9 @@ const TILE := 16
 ## del render —donde cada mapa se compone solo— y en el juego dejaba un tercio de
 ## la pantalla en negro a la derecha. Ningún test lo dijo: todos preguntaban por
 ## la grilla, y la grilla estaba perfecta.
+## Un interior tiene tamaño: no es el mundo, es una sala.
+const INFINITO := false
+
 const ANCHO := 30
 const ALTO := 17
 

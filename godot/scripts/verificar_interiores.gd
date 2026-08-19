@@ -38,8 +38,12 @@ func _ready() -> void:
 		return
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(RUTA))
+	Partida.guardar_al_salir = false
 	Partida.ruta_save = RUTA
 	Partida.ruta_cuarentena = "user://verificacion_interiores.rota.json"
+	# También el archivo del mundo. Sin esto los tests escriben el de verdad:
+	# lo hicieron, y por eso se contaminaban entre sí.
+	Partida.ruta_mundo = "user://verificacion_interiores_mundo.json"
 
 	# Semilla fija. Sin esto el test es un sorteo: la criatura nace de un genoma
 	# al azar, el metabolismo sale de ese genoma, y seis días del mismo cuidado
@@ -56,6 +60,7 @@ func _ready() -> void:
 	await _correr()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(RUTA))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://verificacion_interiores_mundo.json"))
 
 	if _fallas == 0:
 		print("\nTodo bien: los dos interiores se caminan y la cruza funciona.")

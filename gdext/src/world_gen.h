@@ -98,6 +98,82 @@ std::string_view nombreBioma(Bioma b);
 /** Qué bioma hay en esa coordenada de mundo. */
 Bioma biomaEn(Seed semilla, int32_t x, int32_t y);
 
+// ---------------------------------------------------------------------------
+// El pueblo
+// ---------------------------------------------------------------------------
+//
+// El pueblo es parte del mundo, no una excepción que `Mundo.gd` tenga que
+// recordar. `tileEnMundo` devuelve sus tiles cuando la coordenada cae adentro de
+// su rectángulo, así que caminás hasta el borde y seguís caminando sin que nadie
+// haga nada especial.
+//
+// Su grilla vive acá y no en GDScript por eso mismo: si viviera del otro lado,
+// el generador no podría verla y habría que componer los dos afuera, con un caso
+// especial en el walker. Lo que sí se queda en GDScript son los PUNTOS —las
+// entradas, el NPC—, que son datos de juego y no terreno.
+
+/** Dónde arranca el pueblo, en coordenadas de mundo. Está centrado en el origen. */
+inline constexpr int32_t PUEBLO_X = -15;
+inline constexpr int32_t PUEBLO_Y = -8;
+inline constexpr int32_t PUEBLO_ANCHO = 30;
+inline constexpr int32_t PUEBLO_ALTO = 17;
+
+/** ¿Esa coordenada de mundo cae adentro del pueblo? */
+bool enElPueblo(int32_t x, int32_t y);
+
+/**
+ * ¿Cae en una de las cuatro sendas que salen del pueblo?
+ *
+ * El borde del pueblo tiene un hueco en cada lado, y del otro lado del hueco el
+ * mundo pone lo que quiere: un lago, un roquedal, una arboleda maciza.
+ * Cualquiera de las tres deja la puerta tapada.
+ *
+ * No es hipotético. El test de salidas falló una de cada tres corridas —solo
+ * cuando el seed al azar ponía agua justo ahí— y ese es el peor tipo de falla:
+ * la que aparece en el juego de alguien y nunca en el tuyo.
+ */
+bool enUnaSenda(int32_t x, int32_t y);
+
+// ---------------------------------------------------------------------------
+// Qué hay para encontrar
+// ---------------------------------------------------------------------------
+//
+// Sin esto, un mundo infinito es un fondo de pantalla muy grande: caminás,
+// cambia el color, y no pasa nada más. Lo que sigue es lo mínimo para que
+// caminar sea una de las dos economías del juego —la que da lo que se consigue
+// ESTANDO ahí— en vez de una competencia perdida contra las expediciones.
+
+/** Qué se puede sacar de un lugar. */
+enum class Hallazgo : uint8_t {
+    Nada,
+    /// Pasto alto: comida. Es lo que hace que caminar valga aunque no encuentres
+    /// nada raro.
+    Forraje,
+    /// Un afloramiento de piedra: mineral, que es la comida de la rama pétrea.
+    Veta,
+    /// Un hito: algo que alguien dejó. Da un genoma para incubar, y es lo que
+    /// conecta el mundo con el criadero sin pasar por las expediciones.
+    Hito,
+};
+
+/**
+ * Qué hay en esa coordenada.
+ *
+ * Es una función del mundo y no del jugador: dos personas con la misma semilla
+ * encuentran el hito en el mismo lugar, y pueden decirse "está al noreste del
+ * lago". Que ya lo hayas levantado o no es otra cosa, y se guarda aparte.
+ */
+Hallazgo hallazgoEn(Seed semilla, int32_t x, int32_t y);
+
+/**
+ * El genoma que deja un hito.
+ *
+ * Sale de la posición, no de un sorteo: el hito del (312, -88) tiene la misma
+ * criatura adentro para todo el mundo con esa semilla. Es lo mismo que hace que
+ * las rarezas sean verificables en vez de un premio oculto.
+ */
+Seed semillaDeHito(Seed semilla, int32_t x, int32_t y);
+
 /**
  * Qué tile hay en esa coordenada de mundo.
  *

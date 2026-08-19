@@ -29,14 +29,15 @@ const TILE := 16
 
 ## Cuántos tiles de lado tiene cada región dibujada.
 ##
-## 160 son cinco chunks: alcanza para ver lagos enteros y bosques con forma, que
-## es la escala a la que el generador se juzga. Con 40 tiles todo parece ruido y
-## con 400 no se distingue un tile de otro.
-const LADO := 160
+## Bajó de 160 a 96 al meter el pueblo adentro del mundo. Con 160 el pueblo era
+## una manchita de treinta tiles en el medio y no se veía si se integraba o
+## parecía pegado encima, que es justamente la pregunta nueva. Sigue habiendo
+## lagos enteros en cuadro.
+const LADO := 96
 
 ## Un píxel de pantalla por tile del mundo sería ilegible. A tres se ven las
 ## formas grandes y todavía se distingue el moteado de cada tile.
-const ESCALA := 3
+const ESCALA := 5
 
 ## Las semillas que se dibujan. Fijas: dos corridas tienen que dar el mismo PNG,
 ## así que un diff visual significa que cambió el generador y no que salió otra.

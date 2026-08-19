@@ -65,6 +65,18 @@ const RUTA_SAVE := "user://partida.json"
 ## toca al dueño, no al programa.
 const RUTA_CUARENTENA := "user://partida.rota.json"
 
+## Dónde vive lo que es SOLO del nativo.
+##
+## Un archivo aparte, y no un campo más adentro de `partida.json`. Ese archivo es
+## el formato de la web y la web no tiene mundo: agregarle un campo propio
+## rompería la promesa de que los dos programas escriben exactamente lo mismo, y
+## la validación contra su esquema real empezaría a fallar.
+##
+## Acá adentro va dónde estabas y qué ya levantaste del suelo. Si falta, aparecés
+## en el pueblo y el mundo está entero — que es exactamente lo que pasa la
+## primera vez.
+const RUTA_MUNDO := "user://mundo.json"
+
 ## Un tick del juego es un minuto real. Preguntar más seguido no cambia nada
 ## —`simular` solo avanza en ticks enteros— pero mantiene la pantalla al día.
 const INTERVALO_CONSULTA := 1.0
@@ -87,6 +99,14 @@ const MAXIMO_BITACORA := 120
 ## Se cambian ANTES de `iniciar()`; después no tienen efecto.
 var ruta_save := RUTA_SAVE
 var ruta_cuarentena := RUTA_CUARENTENA
+var ruta_mundo := RUTA_MUNDO
+
+## Si se guarda automáticamente al cerrar.
+##
+## Los tests lo apagan, y no es capricho: borran sus archivos al terminar y el
+## manejador de cierre volvía a escribirlos justo después, así que la carpeta de
+## datos del usuario se llenaba de saves de prueba que nadie borraba nunca.
+var guardar_al_salir := true
 
 ## Con qué genoma nace la criatura si no hay partida guardada.
 ##
@@ -101,13 +121,6 @@ var ruta_cuarentena := RUTA_CUARENTENA
 ## nada.
 var semilla_inicial := ""
 
-
-func _nacer_nueva() -> void:
-	var seed: String = semilla_inicial if semilla_inicial != "" else core.seed_al_azar()
-	core.nacer(seed, ahora_ms(), _tz_min())
-	anotar("Nació recién.", "tenue")
-	guardar()
-
 ## En qué mapa estás, y de cuál venías.
 ##
 ## NO se guardan en el archivo, y eso es deliberado: el formato del save es el de
@@ -119,6 +132,31 @@ func _nacer_nueva() -> void:
 ## el medio del pueblo.
 var mapa := "pueblo"
 var venir_de := ""
+
+## Dónde quedó parada la criatura, en píxeles del mundo.
+var donde := Vector2.ZERO
+
+## Las coordenadas que ya se recolectaron, como "x,y".
+##
+## Se guarda lo LEVANTADO y no lo que queda, porque lo que queda es infinito. Un
+## mundo sin techo obliga a invertir la pregunta: no "qué hay", que lo contesta el
+## generador, sino "qué sacaste", que es finito y cabe en un archivo.
+var recolectado := {}
+
+## Cuántas coordenadas se recuerdan.
+##
+## Con el tope, lo más viejo se olvida y el pasto vuelve a crecer. No es una
+## limitación disfrazada de mecánica: un jugador que camina mil tiles no se
+## acuerda de qué mata pisó hace tres días, y el archivo tampoco tiene por qué.
+const MAXIMO_RECOLECTADO := 4000
+
+## La semilla del mundo: el genoma de la primera criatura de la colección.
+##
+## Se cachea porque se pregunta muchísimo —cada comprobación de colisión la
+## necesita— y porque no cambia mientras dure la partida. Se refresca al cargar y
+## al nacer, que son los dos momentos en que la colección puede cambiar de
+## primera criatura.
+var semilla_mundo := ""
 
 var core: RefCounted = null
 
@@ -163,6 +201,8 @@ func iniciar() -> bool:
 	tam_fuente = int(core.fuente_metricas()["alto"])
 
 	_cargar_o_nacer()
+	semilla_mundo = core.semilla_del_mundo()
+	_cargar_mundo()
 
 	_reloj = Timer.new()
 	_reloj.wait_time = INTERVALO_CONSULTA
@@ -213,6 +253,71 @@ func _cargar_o_nacer() -> void:
 		anotar_eventos(sim)
 
 
+func _nacer_nueva() -> void:
+	var seed: String = semilla_inicial if semilla_inicial != "" else core.seed_al_azar()
+	core.nacer(seed, ahora_ms(), _tz_min())
+	anotar("Nació recién.", "tenue")
+	guardar()
+
+
+## Lee el archivo del nativo. Si no está o está roto, se arranca de cero.
+##
+## No hay cuarentena para este: perder dónde estabas parado es una molestia, no
+## una pérdida. Con el save compartido es al revés, y por eso ese sí se renombra.
+func _cargar_mundo() -> void:
+	if not FileAccess.file_exists(ruta_mundo):
+		return
+
+	var archivo := FileAccess.open(ruta_mundo, FileAccess.READ)
+	if archivo == null:
+		return
+	var texto := archivo.get_as_text()
+	archivo.close()
+
+	var datos = JSON.parse_string(texto)
+	if typeof(datos) != TYPE_DICTIONARY:
+		anotar("El archivo del mundo no se pudo leer. Volvés al pueblo.", "aviso")
+		return
+
+	mapa = datos.get("mapa", "pueblo")
+	donde = Vector2(float(datos.get("x", 0.0)), float(datos.get("y", 0.0)))
+	venir_de = datos.get("venir_de", "")
+
+	recolectado = {}
+	for clave in datos.get("recolectado", []):
+		recolectado[clave] = true
+
+
+func guardar_mundo() -> void:
+	var claves: Array = recolectado.keys()
+	# Si se pasó del tope, se tiran las más viejas. `keys()` conserva el orden de
+	# inserción en GDScript, así que las primeras son las primeras que se
+	# levantaron.
+	if claves.size() > MAXIMO_RECOLECTADO:
+		claves = claves.slice(claves.size() - MAXIMO_RECOLECTADO)
+
+	var archivo := FileAccess.open(ruta_mundo, FileAccess.WRITE)
+	if archivo == null:
+		return
+	archivo.store_string(JSON.stringify({
+		"mapa": mapa,
+		"x": donde.x,
+		"y": donde.y,
+		"venir_de": venir_de,
+		"recolectado": claves,
+	}))
+	archivo.close()
+
+
+## ¿Ya se levantó lo que había en esa celda?
+func ya_recolectado(celda: Vector2i) -> bool:
+	return recolectado.has("%d,%d" % [celda.x, celda.y])
+
+
+func marcar_recolectado(celda: Vector2i) -> void:
+	recolectado["%d,%d" % [celda.x, celda.y]] = true
+
+
 func guardar() -> void:
 	if core == null:
 		return
@@ -237,7 +342,10 @@ func guardar() -> void:
 ## igual.
 func _notification(que: int) -> void:
 	if que == NOTIFICATION_WM_CLOSE_REQUEST or que == NOTIFICATION_PREDELETE:
+		if not guardar_al_salir:
+			return
 		guardar()
+		guardar_mundo()
 
 
 # ---------------------------------------------------------------------------

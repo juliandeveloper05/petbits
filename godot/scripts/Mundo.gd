@@ -2,6 +2,10 @@
 ##
 ## Un mapa caminable. Cuál, lo dice `Partida.mapa`.
 ##
+## Hay dos clases, y la escena las trata casi igual: los INTERIORES son una
+## grilla fija del tamaño de la pantalla, y el MUNDO es infinito. La única
+## diferencia real es de dónde salen los tiles y si la cámara se mueve.
+##
 ## ---
 ##
 ## ANTES ERA "EL PUEBLO" Y AHORA ES "UN MAPA".
@@ -75,9 +79,26 @@ var _cartel: Label = null
 var _estado: Label = null
 var _caja: Control = null
 var _velo: ColorRect = null
+var _camara: Camera2D = null
 
 ## Los sprites de los NPC del mapa actual. Se rehacen en cada carga.
 var _vecinos: Array[Sprite2D] = []
+
+## Los chunks ya volcados en el tilemap, por coordenada de chunk.
+##
+## Se guardan para no volver a pintarlos. Volcar un chunk son mil veinticuatro
+## `set_cell`, y repetir los nueve en cada paso sería un tirón por cuadro.
+var _chunks := {}
+
+## En qué chunk estaba la criatura la última vez que se miró.
+var _chunk_actual := Vector2i(999999, 999999)
+
+## Si ya se usó la posición guardada. Ver `_volver_donde_corresponde`.
+var _restaurada := false
+
+## Cuántos tiles de lado tiene un chunk. Lo dice el C++: tenerlo escrito de los
+## dos lados es tenerlo mal de uno.
+var _lado_chunk := 32
 
 ## El script del mapa en el que estamos, y su grilla ya generada.
 var _mapa_id := ""
@@ -96,7 +117,10 @@ func _ready() -> void:
 		_sin_extension()
 		return
 
+	_lado_chunk = Partida.core.lado_de_chunk()
+
 	_construir_criatura()
+	_construir_camara()
 	_construir_carteles()
 	_construir_caja()
 	_construir_velo()
@@ -126,10 +150,18 @@ func _cargar_mapa(id: String, con_fundido: bool) -> void:
 	_mapa_id = id
 	Partida.mapa = id
 	_def = Mapas.script_de(id)
-	_mapa = _def.generar()
 	_cerca = {}
 
-	_construir_tilemap()
+	_rehacer_capa()
+	if _infinito():
+		# El mundo no se vuelca de una: se carga el anillo alrededor de donde
+		# estés, y el resto aparece caminando.
+		_mapa = []
+		_chunk_actual = Vector2i(999999, 999999)
+	else:
+		_mapa = _def.generar()
+		_volcar_grilla()
+
 	_construir_vecinos()
 
 	# Al entrar por una puerta aparecés en la entrada del mapa nuevo. La posición
@@ -137,6 +169,9 @@ func _cargar_mapa(id: String, con_fundido: bool) -> void:
 	# del criadero es lo que uno espera, y guardarla obligaría a decidir qué pasa
 	# cuando el mapa cambia de forma.
 	_criatura.position = _volver_donde_corresponde()
+	if _infinito():
+		_actualizar_chunks()
+	_ubicar_camara(true)
 
 	_caja.cerrar()
 	_cartel.text = _texto_de_ayuda()
@@ -150,6 +185,13 @@ func _cargar_mapa(id: String, con_fundido: bool) -> void:
 ## Si venís del pueblo, en la entrada del interior. Si volvés al pueblo, sobre la
 ## puerta por la que saliste — no en el medio de la plaza, que sería teletransporte.
 func _volver_donde_corresponde() -> Vector2:
+	# Si hay una posición guardada de este mapa, esa manda: es donde dejaste de
+	# jugar. Solo vale la primera vez que se carga el mapa en esta sesión —
+	# después ya estás caminando y `Partida.donde` te sigue.
+	if not _restaurada and Partida.mapa == _mapa_id and Partida.donde != Vector2.ZERO:
+		_restaurada = true
+		return Partida.donde
+
 	if _mapa_id == "pueblo" and Partida.venir_de != "":
 		for punto in _def.PUNTOS:
 			if punto.get("mapa", "") == Partida.venir_de:
@@ -159,9 +201,15 @@ func _volver_donde_corresponde() -> Vector2:
 	return _def.ENTRADA
 
 
-func _construir_tilemap() -> void:
+func _infinito() -> bool:
+	return _def != null and _def.INFINITO
+
+
+## Rearma la capa de tiles vacía. Lo que se vuelque encima depende del mapa.
+func _rehacer_capa() -> void:
 	if _capa != null:
 		_capa.queue_free()
+	_chunks.clear()
 
 	var imagen: Image = Partida.core.atlas_tiles()
 	var textura := ImageTexture.create_from_image(imagen)
@@ -184,9 +232,123 @@ func _construir_tilemap() -> void:
 	# Debajo de la criatura y de los carteles, que se crean antes que él.
 	move_child(_capa, 0)
 
+
+## Vuelca la grilla de un interior, que entra entera de una.
+func _volcar_grilla() -> void:
 	for y in _def.ALTO:
 		for x in _def.ANCHO:
 			_capa.set_cell(Vector2i(x, y), 0, Vector2i(_mapa[y][x], 0))
+
+
+# ---------------------------------------------------------------------------
+# Los chunks
+# ---------------------------------------------------------------------------
+
+## Mantiene cargado el anillo de 3 × 3 chunks alrededor de la criatura.
+##
+## Se llama en cada cuadro pero solo hace algo cuando cambia el chunk, que es
+## cada 32 tiles caminados. Y cuando hace algo, vuelca únicamente los chunks
+## nuevos: cruzar un borde trae tres, no nueve. Son 3072 celdas en vez de 9216, y
+## esa diferencia es la que separa un tirón visible de uno que no se nota.
+func _actualizar_chunks() -> void:
+	var centro := _chunk_de(_criatura.position)
+	if centro == _chunk_actual:
+		return
+	_chunk_actual = centro
+
+	var semilla: String = Partida.semilla_mundo
+	if semilla == "":
+		return
+
+	var quiero := {}
+	for dy in [-1, 0, 1]:
+		for dx in [-1, 0, 1]:
+			var c := centro + Vector2i(dx, dy)
+			quiero[c] = true
+			if not _chunks.has(c):
+				_volcar_chunk(semilla, c)
+				_chunks[c] = true
+
+	# Y se borran los que quedaron lejos. Sin esto el tilemap crece sin techo:
+	# una caminata larga terminaría con decenas de miles de celdas puestas que
+	# nadie va a mirar nunca más.
+	for c in _chunks.keys():
+		if quiero.has(c):
+			continue
+		_borrar_chunk(c)
+		_chunks.erase(c)
+
+
+func _volcar_chunk(semilla: String, c: Vector2i) -> void:
+	var datos: PackedByteArray = Partida.core.mundo_chunk(semilla, c.x, c.y)
+	if datos.is_empty():
+		return
+	for y in _lado_chunk:
+		for x in _lado_chunk:
+			_capa.set_cell(
+				Vector2i(c.x * _lado_chunk + x, c.y * _lado_chunk + y),
+				0,
+				Vector2i(datos[y * _lado_chunk + x], 0)
+			)
+
+
+func _borrar_chunk(c: Vector2i) -> void:
+	for y in _lado_chunk:
+		for x in _lado_chunk:
+			_capa.erase_cell(Vector2i(c.x * _lado_chunk + x, c.y * _lado_chunk + y))
+
+
+func _chunk_de(pos: Vector2) -> Vector2i:
+	# Hacia abajo, no hacia el cero: con división entera el chunk 0 mediría el
+	# doble y el mundo quedaría partido justo en el origen. Es la misma cuenta que
+	# `chunkDe` del lado del C++.
+	return Vector2i(
+		int(floor(pos.x / (_lado_chunk * TILE))),
+		int(floor(pos.y / (_lado_chunk * TILE)))
+	)
+
+
+# ---------------------------------------------------------------------------
+# La cámara
+# ---------------------------------------------------------------------------
+
+## Hasta la Fase 3 no había ninguna: el mapa medía exactamente lo que la pantalla
+## y no había nada que encuadrar. Un mundo infinito la vuelve obligatoria.
+func _construir_camara() -> void:
+	_camara = Camera2D.new()
+	_camara.enabled = true
+	# Suavizado corto. Sin él, la cámara pegada a la criatura hace que el mundo
+	# tiemble con cada paso; con mucho, el personaje se despega del encuadre al
+	# cambiar de dirección.
+	_camara.position_smoothing_enabled = true
+	_camara.position_smoothing_speed = 12.0
+	add_child(_camara)
+
+
+## Encuadra según el mapa.
+##
+## En un interior la cámara se queda quieta en el centro: la sala mide justo lo
+## que la pantalla, y moverla solo mostraría el vacío de afuera. En el mundo
+## sigue a la criatura.
+func _ubicar_camara(de_golpe: bool) -> void:
+	if _camara == null:
+		return
+
+	var destino: Vector2
+	if _infinito():
+		destino = _criatura.position
+	else:
+		destino = Vector2(_def.ANCHO * TILE, _def.ALTO * TILE) * 0.5
+
+	if de_golpe:
+		# Al entrar a un mapa la cámara no se desliza desde donde estaba: eso se
+		# vería como un barrido por encima del mundo entre un lugar y otro.
+		_camara.position_smoothing_enabled = false
+		_camara.position = destino
+		_camara.reset_smoothing()
+		_camara.position_smoothing_enabled = true
+	else:
+		_camara.position = destino
 
 
 # ---------------------------------------------------------------------------
@@ -236,19 +398,25 @@ func _construir_criatura() -> void:
 ## No son la caja de diálogo y no tienen que serlo. Un aviso permanente y una
 ## conversación son cosas distintas: el primero es parte del decorado y se lee de
 ## reojo, la segunda interrumpe y pide respuesta.
+## Las dos líneas y la caja cuelgan de la CÁMARA, no del mundo.
+##
+## Con la cámara quieta daba lo mismo. Ahora que se mueve, un cartel puesto en
+## coordenadas del mundo se quedaría atrás en cuanto camines: la interfaz tiene
+## que vivir en el espacio de la pantalla, y colgarla de la cámara es la forma
+## más corta de decir eso.
 func _construir_carteles() -> void:
 	var vp := _viewport()
-	_cartel = _etiqueta(Vector2(6, vp.y - 18), TEXTO)
-	_estado = _etiqueta(Vector2(6, 4), FOSFORO)
+	_cartel = _etiqueta(Vector2(6 - vp.x / 2, vp.y / 2 - 18), TEXTO)
+	_estado = _etiqueta(Vector2(6 - vp.x / 2, 4 - vp.y / 2), FOSFORO)
 
 
 func _construir_caja() -> void:
 	_caja = CajaDialogo.new()
-	add_child(_caja)
+	_camara.add_child(_caja)
 
 	var vp := _viewport()
 	_caja.size = Vector2(vp.x - 8, _caja.custom_minimum_size.y)
-	_caja.position = Vector2(4, vp.y - _caja.size.y - 4)
+	_caja.position = Vector2(4 - vp.x / 2, vp.y / 2 - _caja.size.y - 4)
 	_caja.termino.connect(_al_terminar_de_hablar)
 
 
@@ -261,8 +429,9 @@ func _construir_velo() -> void:
 	_velo = ColorRect.new()
 	_velo.color = Color(0, 0, 0, 0)
 	_velo.size = _viewport()
+	_velo.position = -_viewport() * 0.5
 	_velo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_velo)
+	_camara.add_child(_velo)
 
 
 func _viewport() -> Vector2:
@@ -283,7 +452,7 @@ func _etiqueta(donde: Vector2, color: Color) -> Label:
 	etiqueta.add_theme_color_override("font_color", color)
 	etiqueta.add_theme_color_override("font_outline_color", SOMBRA)
 	etiqueta.add_theme_constant_override("outline_size", 2)
-	add_child(etiqueta)
+	_camara.add_child(etiqueta)
 	return etiqueta
 
 
@@ -331,6 +500,10 @@ func _process(delta: float) -> void:
 	if not _choca(_criatura.position + Vector2(0, paso.y)):
 		_criatura.position.y += paso.y
 
+	Partida.donde = _criatura.position
+	if _infinito():
+		_actualizar_chunks()
+	_ubicar_camara(false)
 	_mirar_alrededor()
 
 
@@ -343,17 +516,36 @@ func _choca(pos: Vector2) -> bool:
 	const MEDIO := 5.0
 	for dx in [-MEDIO, MEDIO]:
 		for dy in [-MEDIO, MEDIO]:
-			var celda := Vector2i(int((pos.x + dx) / TILE), int((pos.y + dy) / TILE))
-			if celda.x < 0 or celda.y < 0 or celda.x >= _def.ANCHO or celda.y >= _def.ALTO:
-				return true
-			if Partida.core.tile_solido(_mapa[celda.y][celda.x]):
+			var celda := Vector2i(
+				int(floor((pos.x + dx) / TILE)), int(floor((pos.y + dy) / TILE))
+			)
+			if _solido_en(celda):
 				return true
 	return false
 
 
+## ¿Hay algo sólido en esa celda?
+##
+## En un interior el borde del mapa es una pared implícita; en el mundo no hay
+## borde, así que la pregunta se le hace al generador. El `floor` de arriba y no
+## un casteo a entero es por lo mismo: con coordenadas negativas, `int(-0.5)` da
+## 0 y la criatura atravesaría el tile que está a su izquierda.
+func _solido_en(celda: Vector2i) -> bool:
+	if _infinito():
+		return Partida.core.tile_solido(
+			Partida.core.mundo_tile(Partida.semilla_mundo, celda.x, celda.y)
+		)
+
+	if celda.x < 0 or celda.y < 0 or celda.x >= _def.ANCHO or celda.y >= _def.ALTO:
+		return true
+	return Partida.core.tile_solido(_mapa[celda.y][celda.x])
+
+
 ## Si está parada sobre un punto, lo nombra y lo deja listo para usar.
 func _mirar_alrededor() -> void:
-	var celda := Vector2i(int(_criatura.position.x / TILE), int(_criatura.position.y / TILE))
+	var celda := Vector2i(
+		int(floor(_criatura.position.x / TILE)), int(floor(_criatura.position.y / TILE))
+	)
 
 	for punto in _def.PUNTOS:
 		# Se acepta el tile del punto y sus vecinos: pararse EXACTO sobre una
@@ -367,11 +559,15 @@ func _mirar_alrededor() -> void:
 
 	if not _cerca.is_empty():
 		_cerca = {}
+
+	if _infinito():
+		_cartel.text = _texto_del_suelo(celda)
+	else:
 		_cartel.text = _texto_de_ayuda()
 
 
 func _texto_de_ayuda() -> String:
-	if _mapa_id == "pueblo":
+	if _infinito():
 		return "Flechas para caminar · Esc para volver"
 	return "Flechas para caminar · Esc para salir"
 
@@ -433,6 +629,10 @@ func _unhandled_input(evento: InputEvent) -> void:
 
 func _usar() -> void:
 	if _cerca.is_empty():
+		# Nada con qué interactuar: se prueba levantar algo del suelo. Es lo que
+		# hace que Enter siempre signifique lo mismo —"usar lo que tengo
+		# delante"— en vez de estar deshabilitado la mayor parte del tiempo.
+		_recolectar()
 		return
 
 	match _cerca["tipo"]:
@@ -450,6 +650,9 @@ func _usar() -> void:
 
 func _ir_a(mapa: String) -> void:
 	Partida.venir_de = _mapa_id
+	# Antes de cruzar la puerta: si el juego se cierra del otro lado, la posición
+	# guardada tiene que ser la del mapa al que vas, no la de este.
+	Partida.guardar_mundo()
 	_cargar_mapa(mapa, true)
 
 
@@ -546,6 +749,66 @@ func _hablar(punto: Dictionary) -> void:
 	_caja.decir_ya(dice[0])
 	for i in range(1, dice.size()):
 		_caja.decir(dice[i])
+
+
+## Qué dice el cartel cuando estás en el campo, sin nada delante.
+##
+## El bioma va siempre: es la única forma de saber dónde estás en un mundo sin
+## bordes ni nombres de lugar. Y si hay algo para levantar, lo dice — un hallazgo
+## que no se anuncia es un hallazgo que nadie encuentra.
+func _texto_del_suelo(celda: Vector2i) -> String:
+	var semilla: String = Partida.semilla_mundo
+	if semilla == "":
+		return _texto_de_ayuda()
+
+	var donde: String = Partida.core.mundo_bioma(semilla, celda.x, celda.y)
+
+	var h: Dictionary = Partida.core.mundo_hallazgo(semilla, celda.x, celda.y)
+	if h["tipo"] != "nada" and not Partida.ya_recolectado(celda):
+		return "%s · %s — Enter para juntar" % [donde, h["nombre"]]
+
+	return "%s · %d, %d" % [donde, celda.x, celda.y]
+
+
+## Levanta lo que haya en el suelo.
+##
+## Lo que ya se levantó se recuerda en el archivo del mundo, no en el save
+## compartido. Y se recuerda lo LEVANTADO y no lo que queda: en un mundo infinito
+## lo que queda también lo es, así que la pregunta hay que darla vuelta.
+func _recolectar() -> void:
+	if not _infinito():
+		return
+
+	var semilla: String = Partida.semilla_mundo
+	if semilla == "":
+		return
+
+	var celda := Vector2i(
+		int(floor(_criatura.position.x / TILE)), int(floor(_criatura.position.y / TILE))
+	)
+
+	var h: Dictionary = Partida.core.mundo_hallazgo(semilla, celda.x, celda.y)
+	if h["tipo"] == "nada":
+		return
+
+	if Partida.ya_recolectado(celda):
+		_caja.decir_ya("Acá ya no queda nada. Va a volver a crecer.")
+		return
+
+	var r: Dictionary = Partida.actuar(func(): return Partida.core.recolectar(
+		semilla, celda.x, celda.y
+	))
+	if not r["ok"]:
+		return
+
+	Partida.marcar_recolectado(celda)
+	Partida.guardar_mundo()
+	_caja.decir_ya(r["mensaje"])
+
+	# Un hito es un hallazgo de verdad, así que va a la bitácora: al volver a
+	# PetView tiene que quedar rastro de que encontraste algo.
+	if h["tipo"] == "hito":
+		Partida.anotar(r["mensaje"], "raro")
 
 
 func _mirar_estante(categoria: String) -> void:

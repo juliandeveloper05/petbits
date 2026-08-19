@@ -246,6 +246,24 @@ public:
     /** Cómo se llama el lugar donde estás parado: "el bosque", "la orilla". */
     String mundo_bioma(const String& semilla, int64_t x, int64_t y) const;
 
+    /**
+     * Qué se puede levantar de ahí.
+     *
+     * { tipo, nombre, alimento, semilla } — `tipo` es "nada", "forraje", "veta" o
+     * "hito". Ya trae qué alimento da y qué genoma deja, para que la pantalla no
+     * tenga que decidir nada.
+     */
+    Dictionary mundo_hallazgo(const String& semilla, int64_t x, int64_t y) const;
+
+    /**
+     * Levanta lo que haya. { ok, mensaje }.
+     *
+     * Suma a la despensa o a las semillas, según corresponda. Que la coordenada
+     * ya se haya recolectado NO se pregunta acá: eso es estado del jugador y vive
+     * en el archivo del mundo, del lado de Godot.
+     */
+    Dictionary recolectar(const String& semilla, int64_t x, int64_t y);
+
     // -----------------------------------------------------------------------
     // Tipografía
     // -----------------------------------------------------------------------

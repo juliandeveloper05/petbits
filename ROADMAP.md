@@ -458,10 +458,11 @@ mudó a `PuebloMapa.gd`, que no depende de nada.
 | `world_gen.cpp` — ruido de valor, biomas, chunks | ✅ |
 | Los cuatro tests: costura, determinismo, variedad, caminabilidad | ✅ |
 | `region_a_png.gd` — mirar el mundo antes de que sea jugable | ✅ |
-| Cámara y carga de chunks en `Mundo.gd` | ⬜ |
-| El pueblo adentro del mundo, con el borde abierto | ⬜ |
-| Recolectar, hitos y semillas perdidas | ⬜ |
-| `user://mundo.json` — dónde estabas | ⬜ |
+| Cámara y carga de chunks en `Mundo.gd` | ✅ |
+| El pueblo adentro del mundo, con el borde abierto | ✅ |
+| Recolectar, hitos y semillas perdidas | ✅ |
+| `user://mundo.json` — dónde estabas | ✅ |
+| Criaturas salvajes en el pasto alto | ⬜ pide combate |
 
 **El mundo sale del genoma de tu primera criatura.** Es la tesis del proyecto
 llevada hasta el final: la criatura ES la semilla, y ahora el mundo también. La
@@ -512,6 +513,65 @@ camina. El techo es la otra mitad del piso.
 ```bash
 godot --headless --path godot res://scenes/RegionAPng.tscn
 ```
+
+**El pueblo es parte del mundo, no una excepción.** Su grilla se mudó a
+`world_gen.cpp` y `tileEnMundo` la devuelve cuando la coordenada cae adentro de
+su rectángulo. Con eso `Mundo.gd` no necesita saber que el pueblo existe:
+caminás hasta el borde y seguís caminando. Si la grilla se hubiera quedado en
+GDScript habría que componer las dos afuera, con un caso especial antes de cada
+tile.
+
+Su borde de árboles —que lo encerraba por completo, y estaba bien cuando el mapa
+era todo lo que había— ahora tiene un hueco en cada lado. Y del otro lado del
+hueco aparecieron **las sendas**, que no estaban en el plan: el test de salidas
+falló una de cada tres corridas, solo cuando el seed al azar ponía un lago justo
+en la puerta. Es el peor tipo de falla —la que aparece en el juego de otro y
+nunca en el tuyo— y se arregla con diez tiles de camino que se dibujan
+únicamente cuando afuera hay algo sólido. Si afuera hay pradera, no hay senda.
+
+**`Mundo.gd` mantiene un anillo de 3 × 3 chunks** y al cruzar un borde vuelca
+solo los nuevos: hasta 3072 celdas en vez de 9216. Y libera los que quedaron
+lejos, porque sin eso una caminata larga deja decenas de miles de celdas puestas
+que nadie va a mirar nunca más.
+
+Hasta acá no había ninguna `Camera2D`: el mapa medía exactamente lo que la
+pantalla. Con el mundo infinito la cámara sigue a la criatura, y los carteles y
+la caja de diálogo pasaron a colgar de ELLA — una interfaz en coordenadas del
+mundo se queda atrás en cuanto camines.
+
+**Caminar da lo que se consigue estando ahí.** El pasto alto da comida, las vetas
+del roquedal dan mineral, y muy de vez en cuando hay un hito que deja un genoma
+para incubar — que es lo que conecta el mundo con el criadero sin pasar por las
+expediciones. Nada de esto hay en el pueblo: es el lugar seguro, y llenarlo de
+recursos convertiría el mundo en un rodeo.
+
+Lo levantado se recuerda en un archivo propio del nativo, `user://mundo.json`,
+que también guarda dónde estabas. **No va en `partida.json`**: ese archivo es el
+formato de la web, la web no tiene mundo, y hasta hoy los dos programas escriben
+exactamente lo mismo. Hay un test que abre el save compartido y comprueba que no
+tenga ni un campo de más.
+
+Y se guarda lo LEVANTADO, no lo que queda: en un mundo infinito lo que queda
+también lo es, así que la pregunta hay que darla vuelta. Con un tope de cuatro
+mil coordenadas, lo más viejo se olvida y el pasto vuelve a crecer.
+
+```bash
+godot --headless --path godot res://scenes/VerificarInfinito.tscn
+```
+
+Dieciséis comprobaciones sobre el juego y no sobre el generador: que el anillo
+de chunks se cargue y se libere, que el mundo no cambie por haberse ido y vuelto,
+que haya de los tres hallazgos cerca del pueblo, que levantar algo llegue a la
+despensa y no se pueda levantar dos veces, y que el save compartido siga limpio.
+
+Ese test destapó algo que no era suyo: **los tests se estaban contaminando entre
+sí a través del archivo del mundo**. La costura que desvía la ruta se fijaba
+DESPUÉS de `iniciar()`, así que la carga usaba la de verdad — y los tests
+escribieron el `user://mundo.json` del usuario, que es exactamente lo que el
+resto del proyecto se ocupa de que no pase. Ahora se fija antes, como la del
+save, y además los tests apagan el guardado automático al cerrar: lo borraban
+todo al terminar y el manejador de cierre lo volvía a escribir un instante
+después.
 
 Dibuja tres semillas de 160 × 160 tiles, cada tile promediado a un color. A esa
 escala no se ve el detalle de un tile y se ven las formas: si los lagos tienen

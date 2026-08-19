@@ -41,8 +41,12 @@ func _ready() -> void:
 		return
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(RUTA))
+	Partida.guardar_al_salir = false
 	Partida.ruta_save = RUTA
 	Partida.ruta_cuarentena = "user://verificacion_mundo.rota.json"
+	# También el archivo del mundo. Sin esto los tests escriben el de verdad:
+	# lo hicieron, y por eso se contaminaban entre sí.
+	Partida.ruta_mundo = "user://verificacion_mundo_mundo.json"
 
 	print("\nPetBits — el mapa y la criatura son la misma partida\n")
 
@@ -54,6 +58,7 @@ func _ready() -> void:
 	await _correr()
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(RUTA))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://verificacion_mundo_mundo.json"))
 
 	if _fallas == 0:
 		print("\nTodo bien: las dos pantallas juegan la misma partida.")
@@ -95,11 +100,36 @@ func _correr() -> void:
 	_afirmar(seed_mapa == seed_petview, "es la MISMA criatura en las dos pantallas")
 	_afirmar(mundo._criatura != null, "hay algo que caminar")
 
-	# ---- Los árboles frenan ------------------------------------------------
-	# El borde es la única pared del pueblo. Si no frenara, se podría salir del
-	# mapa caminando y el resto de este test daría igual.
-	_afirmar(mundo._choca(Vector2(8, 8)), "el borde de árboles frena")
-	_afirmar(not mundo._choca(Vector2(15.5 * 16, 8.5 * 16)), "la plaza se camina")
+	# ---- El pueblo está adentro del mundo ---------------------------------
+	#
+	# Las coordenadas son de MUNDO y el pueblo está centrado en el origen, así que
+	# la plaza es el (0, 0). Antes este bloque probaba (8, 8) esperando la esquina
+	# del mapa; con el mundo infinito ese píxel es el medio de la plaza, y el test
+	# falló con razón.
+	_afirmar(not mundo._choca(Vector2(8, 8)), "la plaza se camina")
+
+	# Una esquina del borde de árboles: sigue siendo pared.
+	_afirmar(mundo._choca(Vector2(-15 * 16 + 8, -8 * 16 + 8)), "el borde de árboles frena")
+
+	# Y los huecos del borde SE CRUZAN. Es lo que convierte el mundo infinito en
+	# algo más que un fondo de pantalla: sin esto el pueblo seguiría amurallado y
+	# no habría forma de llegar a lo generado.
+	var salidas := {
+		"norte": Vector2(8, (-8 - 1) * 16 + 8),
+		"sur": Vector2(8, (8 + 1) * 16 + 8),
+		"oeste": Vector2((-15 - 1) * 16 + 8, 8),
+		"este": Vector2((14 + 1) * 16 + 8, 8),
+	}
+	for lado in salidas:
+		_afirmar(not mundo._choca(salidas[lado]), "se puede salir del pueblo por el %s" % lado)
+
+	# Y afuera hay mundo de verdad, no vacío.
+	var lejos := Vector2(400 * 16, 400 * 16)
+	_afirmar(
+		Partida.core.mundo_tile(Partida.semilla_mundo, 400, 400) >= 0,
+		"a cuatrocientos tiles del pueblo sigue habiendo terreno"
+	)
+	_afirmar(Partida.semilla_mundo != "", "el mundo tiene semilla")
 
 	# ---- Caminar hasta el patio -------------------------------------------
 	var patio: Dictionary = preload("res://scripts/PuebloMapa.gd").PUNTOS[0]

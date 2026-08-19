@@ -2,6 +2,7 @@
 
 #include "rng.h"
 
+#include <array>
 #include <cmath>
 
 namespace petbits {
@@ -136,6 +137,7 @@ constexpr double ESCALA_DETALLE = 9.5;
 constexpr uint64_t CAMPO_ALTURA = 0x1A17D1AULL;
 constexpr uint64_t CAMPO_HUMEDAD = 0xB0DEC0DEULL;
 constexpr uint64_t CAMPO_DETALLE = 0xD37A11EULL;
+constexpr uint64_t CAMPO_HITO = 0x81707ULL;
 
 // ---------------------------------------------------------------------------
 // Tierra firme alrededor del origen
@@ -217,6 +219,146 @@ constexpr double DENSIDAD_ARBOLES = 0.34;
 } // namespace
 
 // ---------------------------------------------------------------------------
+// El pueblo
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/** Los cinco puntos del pueblo, en coordenadas locales. Van marcados en piedra. */
+constexpr int PUNTOS_PUEBLO[5][2] = {{4, 3}, {25, 3}, {25, 13}, {4, 13}, {15, 2}};
+
+/** Traza un camino en L, primero horizontal y después vertical. */
+void trazarCamino(uint8_t* g, int x0, int y0, int x1, int y1) {
+    const int desdeX = x0 < x1 ? x0 : x1;
+    const int hastaX = x0 < x1 ? x1 : x0;
+    for (int x = desdeX; x <= hastaX; ++x) {
+        if (x > 0 && x < PUEBLO_ANCHO - 1 && y0 > 0 && y0 < PUEBLO_ALTO - 1) {
+            g[y0 * PUEBLO_ANCHO + x] = static_cast<uint8_t>(Tile::Camino);
+        }
+    }
+    const int desdeY = y0 < y1 ? y0 : y1;
+    const int hastaY = y0 < y1 ? y1 : y0;
+    for (int y = desdeY; y <= hastaY; ++y) {
+        if (x1 > 0 && x1 < PUEBLO_ANCHO - 1 && y > 0 && y < PUEBLO_ALTO - 1) {
+            g[y * PUEBLO_ANCHO + x1] = static_cast<uint8_t>(Tile::Camino);
+        }
+    }
+}
+
+/**
+ * La grilla del pueblo, armada una sola vez.
+ *
+ * A mano y no procedural: es el lugar donde el jugador arranca y tiene que
+ * leerse como un sitio pensado, no como ruido. Los caminos van de la plaza a
+ * cada entrada, que es lo que enseña sin decir nada que esas son las salidas.
+ */
+const std::array<uint8_t, PUEBLO_ANCHO * PUEBLO_ALTO>& grillaPueblo() {
+    static const std::array<uint8_t, PUEBLO_ANCHO * PUEBLO_ALTO> g = [] {
+        std::array<uint8_t, PUEBLO_ANCHO * PUEBLO_ALTO> m{};
+        m.fill(static_cast<uint8_t>(Tile::Pasto));
+
+        // El borde de árboles, CON HUECOS.
+        //
+        // Antes encerraba el pueblo por completo, y tenía sentido cuando el mapa
+        // era todo lo que había: era la pared sin necesidad de paredes
+        // invisibles. Ahora hay mundo del otro lado, y un pueblo amurallado
+        // convertiría el mundo infinito en un fondo de pantalla.
+        //
+        // Los huecos van en el medio de cada lado y miden cinco tiles: menos se
+        // lee como un error del terreno, más deja de leerse como una salida.
+        const int medioX = PUEBLO_ANCHO / 2;
+        const int medioY = PUEBLO_ALTO / 2;
+        for (int x = 0; x < PUEBLO_ANCHO; ++x) {
+            const bool hueco = (x >= medioX - 2 && x <= medioX + 2);
+            if (!hueco) {
+                m[0 * PUEBLO_ANCHO + x] = static_cast<uint8_t>(Tile::Arbol);
+                m[(PUEBLO_ALTO - 1) * PUEBLO_ANCHO + x] = static_cast<uint8_t>(Tile::Arbol);
+            }
+        }
+        for (int y = 0; y < PUEBLO_ALTO; ++y) {
+            const bool hueco = (y >= medioY - 2 && y <= medioY + 2);
+            if (!hueco) {
+                m[y * PUEBLO_ANCHO + 0] = static_cast<uint8_t>(Tile::Arbol);
+                m[y * PUEBLO_ANCHO + (PUEBLO_ANCHO - 1)] = static_cast<uint8_t>(Tile::Arbol);
+            }
+        }
+
+        // La plaza, en el centro.
+        for (int y = 7; y < 11; ++y) {
+            for (int x = 12; x < 19; ++x) {
+                m[y * PUEBLO_ANCHO + x] = static_cast<uint8_t>(Tile::Camino);
+            }
+        }
+
+        // Un caminito de la plaza a cada entrada.
+        for (const auto& p : PUNTOS_PUEBLO) {
+            trazarCamino(m.data(), 15, 8, p[0], p[1]);
+        }
+
+        // Y cuatro caminos más, de la plaza a cada hueco del borde: si no, las
+        // salidas serían agujeros en el bosque y no puertas.
+        trazarCamino(m.data(), 15, 8, medioX, 1);
+        trazarCamino(m.data(), 15, 8, medioX, PUEBLO_ALTO - 2);
+        trazarCamino(m.data(), 15, 8, 1, medioY);
+        trazarCamino(m.data(), 15, 8, PUEBLO_ANCHO - 2, medioY);
+
+        // Un estanque, para que no sea todo verde y camino.
+        for (int y = 11; y < 15; ++y) {
+            for (int x = 19; x < 24; ++x) {
+                m[y * PUEBLO_ANCHO + x] = static_cast<uint8_t>(Tile::Agua);
+            }
+        }
+        for (int x = 19; x < 24; ++x) {
+            m[10 * PUEBLO_ANCHO + x] = static_cast<uint8_t>(Tile::Arena);
+        }
+
+        // Pasto alto en dos manchones.
+        constexpr int MANCHONES[7][2] = {{7, 4}, {8, 4}, {7, 5}, {21, 4}, {22, 4}, {21, 5}, {22, 5}};
+        for (const auto& p : MANCHONES) {
+            m[p[1] * PUEBLO_ANCHO + p[0]] = static_cast<uint8_t>(Tile::PastoAlto);
+        }
+
+        // Y las entradas, marcadas en piedra.
+        for (const auto& p : PUNTOS_PUEBLO) {
+            m[p[1] * PUEBLO_ANCHO + p[0]] = static_cast<uint8_t>(Tile::Piedra);
+        }
+
+        return m;
+    }();
+    return g;
+}
+
+} // namespace
+
+bool enElPueblo(int32_t x, int32_t y) {
+    return x >= PUEBLO_X && x < PUEBLO_X + PUEBLO_ANCHO && y >= PUEBLO_Y &&
+           y < PUEBLO_Y + PUEBLO_ALTO;
+}
+
+namespace {
+/** Cuánto se adentra cada senda en el mundo, y cuánto mide de ancho. */
+constexpr int32_t LARGO_SENDA = 10;
+constexpr int32_t MEDIO_SENDA = 1;
+} // namespace
+
+bool enUnaSenda(int32_t x, int32_t y) {
+    const int32_t cx = PUEBLO_X + PUEBLO_ANCHO / 2;
+    const int32_t cy = PUEBLO_Y + PUEBLO_ALTO / 2;
+
+    // Norte y sur: una franja vertical alineada con el hueco de arriba y el de
+    // abajo. Este y oeste, lo mismo en horizontal.
+    if (x >= cx - MEDIO_SENDA && x <= cx + MEDIO_SENDA) {
+        if (y < PUEBLO_Y && y >= PUEBLO_Y - LARGO_SENDA) return true;
+        if (y >= PUEBLO_Y + PUEBLO_ALTO && y < PUEBLO_Y + PUEBLO_ALTO + LARGO_SENDA) return true;
+    }
+    if (y >= cy - MEDIO_SENDA && y <= cy + MEDIO_SENDA) {
+        if (x < PUEBLO_X && x >= PUEBLO_X - LARGO_SENDA) return true;
+        if (x >= PUEBLO_X + PUEBLO_ANCHO && x < PUEBLO_X + PUEBLO_ANCHO + LARGO_SENDA) return true;
+    }
+    return false;
+}
+
+// ---------------------------------------------------------------------------
 
 std::string_view nombreBioma(Bioma b) {
     switch (b) {
@@ -267,6 +409,27 @@ Bioma biomaEn(Seed semilla, int32_t x, int32_t y) {
 }
 
 Tile tileEnMundo(Seed semilla, int32_t x, int32_t y) {
+    // El pueblo primero. No es un caso especial que el walker tenga que
+    // recordar: acá adentro, el mundo simplemente es el pueblo.
+    if (enElPueblo(x, y)) {
+        const int lx = x - PUEBLO_X;
+        const int ly = y - PUEBLO_Y;
+        return static_cast<Tile>(grillaPueblo()[ly * PUEBLO_ANCHO + lx]);
+    }
+
+    // Las sendas: diez tiles saliendo de cada hueco del borde del pueblo.
+    //
+    // Solo aparecen cuando hacen falta. Si del otro lado del hueco hay pradera,
+    // la senda no existe y salís al pasto — que es como tiene que ser. Se dibuja
+    // únicamente cuando el mundo puso algo sólido en la puerta, y ahí hace lo que
+    // haría cualquiera que viviera ahí: un camino.
+    if (enUnaSenda(x, y)) {
+        const Bioma b = biomaEn(semilla, x, y);
+        if (b == Bioma::Lago || b == Bioma::Roquedal || b == Bioma::Bosque) {
+            return Tile::Camino;
+        }
+    }
+
     const double fx = static_cast<double>(x);
     const double fy = static_cast<double>(y);
 
@@ -311,6 +474,53 @@ Tile tileEnMundo(Seed semilla, int32_t x, int32_t y) {
     // alfombra de un solo tile.
     const double detalle = ruido(semilla, fx / ESCALA_DETALLE, fy / ESCALA_DETALLE, CAMPO_DETALLE);
     return detalle > 0.52 ? Tile::PastoAlto : Tile::Pasto;
+}
+
+// ---------------------------------------------------------------------------
+// Qué hay para encontrar
+// ---------------------------------------------------------------------------
+
+namespace {
+/**
+ * Cada cuántos tiles, más o menos, hay un hito.
+ *
+ * Uno cada dos mil suena a poquísimo y en la práctica es uno cada cuarenta y
+ * cinco tiles de lado — o sea, más o menos uno por pantalla y media. Si fueran
+ * más, dejarían de ser un hallazgo; si fueran menos, nadie encontraría ninguno
+ * y la mecánica no existiría.
+ */
+constexpr double RAREZA_HITO = 0.9995;
+} // namespace
+
+Hallazgo hallazgoEn(Seed semilla, int32_t x, int32_t y) {
+    // En el pueblo no hay nada que juntar. Es el lugar seguro, y llenarlo de
+    // recursos convertiría el mundo en un rodeo: darías vueltas en la plaza.
+    if (enElPueblo(x, y)) return Hallazgo::Nada;
+
+    const Tile t = tileEnMundo(semilla, x, y);
+
+    // El hito va primero: es más raro, y un hito sobre pasto alto tiene que
+    // leerse como hito.
+    if (!esSolido(t) && valorEn(semilla, x, y, CAMPO_HITO) > RAREZA_HITO) {
+        return Hallazgo::Hito;
+    }
+
+    if (t == Tile::PastoAlto) return Hallazgo::Forraje;
+
+    // La veta no está EN la piedra —la piedra es sólida, no se puede pisar— sino
+    // en el musgo que la rodea, que es por donde se camina en un roquedal.
+    if (t == Tile::Musgo && biomaEn(semilla, x, y) == Bioma::Roquedal) return Hallazgo::Veta;
+
+    return Hallazgo::Nada;
+}
+
+Seed semillaDeHito(Seed semilla, int32_t x, int32_t y) {
+    // Se mezcla la posición con la semilla del mundo y se vuelve a mezclar. Sin
+    // la segunda pasada, hitos vecinos darían genomas parecidos y todas las
+    // criaturas de una zona saldrían del mismo linaje.
+    const uint64_t ejes = static_cast<uint64_t>(static_cast<uint32_t>(x)) |
+                          (static_cast<uint64_t>(static_cast<uint32_t>(y)) << 32);
+    return splitmix64(splitmix64(semilla ^ 0x5EEDULL) ^ ejes);
 }
 
 Chunk generarChunk(Seed semilla, int32_t cx, int32_t cy) {
