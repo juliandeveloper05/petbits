@@ -1,30 +1,28 @@
 ## mapa_a_png.gd
 ##
-## Compone el mundo en un PNG, sin abrir una ventana.
+## Compone los INTERIORES en un PNG, sin abrir una ventana.
 ##
 ##   godot --headless --path godot res://scenes/MapaAPng.tscn
 ##   → godot/mapa.png
 ##
 ## ---
 ##
-## Existe por la misma razón que la hoja de contacto de las criaturas: los tests
-## dicen que los tiles son opacos y distinguibles, pero no dicen si el pueblo se
-## LEE como un pueblo. Eso solo se contesta mirándolo.
+## ANTES DIBUJABA TAMBIÉN EL PUEBLO, Y YA NO.
 ##
-## Y hace falta que sea headless porque el modo sin ventana de Godot no dibuja
-## nada: pedirle una captura de pantalla devuelve negro. Así que el mapa se
-## compone a mano, tile por tile, con las mismas imágenes que usa el juego.
+## El pueblo dejó de tener grilla propia: su terreno se mudó al generador del
+## mundo, porque ahora ES una región del mundo. Esta herramienta lo pedía con
+## `generar()` y esa función ya no existe — el render se colgaba sin decir nada,
+## que es como se descubrió.
+##
+## Y está bien que no exista: el pueblo se mira en `region_a_png`, junto con el
+## terreno que lo rodea, que es donde de verdad se juzga si se integra. Acá quedan
+## los dos interiores, que sí son grillas fijas y sí tienen sentido mirar solas.
 ##
 ## ---
 ##
-## ES UNA ESCENA Y NO UN `--script`.
-##
-## Pasó a serlo al agregarle la caja de diálogo: para no reimplementar el corte
-## de línea usa el de `CajaDialogo`, y ese script menciona el autoload `Partida`.
-## Con `--script` los autoloads no llegan a instanciarse, el script no compila,
-## `load()` devuelve null y la herramienta se cuelga sin decir por qué. Como
-## escena no pasa — y de paso no toca tu partida, porque `Partida` no se inicia
-## solo.
+## Godot en modo headless no dibuja nada —pedirle una captura devuelve negro— así
+## que la imagen se compone a mano, tile por tile, con el mismo atlas que usa el
+## juego.
 
 extends Node
 
@@ -39,6 +37,7 @@ const ESCALA := 2
 const SEPARACION := 10
 
 var _atlas: Image = null
+var _layout := {}
 
 
 func _ready() -> void:
@@ -49,22 +48,21 @@ func _ready() -> void:
 
 	var core: RefCounted = ClassDB.instantiate("PetBitsCore")
 	_atlas = core.atlas_tiles()
+	_layout = core.atlas_layout()
 
 	# Hace falta una criatura para poder dibujarla. Se usa un seed fijo y no uno
 	# al azar: así dos corridas dan el mismo PNG y un diff visual significa que
 	# cambió el mapa, no que salió otro bicho.
 	core.nacer("A3F0-91C4-77BE-2D08", 1786406400000, -180)
 
-	# Los mapas se leen de donde están definidos, así que si alguno se rediseña
-	# esta herramienta muestra el nuevo sin tocar una línea. Y no se instancia
-	# nada: `generar()` es estática y devuelve la grilla y ya.
 	var tipo: Dictionary = Escritura.preparar(core)
-	var ids: Array = Mapas.todos()
 
-	# Los tres van uno debajo del otro, en una sola imagen. Verlos juntos es lo
-	# que dice si conviven: el pueblo es verde y frío y los interiores son
-	# madera, y esa diferencia es la que hace que entrar a un lugar se sienta
-	# como entrar a un lugar sin necesidad de ninguna transición.
+	# Solo los mapas que NO son infinitos: los que tienen grilla propia.
+	var ids: Array = []
+	for id in Mapas.todos():
+		if not Mapas.script_de(id).INFINITO:
+			ids.append(id)
+
 	var ancho_total := 0
 	var alto_total := 0
 	for id in ids:
@@ -84,27 +82,18 @@ func _ready() -> void:
 
 		for y in def.ALTO:
 			for x in def.ANCHO:
-				_pegar_tile(salida, celdas[y][x], x, y + y0 / TILE)
+				var d: Dictionary = core.tile_de_grilla(celdas[y][x])
+				_pegar_tile(salida, int(d["col"]), int(d["fila"]), x * TILE, y0 + y * TILE)
 
-		# La criatura, donde arranca en ese mapa.
 		var sprite: Image = core.sprite_actual(false)
 		_pegar_sprite(salida, sprite, def.ENTRADA.x - 8, y0 + def.ENTRADA.y - 8)
 
-		# Y el nombre del mapa arriba a la izquierda, con la tipografía del
-		# juego. No es decoración: el texto sobre pasto y sobre madera es donde se
-		# ve si la fuente tiene contraste suficiente, y eso no se puede contestar
-		# mirando el atlas sobre negro.
 		_cartel(salida, tipo, id, 6, y0 + 4, Color("#9bbc0f"))
-
 		y0 += def.ALTO * TILE + SEPARACION
 
-	# Y la caja de diálogo sobre el último mapa, que es lo que de verdad hay que
-	# mirar: si el marco pisa el mapa, si el texto respira, si tres renglones
-	# alcanzan.
 	_caja(
 		salida, tipo,
-		"El bosque. Hay cosas raras entre los árboles, pero está lejos:"
-		+ " hora y media de ida y vuelta.",
+		"Los pedestales. Traé dos criaturas adultas y algo va a pasar.",
 		alto_total - SEPARACION
 	)
 
@@ -114,10 +103,21 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
-	print("Mapa escrito en %s" % ProjectSettings.globalize_path("res://mapa.png"))
-	print("%d mapas: %s" % [ids.size(), ", ".join(ids)])
-	print("%d x %d px" % [salida.get_width(), salida.get_height()])
+	print("Interiores escritos en %s" % ProjectSettings.globalize_path("res://mapa.png"))
+	print("%d interiores: %s" % [ids.size(), ", ".join(ids)])
 	get_tree().quit(0)
+
+
+## Un tile llano del atlas, en su fila.
+func _pegar_tile(destino: Image, columna: int, fila: int, px: int, py: int) -> void:
+	for y in TILE:
+		for x in TILE:
+			var c := _atlas.get_pixel(columna * TILE + x, fila * TILE + y)
+			if c.a == 0.0:
+				continue
+			for dy in ESCALA:
+				for dx in ESCALA:
+					destino.set_pixel((px + x) * ESCALA + dx, (py + y) * ESCALA + dy, c)
 
 
 ## La caja de diálogo, tal como la va a dibujar Godot.
@@ -192,19 +192,6 @@ func _cartel(destino: Image, tipo: Dictionary, texto: String, x: int, y: int, co
 				destino, tipo, texto, (x + dx) * ESCALA, (y + dy) * ESCALA, SOMBRA, ESCALA
 			)
 	Escritura.escribir(destino, tipo, texto, x * ESCALA, y * ESCALA, color, ESCALA)
-
-
-func _pegar_tile(destino: Image, indice: int, cx: int, cy: int) -> void:
-	for y in TILE:
-		for x in TILE:
-			var c := _atlas.get_pixel(indice * TILE + x, y)
-			for dy in ESCALA:
-				for dx in ESCALA:
-					destino.set_pixel(
-						(cx * TILE + x) * ESCALA + dx,
-						(cy * TILE + y) * ESCALA + dy,
-						c
-					)
 
 
 ## El sprite va a media escala, igual que en el juego: 32×32 a 0.5 ocupa un tile.

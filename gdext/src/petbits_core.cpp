@@ -111,6 +111,16 @@ void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("lado_de_chunk"), &PetBitsCore::lado_de_chunk);
     ClassDB::bind_method(D_METHOD("mundo_chunk", "semilla", "cx", "cy"),
                          &PetBitsCore::mundo_chunk);
+    ClassDB::bind_method(D_METHOD("atlas_layout"), &PetBitsCore::atlas_layout);
+    ClassDB::bind_method(D_METHOD("mundo_capa_chunk", "semilla", "cx", "cy", "capa"),
+                         &PetBitsCore::mundo_capa_chunk);
+    ClassDB::bind_method(D_METHOD("mundo_objetos_chunk", "semilla", "cx", "cy"),
+                         &PetBitsCore::mundo_objetos_chunk);
+    ClassDB::bind_method(D_METHOD("mundo_mascara", "semilla", "x", "y", "capa"),
+                         &PetBitsCore::mundo_mascara);
+    ClassDB::bind_method(D_METHOD("mundo_objeto_columna", "semilla", "x", "y"),
+                         &PetBitsCore::mundo_objeto_columna);
+    ClassDB::bind_method(D_METHOD("tile_de_grilla", "tile"), &PetBitsCore::tile_de_grilla);
     ClassDB::bind_method(D_METHOD("mundo_tile", "semilla", "x", "y"), &PetBitsCore::mundo_tile);
     ClassDB::bind_method(D_METHOD("mundo_bioma", "semilla", "x", "y"), &PetBitsCore::mundo_bioma);
     ClassDB::bind_method(D_METHOD("mundo_hallazgo", "semilla", "x", "y"),
@@ -951,6 +961,111 @@ PackedByteArray PetBitsCore::mundo_chunk(const String& semilla, int64_t cx, int6
     salida.resize(static_cast<int64_t>(chunk.tiles.size()));
     std::memcpy(salida.ptrw(), chunk.tiles.data(), chunk.tiles.size());
     return salida;
+}
+
+Dictionary PetBitsCore::atlas_layout() const {
+    Dictionary d;
+    d["columnas"] = petbits::COLUMNAS_ATLAS;
+    d["filas"] = petbits::FILAS_ATLAS;
+    d["capas"] = static_cast<int>(petbits::Capa::CANTIDAD);
+    d["fila_objetos"] = petbits::FILA_OBJETOS;
+    d["fila_llanos"] = petbits::FILA_LLANOS;
+    return d;
+}
+
+PackedByteArray PetBitsCore::mundo_capa_chunk(const String& semilla, int64_t cx, int64_t cy,
+                                              int64_t capa) const {
+    PackedByteArray salida;
+
+    petbits::Seed valor = 0;
+    if (!leerSeed(semilla, valor)) return salida;
+    if (capa < 0 || capa >= static_cast<int64_t>(petbits::Capa::CANTIDAD)) return salida;
+
+    const petbits::Capa c = static_cast<petbits::Capa>(capa);
+    salida.resize(static_cast<int64_t>(petbits::CHUNK) * petbits::CHUNK);
+    uint8_t* p = salida.ptrw();
+
+    for (int y = 0; y < petbits::CHUNK; ++y) {
+        for (int x = 0; x < petbits::CHUNK; ++x) {
+            const int32_t wx = static_cast<int32_t>(cx) * petbits::CHUNK + x;
+            const int32_t wy = static_cast<int32_t>(cy) * petbits::CHUNK + y;
+            p[y * petbits::CHUNK + x] =
+                static_cast<uint8_t>(petbits::mascaraDualEnMundo(valor, wx, wy, c));
+        }
+    }
+    return salida;
+}
+
+PackedByteArray PetBitsCore::mundo_objetos_chunk(const String& semilla, int64_t cx,
+                                                 int64_t cy) const {
+    PackedByteArray salida;
+
+    petbits::Seed valor = 0;
+    if (!leerSeed(semilla, valor)) return salida;
+
+    salida.resize(static_cast<int64_t>(petbits::CHUNK) * petbits::CHUNK);
+    uint8_t* p = salida.ptrw();
+
+    for (int y = 0; y < petbits::CHUNK; ++y) {
+        for (int x = 0; x < petbits::CHUNK; ++x) {
+            const int32_t wx = static_cast<int32_t>(cx) * petbits::CHUNK + x;
+            const int32_t wy = static_cast<int32_t>(cy) * petbits::CHUNK + y;
+
+            const petbits::Objeto o = petbits::objetoDe(petbits::tileEnMundo(valor, wx, wy));
+            if (o == petbits::Objeto::Ninguno) {
+                // 255 y no 0: el cero es una columna válida del atlas, y usarlo
+                // como "nada" llenaría el mundo del primer árbol.
+                p[y * petbits::CHUNK + x] = 255;
+                continue;
+            }
+            p[y * petbits::CHUNK + x] = static_cast<uint8_t>(
+                petbits::columnaDeObjeto(o, petbits::varianteDeObjeto(valor, wx, wy)));
+        }
+    }
+    return salida;
+}
+
+int64_t PetBitsCore::mundo_mascara(const String& semilla, int64_t x, int64_t y,
+                                   int64_t capa) const {
+    petbits::Seed valor = 0;
+    if (!leerSeed(semilla, valor)) return 0;
+    if (capa < 0 || capa >= static_cast<int64_t>(petbits::Capa::CANTIDAD)) return 0;
+    return petbits::mascaraDualEnMundo(valor, static_cast<int32_t>(x), static_cast<int32_t>(y),
+                                       static_cast<petbits::Capa>(capa));
+}
+
+int64_t PetBitsCore::mundo_objeto_columna(const String& semilla, int64_t x, int64_t y) const {
+    petbits::Seed valor = 0;
+    if (!leerSeed(semilla, valor)) return -1;
+
+    const int32_t wx = static_cast<int32_t>(x);
+    const int32_t wy = static_cast<int32_t>(y);
+    const petbits::Objeto o = petbits::objetoDe(petbits::tileEnMundo(valor, wx, wy));
+    if (o == petbits::Objeto::Ninguno) return -1;
+    return petbits::columnaDeObjeto(o, petbits::varianteDeObjeto(valor, wx, wy));
+}
+
+Dictionary PetBitsCore::tile_de_grilla(int64_t tile) const {
+    const petbits::Tile t = static_cast<petbits::Tile>(tile);
+    Dictionary d;
+
+    switch (t) {
+        case petbits::Tile::Piso:
+        case petbits::Tile::Pared:
+        case petbits::Tile::Alfombra:
+        case petbits::Tile::Pedestal:
+            d["col"] = petbits::columnaLlana(t);
+            d["fila"] = petbits::FILA_LLANOS;
+            return d;
+        default:
+            break;
+    }
+
+    // Terreno adentro de una sala: su máscara llena, que es el material sin
+    // bordes. Una maceta de musgo no tiene costa.
+    d["col"] = 15;
+    d["fila"] = static_cast<int>(petbits::capaDeSuelo(t));
+    return d;
 }
 
 int64_t PetBitsCore::mundo_tile(const String& semilla, int64_t x, int64_t y) const {

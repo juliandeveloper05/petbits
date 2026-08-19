@@ -73,7 +73,16 @@ const SOMBRA := Color("#0a0e0a")
 const FOSFORO := Color("#9bbc0f")
 const AVISO := Color("#ffc23d")
 
-var _capa: TileMapLayer = null
+## Las capas de terreno, de abajo hacia arriba, más la de objetos al final.
+##
+## Antes era una sola. Con la grilla dual cada material se dibuja en su propia
+## capa, transparente donde no está, y lo que se ve es la pila — que es lo que
+## produce los bordes redondeados en vez de escalones de dieciséis píxeles.
+var _capas: Array[TileMapLayer] = []
+var _capa_objetos: TileMapLayer = null
+
+## La forma del atlas, que la dice el C++.
+var _layout := {}
 var _criatura: Sprite2D = null
 var _cartel: Label = null
 var _estado: Label = null
@@ -207,9 +216,14 @@ func _infinito() -> bool:
 
 ## Rearma la capa de tiles vacía. Lo que se vuelque encima depende del mapa.
 func _rehacer_capa() -> void:
-	if _capa != null:
-		_capa.queue_free()
+	for c in _capas:
+		c.queue_free()
+	_capas.clear()
+	if _capa_objetos != null:
+		_capa_objetos.queue_free()
 	_chunks.clear()
+
+	_layout = Partida.core.atlas_layout()
 
 	var imagen: Image = Partida.core.atlas_tiles()
 	var textura := ImageTexture.create_from_image(imagen)
@@ -217,27 +231,47 @@ func _rehacer_capa() -> void:
 	var fuente := TileSetAtlasSource.new()
 	fuente.texture = textura
 	fuente.texture_region_size = Vector2i(TILE, TILE)
-	for i in Partida.core.cantidad_tiles():
-		fuente.create_tile(Vector2i(i, 0))
+	for fila in int(_layout["filas"]):
+		for col in int(_layout["columnas"]):
+			fuente.create_tile(Vector2i(col, fila))
 
 	var conjunto := TileSet.new()
 	conjunto.tile_size = Vector2i(TILE, TILE)
 	conjunto.add_source(fuente, 0)
 
-	_capa = TileMapLayer.new()
-	_capa.tile_set = conjunto
-	# Nearest: sin esto el pixel art se ve borroso, igual que con el sprite.
-	_capa.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	add_child(_capa)
-	# Debajo de la criatura y de los carteles, que se crean antes que él.
-	move_child(_capa, 0)
+	# Una capa por material, en orden. El z de cada una lo da el orden de los
+	# hijos, así que agregarlas de abajo hacia arriba ya las apila bien.
+	for i in int(_layout["capas"]):
+		var capa := TileMapLayer.new()
+		capa.tile_set = conjunto
+		# Nearest: sin esto el pixel art se ve borroso, igual que con el sprite.
+		capa.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		# MEDIO TILE de corrimiento, y es toda la técnica. El tile que se dibuja
+		# se apoya sobre el cruce de cuatro celdas del mundo en vez de sobre una,
+		# y por eso puede mostrar la transición entre ellas.
+		capa.position = Vector2(-TILE / 2.0, -TILE / 2.0)
+		add_child(capa)
+		move_child(capa, i)
+		_capas.append(capa)
+
+	# Y la de objetos, sin corrimiento: un árbol se para sobre SU celda.
+	_capa_objetos = TileMapLayer.new()
+	_capa_objetos.tile_set = conjunto
+	_capa_objetos.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	add_child(_capa_objetos)
+	move_child(_capa_objetos, _capas.size())
 
 
 ## Vuelca la grilla de un interior, que entra entera de una.
+##
+## Los interiores NO usan grilla dual: una sala no tiene costas, y sus cuatro
+## tiles —piso, pared, alfombra, pedestal— se dibujan enteros. Van todos en la
+## capa de objetos, que es la única sin corrimiento.
 func _volcar_grilla() -> void:
 	for y in _def.ALTO:
 		for x in _def.ANCHO:
-			_capa.set_cell(Vector2i(x, y), 0, Vector2i(_mapa[y][x], 0))
+			var d: Dictionary = Partida.core.tile_de_grilla(_mapa[y][x])
+			_capa_objetos.set_cell(Vector2i(x, y), 0, Vector2i(int(d["col"]), int(d["fila"])))
 
 
 # ---------------------------------------------------------------------------
@@ -280,22 +314,43 @@ func _actualizar_chunks() -> void:
 
 
 func _volcar_chunk(semilla: String, c: Vector2i) -> void:
-	var datos: PackedByteArray = Partida.core.mundo_chunk(semilla, c.x, c.y)
-	if datos.is_empty():
+	for i in _capas.size():
+		var datos: PackedByteArray = Partida.core.mundo_capa_chunk(semilla, c.x, c.y, i)
+		if datos.is_empty():
+			continue
+		for y in _lado_chunk:
+			for x in _lado_chunk:
+				var m: int = datos[y * _lado_chunk + x]
+				# La máscara cero es "esta capa no está acá". No se pinta: dejar
+				# la celda vacía es lo que permite ver la capa de abajo, y pintar
+				# el tile transparente costaría lo mismo sin ganar nada.
+				if m == 0:
+					continue
+				_capas[i].set_cell(
+					Vector2i(c.x * _lado_chunk + x, c.y * _lado_chunk + y), 0, Vector2i(m, i)
+				)
+
+	var objetos: PackedByteArray = Partida.core.mundo_objetos_chunk(semilla, c.x, c.y)
+	if objetos.is_empty():
 		return
+	var fila: int = int(_layout["fila_objetos"])
 	for y in _lado_chunk:
 		for x in _lado_chunk:
-			_capa.set_cell(
-				Vector2i(c.x * _lado_chunk + x, c.y * _lado_chunk + y),
-				0,
-				Vector2i(datos[y * _lado_chunk + x], 0)
+			var col: int = objetos[y * _lado_chunk + x]
+			if col == 255:
+				continue
+			_capa_objetos.set_cell(
+				Vector2i(c.x * _lado_chunk + x, c.y * _lado_chunk + y), 0, Vector2i(col, fila)
 			)
 
 
 func _borrar_chunk(c: Vector2i) -> void:
 	for y in _lado_chunk:
 		for x in _lado_chunk:
-			_capa.erase_cell(Vector2i(c.x * _lado_chunk + x, c.y * _lado_chunk + y))
+			var celda := Vector2i(c.x * _lado_chunk + x, c.y * _lado_chunk + y)
+			for capa in _capas:
+				capa.erase_cell(celda)
+			_capa_objetos.erase_cell(celda)
 
 
 func _chunk_de(pos: Vector2) -> Vector2i:

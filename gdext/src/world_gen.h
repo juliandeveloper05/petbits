@@ -182,6 +182,25 @@ Seed semillaDeHito(Seed semilla, int32_t x, int32_t y);
  */
 Tile tileEnMundo(Seed semilla, int32_t x, int32_t y);
 
+/**
+ * La máscara de la grilla dual del tile DIBUJADO en (x, y).
+ *
+ * El tile dibujado va corrido medio tile respecto del mundo, así que sus cuatro
+ * esquinas son las celdas (x-1, y-1), (x, y-1), (x-1, y) y (x, y). Ese
+ * desplazamiento es toda la técnica: cambiarlo por (x, y) y sus tres siguientes
+ * produce un mundo entero de bordes en lugar de ninguno.
+ */
+int mascaraDualEnMundo(Seed semilla, int32_t x, int32_t y, Capa c);
+
+/**
+ * Qué variante de objeto le toca a esa celda.
+ *
+ * Sale de la posición y no de un contador: dos árboles vecinos tienen que salir
+ * distintos, y el mismo árbol tiene que salir igual cada vez que se carga el
+ * chunk.
+ */
+int varianteDeObjeto(Seed semilla, int32_t x, int32_t y);
+
 /** Resuelve un chunk entero. Es `tileEnMundo` mil veces, y nada más. */
 Chunk generarChunk(Seed semilla, int32_t cx, int32_t cy);
 

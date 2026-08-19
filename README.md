@@ -285,7 +285,7 @@ cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.c
 ng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\srcctions.cpp && run_tests.exe
 ```
 
-Estado actual: **54.267 comprobaciones, 0 fallas.**
+Estado actual: **79.473 comprobaciones, 0 fallas.**
 
 No hacen falta Godot ni SCons ni godot-cpp: los módulos portados son C++ puro.
 Con un compilador alcanza, así que la paridad se puede comprobar antes de

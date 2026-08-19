@@ -523,6 +523,17 @@ Seed semillaDeHito(Seed semilla, int32_t x, int32_t y) {
     return splitmix64(splitmix64(semilla ^ 0x5EEDULL) ^ ejes);
 }
 
+int mascaraDualEnMundo(Seed semilla, int32_t x, int32_t y, Capa c) {
+    return mascaraDeEsquinas(tileEnMundo(semilla, x - 1, y - 1), tileEnMundo(semilla, x, y - 1),
+                             tileEnMundo(semilla, x - 1, y), tileEnMundo(semilla, x, y), c);
+}
+
+int varianteDeObjeto(Seed semilla, int32_t x, int32_t y) {
+    const uint64_t ejes = static_cast<uint64_t>(static_cast<uint32_t>(x)) |
+                          (static_cast<uint64_t>(static_cast<uint32_t>(y)) << 32);
+    return static_cast<int>(splitmix64(semilla ^ 0x0B7E70ULL ^ ejes) % 8ULL);
+}
+
 Chunk generarChunk(Seed semilla, int32_t cx, int32_t cy) {
     Chunk chunk;
     chunk.cx = cx;

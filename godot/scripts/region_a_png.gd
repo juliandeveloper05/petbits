@@ -22,6 +22,19 @@
 ## Se dibujan varias semillas, una al lado de la otra. Una sola podría salir
 ## linda de casualidad; tres seguidas ya dicen algo del generador y no de la
 ## suerte.
+##
+## ---
+##
+## DIBUJA LOS TILES ENTEROS, Y ANTES NO.
+##
+## La primera versión promediaba cada tile de 16×16 a un solo color. Tenía
+## sentido mientras la pregunta era sobre formas grandes —si los lagos tienen
+## costa, si los biomas se tocan— y dejó de tenerlo en cuanto la pregunta pasó a
+## ser cómo se ven los materiales al tocarse: promediando, una transición y un
+## escalón se ven exactamente igual.
+##
+## Con los tiles enteros entran menos tiles en la misma imagen, y está bien. Para
+## mirar formas grandes está el mapa del pueblo; esto ahora mira la textura.
 
 extends Node
 
@@ -29,15 +42,15 @@ const TILE := 16
 
 ## Cuántos tiles de lado tiene cada región dibujada.
 ##
-## Bajó de 160 a 96 al meter el pueblo adentro del mundo. Con 160 el pueblo era
-## una manchita de treinta tiles en el medio y no se veía si se integraba o
-## parecía pegado encima, que es justamente la pregunta nueva. Sigue habiendo
-## lagos enteros en cuadro.
-const LADO := 96
+## Con los tiles dibujados enteros, 48 tiles son 768 píxeles por semilla: alcanza
+## para ver un pedazo de costa, un claro de bosque y el pueblo, que es la escala
+## a la que se juzga cómo se tocan los materiales. Con 96 no entraba en una
+## imagen que se pueda mirar.
+const LADO := 48
 
-## Un píxel de pantalla por tile del mundo sería ilegible. A tres se ven las
-## formas grandes y todavía se distingue el moteado de cada tile.
-const ESCALA := 5
+## Sin escalar: un píxel del tile es un píxel de la imagen. Ampliar acá no
+## agregaría información, solo tamaño.
+const ESCALA := 1
 
 ## Las semillas que se dibujan. Fijas: dos corridas tienen que dar el mismo PNG,
 ## así que un diff visual significa que cambió el generador y no que salió otra.
@@ -59,14 +72,14 @@ func _ready() -> void:
 	var core: RefCounted = ClassDB.instantiate("PetBitsCore")
 	var atlas: Image = core.atlas_tiles()
 
-	var ancho := SEMILLAS.size() * (LADO + SEPARACION) - SEPARACION
-	var salida := Image.create_empty(ancho * ESCALA, LADO * ESCALA, false, Image.FORMAT_RGBA8)
+	var ancho := SEMILLAS.size() * (LADO * TILE + SEPARACION) - SEPARACION
+	var salida := Image.create_empty(ancho * ESCALA, LADO * TILE * ESCALA, false, Image.FORMAT_RGBA8)
 	salida.fill(Color("#0a0e0a"))
 
 	var x0 := 0
 	for semilla in SEMILLAS:
 		_dibujar_region(salida, core, atlas, semilla, x0)
-		x0 += LADO + SEPARACION
+		x0 += LADO * TILE + SEPARACION
 
 	var error := salida.save_png("res://region.png")
 	if error != OK:
@@ -107,81 +120,75 @@ func _ready() -> void:
 ## Centrada en (0, 0) y no en un punto cualquiera a propósito: ahí es donde va a
 ## estar el pueblo, así que es la parte del mundo que todos los jugadores ven
 ## primero. Si el origen cae en medio de un lago, eso hay que saberlo ahora.
+## `x0_px` viene en pixeles; adentro se trabaja en tiles.
+##
+## Se dibuja capa por capa, de abajo hacia arriba, con el mismo corrimiento de
+## medio tile que usa el juego. Es literalmente el mismo apilado: si aca se ve una
+## costura, en pantalla tambien.
 func _dibujar_region(
-	destino: Image, core: RefCounted, atlas: Image, semilla: String, x0: int
+	destino: Image, core: RefCounted, atlas: Image, semilla: String, x0_px: int
 ) -> void:
-	var lado_chunk: int = core.lado_de_chunk()
+	var x0 := x0_px / TILE
+	var layout: Dictionary = core.atlas_layout()
 	var desde := -LADO / 2
 
-	# Se pide chunk por chunk y no tile por tile: es la misma llamada que va a
-	# hacer el juego, así que si la API de chunks estuviera mal armada se vería
-	# acá antes de escribir el cargador.
-	var c0 := int(floor(float(desde) / lado_chunk))
-	var c1 := int(floor(float(desde + LADO - 1) / lado_chunk))
+	# El medio tile de corrimiento se aplica al DIBUJAR, no al pedir: la mascara
+	# de (x, y) ya mira las cuatro celdas correctas.
+	var medio := TILE / 2
 
-	for cy in range(c0, c1 + 1):
-		for cx in range(c0, c1 + 1):
-			var datos: PackedByteArray = core.mundo_chunk(semilla, cx, cy)
-			if datos.is_empty():
+	for capa in int(layout["capas"]):
+		for ty in range(LADO + 1):
+			for tx in range(LADO + 1):
+				var wx: int = desde + tx
+				var wy: int = desde + ty
+				var m: int = core.mundo_mascara(semilla, wx, wy, capa)
+				if m == 0:
+					continue
+				_pegar(destino, atlas, m, capa, (x0 + tx) * TILE - medio, ty * TILE - medio)
+
+	# Los objetos van encima y sin corrimiento: un arbol se para sobre su celda.
+	var fila_obj: int = int(layout["fila_objetos"])
+	for ty in LADO:
+		for tx in LADO:
+			var wx: int = desde + tx
+			var wy: int = desde + ty
+			var col: int = core.mundo_objeto_columna(semilla, wx, wy)
+			if col < 0:
 				continue
-			for ty in lado_chunk:
-				for tx in lado_chunk:
-					var wx: int = cx * lado_chunk + tx
-					var wy: int = cy * lado_chunk + ty
-					var px: int = wx - desde
-					var py: int = wy - desde
-					if px < 0 or py < 0 or px >= LADO or py >= LADO:
-						continue
-					_pintar(destino, atlas, datos[ty * lado_chunk + tx], x0 + px, py)
+			_pegar(destino, atlas, col, fila_obj, (x0 + tx) * TILE, ty * TILE)
 
-	# Una cruz en el origen, para saber dónde va a caer el pueblo.
-	for d in range(-6, 7):
-		_marcar(destino, x0 + LADO / 2 + d, LADO / 2)
-		_marcar(destino, x0 + LADO / 2, LADO / 2 + d)
+	# Una cruz de un tile en el origen, para saber donde cae el pueblo.
+	_marcar(destino, x0 + LADO / 2, LADO / 2)
 
 
-## Un tile del mundo, reducido a un solo color.
+## Copia un tile del atlas, salteando la transparencia.
 ##
-## Se promedia el tile de 16×16 en vez de dibujarlo entero. A esta escala el
-## detalle de cada tile no se ve y solo agregaría ruido; lo que se está mirando
-## son las formas grandes: si los lagos tienen costa, si los bosques tienen
-## claros, si los biomas se tocan de forma creíble.
-func _pintar(destino: Image, atlas: Image, indice: int, px: int, py: int) -> void:
-	var color := _promedio(atlas, indice)
-	for dy in ESCALA:
-		for dx in ESCALA:
-			var x := px * ESCALA + dx
-			var y := py * ESCALA + dy
-			if x >= 0 and y >= 0 and x < destino.get_width() and y < destino.get_height():
-				destino.set_pixel(x, y, color)
-
-
-var _cache_promedio := {}
-
-
-func _promedio(atlas: Image, indice: int) -> Color:
-	if _cache_promedio.has(indice):
-		return _cache_promedio[indice]
-
-	var r := 0.0
-	var g := 0.0
-	var b := 0.0
-	for y in TILE:
-		for x in TILE:
-			var c := atlas.get_pixel(indice * TILE + x, y)
-			r += c.r
-			g += c.g
-			b += c.b
-	var n := float(TILE * TILE)
-	var color := Color(r / n, g / n, b / n)
-	_cache_promedio[indice] = color
-	return color
+## Saltear el alfa cero no es una optimizacion: con las capas apiladas, una que
+## pintara su transparencia como negro taparia a la de abajo. Es la diferencia
+## entre ver una transicion y ver un agujero.
+func _pegar(destino: Image, atlas: Image, col: int, fila: int, px: int, py: int) -> void:
+	for ty in TILE:
+		for tx in TILE:
+			var c := atlas.get_pixel(col * TILE + tx, fila * TILE + ty)
+			if c.a == 0.0:
+				continue
+			for dy in ESCALA:
+				for dx in ESCALA:
+					var x := (px + tx) * ESCALA + dx
+					var y := (py + ty) * ESCALA + dy
+					if x >= 0 and y >= 0 and x < destino.get_width() and y < destino.get_height():
+						destino.set_pixel(x, y, c)
 
 
 func _marcar(destino: Image, px: int, py: int) -> void:
-	for dy in ESCALA:
-		for dx in ESCALA:
-			var x := px * ESCALA + dx
-			var y := py * ESCALA + dy
-			if x >= 0 and y >= 0 and x < destino.get_width() and y < destino.get_height():
-				destino.set_pixel(x, y, Color("#ff6b6b"))
+	for ty in TILE:
+		for tx in TILE:
+			# Solo el marco del tile: relleno taparía lo que se quiere mirar.
+			if ty > 0 and ty < TILE - 1 and tx > 0 and tx < TILE - 1:
+				continue
+			for dy in ESCALA:
+				for dx in ESCALA:
+					var x := (px * TILE + tx) * ESCALA + dx
+					var y := (py * TILE + ty) * ESCALA + dy
+					if x >= 0 and y >= 0 and x < destino.get_width() and y < destino.get_height():
+						destino.set_pixel(x, y, Color("#ff6b6b"))

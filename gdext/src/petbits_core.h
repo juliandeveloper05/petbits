@@ -240,6 +240,51 @@ public:
      */
     PackedByteArray mundo_chunk(const String& semilla, int64_t cx, int64_t cy) const;
 
+    /**
+     * La forma del atlas: { columnas, filas, capas, fila_objetos, fila_llanos }.
+     *
+     * Godot necesita saberla para crear los tiles de la grilla entera, y tenerla
+     * escrita de los dos lados es tenerla mal de uno.
+     */
+    Dictionary atlas_layout() const;
+
+    /**
+     * Las máscaras de una capa para un chunk entero, fila por fila.
+     *
+     * Una llamada por capa y por chunk en vez de una por celda: son mil
+     * veinticuatro celdas y seis capas, y cruzar un borde carga tres chunks.
+     */
+    PackedByteArray mundo_capa_chunk(const String& semilla, int64_t cx, int64_t cy,
+                                     int64_t capa) const;
+
+    /**
+     * Los objetos de un chunk: la columna del atlas, o 255 donde no hay nada.
+     *
+     * Los árboles y las piedras no llevan grilla dual —un árbol no se funde con
+     * el de al lado— así que van en su propia capa, sin desplazamiento.
+     */
+    PackedByteArray mundo_objetos_chunk(const String& semilla, int64_t cx, int64_t cy) const;
+
+    /** La máscara de una celda suelta. La usa el render de PNG. */
+    int64_t mundo_mascara(const String& semilla, int64_t x, int64_t y, int64_t capa) const;
+
+    /** La columna del objeto de una celda, o -1 si no hay ninguno. */
+    int64_t mundo_objeto_columna(const String& semilla, int64_t x, int64_t y) const;
+
+    /**
+     * Dónde cae un tile de una grilla fija en el atlas: { col, fila }.
+     *
+     * Los cuatro tiles de interior —piso, pared, alfombra, pedestal— viven en la
+     * fila de llanos. Cualquier otro es terreno, y se dibuja con su máscara
+     * llena: es lo que permite poner una maceta de musgo adentro de una sala sin
+     * inventar un tile nuevo.
+     *
+     * La primera versión devolvía solo la columna y mandaba todo lo que no
+     * conocía a la de piso: las macetas del criadero desaparecían y el suelo se
+     * las tragaba.
+     */
+    Dictionary tile_de_grilla(int64_t tile) const;
+
     /** Un tile suelto, para preguntar por dónde se puede caminar. */
     int64_t mundo_tile(const String& semilla, int64_t x, int64_t y) const;
 

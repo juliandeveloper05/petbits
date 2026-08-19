@@ -113,6 +113,7 @@ la despensa se gasta
 botín de expediciones
 reglas de las expediciones
 atlas de tiles (sin paridad — solo propiedades)
+grilla dual
 tipografía (sin paridad — solo propiedades)
 cruza
 codex
@@ -121,7 +122,7 @@ guardados corruptos
 invariante de partición
 reloj hacia atrás
 
-54267 comprobaciones, 0 fallas
+79473 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
@@ -150,6 +151,7 @@ script.
 | `breeding.cpp` | El hijo, la herencia campo por campo, las mutaciones y la frase | 72 cruzas |
 | `codex.cpp` | El codex acumulado paso a paso, con sus tres ordenamientos | 38 pasos |
 | `world_gen.cpp` | **Sin paridad.** Costura, determinismo, variedad y caminabilidad | propiedades |
+| grilla dual | **Sin paridad.** Rango, región uniforme, cada bit en su esquina | propiedades |
 | `tileset_gen.cpp` | **Sin paridad.** Opacidad, determinismo y que los tiles se distingan | propiedades |
 | `font_gen.cpp` | **Sin paridad.** Cobertura del castellano, que ningún glifo se repita | propiedades |
 

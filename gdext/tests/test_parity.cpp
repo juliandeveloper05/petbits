@@ -845,68 +845,168 @@ static void probarAtlas() {
     bloque("atlas de tiles (sin paridad — solo propiedades)");
 
     const Atlas a = generarAtlas();
-    const int cantidad = static_cast<int>(Tile::CANTIDAD);
 
-    revisarEnteros(static_cast<uint64_t>(a.width), static_cast<uint64_t>(cantidad * TILE), "atlas",
-                   "ancho");
-    revisarEnteros(static_cast<uint64_t>(a.height), TILE, "atlas", "alto");
-    revisarEnteros(a.data.size(), static_cast<uint64_t>(a.width * a.height * 4), "atlas", "bytes");
+    revisarEnteros(static_cast<uint64_t>(a.width),
+                   static_cast<uint64_t>(COLUMNAS_ATLAS * TILE), "atlas", "ancho");
+    revisarEnteros(static_cast<uint64_t>(a.height),
+                   static_cast<uint64_t>(FILAS_ATLAS * TILE), "atlas", "alto");
+    revisarEnteros(a.data.size(), static_cast<uint64_t>(a.width) * a.height * 4, "atlas",
+                   "bytes");
 
-    // Todo píxel del suelo tiene que ser opaco. Un agujero transparente en un
-    // tile de pasto deja ver el vacío del fondo, y a 16×16 eso es un punto negro
-    // en medio del campo.
-    for (size_t i = 3; i < a.data.size(); i += 4) {
-        if (a.data[i] != 255) {
-            const size_t pixel = i / 4;
-            char detalle[128];
-            std::snprintf(detalle, sizeof(detalle), "el píxel (%zu,%zu) del tile %zu es transparente",
-                          pixel % static_cast<size_t>(a.width),
-                          pixel / static_cast<size_t>(a.width),
-                          (pixel % static_cast<size_t>(a.width)) / TILE);
-            revisar(false, "opacidad", detalle);
-            break;
-        }
-    }
-    revisar(true, "opacidad", "");
+    // Un píxel del atlas, por fila y columna de la grilla.
+    auto alfa = [&](int col, int fila, int x, int y) {
+        const size_t i = (static_cast<size_t>(fila * TILE + y) * a.width +
+                          static_cast<size_t>(col * TILE + x)) * 4 + 3;
+        return a.data[i];
+    };
 
-    // Determinista: dos llamadas dan el mismo atlas. Si no, el mundo cambiaría
-    // de aspecto en cada arranque.
-    const Atlas b = generarAtlas();
-    revisar(a.data == b.data, "determinismo", "dos llamadas dieron atlas distintos");
-
-    // Y cada tile tiene que verse distinto de los demás. Es lo que atrapa que la
-    // tabla de recetas quede mal indexada: si dos tiles comparten receta, el
-    // mapa se vuelve ilegible aunque nada falle.
-    std::vector<std::array<int, 3>> promedios;
-    for (int t = 0; t < cantidad; ++t) {
-        long r = 0, g = 0, bl = 0;
-        for (int y = 0; y < TILE; ++y) {
+    // -- la máscara cero es un agujero, y tiene que serlo ------------------
+    //
+    // Es lo que deja ver la capa de abajo. Si tuviera un solo píxel opaco, cada
+    // celda sin esta capa taparía al agua o al pasto de abajo con un cuadrado, y
+    // el mundo entero volvería a ser una grilla.
+    for (int c = 0; c < static_cast<int>(Capa::CANTIDAD); ++c) {
+        bool vacia = true;
+        for (int y = 0; y < TILE && vacia; ++y) {
             for (int x = 0; x < TILE; ++x) {
-                const size_t i = static_cast<size_t>((y * a.width + t * TILE + x) * 4);
-                r += a.data[i];
-                g += a.data[i + 1];
-                bl += a.data[i + 2];
+                if (alfa(0, c, x, y) != 0) { vacia = false; break; }
             }
         }
-        const int n = TILE * TILE;
-        promedios.push_back({static_cast<int>(r / n), static_cast<int>(g / n),
-                             static_cast<int>(bl / n)});
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "capa %d", c);
+        revisar(vacia, ctx, "la máscara cero tiene tinta: taparía la capa de abajo");
     }
 
-    for (int i = 0; i < cantidad; ++i) {
-        for (int j = i + 1; j < cantidad; ++j) {
-            const int d = std::abs(promedios[i][0] - promedios[j][0]) +
-                          std::abs(promedios[i][1] - promedios[j][1]) +
-                          std::abs(promedios[i][2] - promedios[j][2]);
-            char detalle[160];
-            std::snprintf(detalle, sizeof(detalle),
-                          "los tiles %d y %d se parecen demasiado (distancia %d)", i, j, d);
-            revisar(d >= 12, "tiles distinguibles", detalle);
+    // -- y la quince es maciza ---------------------------------------------
+    //
+    // Un tile con las cuatro esquinas presentes está en el interior del material,
+    // lejos de cualquier borde. Un agujero ahí se ve como un punto del color
+    // equivocado en medio de un campo, y es de las cosas más difíciles de
+    // rastrear mirando: parece suciedad del render.
+    for (int c = 0; c < static_cast<int>(Capa::CANTIDAD); ++c) {
+        int huecos = 0;
+        for (int y = 0; y < TILE; ++y) {
+            for (int x = 0; x < TILE; ++x) {
+                if (alfa(15, c, x, y) != 255) ++huecos;
+            }
+        }
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "capa %d", c);
+        char detalle[96];
+        std::snprintf(detalle, sizeof(detalle), "la máscara llena tiene %d píxeles no opacos",
+                      huecos);
+        revisar(huecos == 0, ctx, detalle);
+    }
+
+    // -- cuánto cubre cada máscara crece con la cantidad de esquinas --------
+    //
+    // Es la propiedad que dice que la cobertura bilineal está bien: una máscara
+    // con tres esquinas tiene que pintar más que una con dos, y esa más que una
+    // con una. Si estuviera al revés —o fuera igual— los bordes irían para el
+    // lado contrario y el mundo se vería como un negativo.
+    for (int c = 0; c < static_cast<int>(Capa::CANTIDAD); ++c) {
+        int cubierto[16] = {};
+        for (int m = 0; m < 16; ++m) {
+            for (int y = 0; y < TILE; ++y) {
+                for (int x = 0; x < TILE; ++x) {
+                    if (alfa(m, c, x, y) != 0) ++cubierto[m];
+                }
+            }
+        }
+
+        for (int m = 0; m < 16; ++m) {
+            const int esquinas = ((m & 1) ? 1 : 0) + ((m & 2) ? 1 : 0) + ((m & 4) ? 1 : 0) +
+                                 ((m & 8) ? 1 : 0);
+            for (int n = 0; n < 16; ++n) {
+                const int otras = ((n & 1) ? 1 : 0) + ((n & 2) ? 1 : 0) + ((n & 4) ? 1 : 0) +
+                                  ((n & 8) ? 1 : 0);
+                if (esquinas >= otras) continue;
+
+                char ctx[80];
+                std::snprintf(ctx, sizeof(ctx), "capa %d, máscaras %d y %d", c, m, n);
+                char detalle[128];
+                std::snprintf(detalle, sizeof(detalle),
+                              "%d esquinas cubren %d px y %d esquinas cubren %d", esquinas,
+                              cubierto[m], otras, cubierto[n]);
+                revisar(cubierto[m] <= cubierto[n], ctx, detalle);
+            }
         }
     }
 
-    // Los sólidos son los que son. Equivocarse acá deja al jugador caminando
-    // sobre el agua o chocando contra el pasto.
+    // -- las capas se distinguen entre sí -----------------------------------
+    //
+    // Con la máscara llena, que es donde se ve el color del material sin bordes
+    // de por medio. Dos capas del mismo color son dos capas que no sirven.
+    auto promedio = [&](int col, int fila) {
+        long r = 0, g = 0, b = 0;
+        for (int y = 0; y < TILE; ++y) {
+            for (int x = 0; x < TILE; ++x) {
+                const size_t i = (static_cast<size_t>(fila * TILE + y) * a.width +
+                                  static_cast<size_t>(col * TILE + x)) * 4;
+                r += a.data[i];
+                g += a.data[i + 1];
+                b += a.data[i + 2];
+            }
+        }
+        const long n = TILE * TILE;
+        return std::array<long, 3>{r / n, g / n, b / n};
+    };
+
+    for (int c = 0; c < static_cast<int>(Capa::CANTIDAD); ++c) {
+        for (int d = c + 1; d < static_cast<int>(Capa::CANTIDAD); ++d) {
+            const auto pc = promedio(15, c);
+            const auto pd = promedio(15, d);
+            const long dist = std::labs(pc[0] - pd[0]) + std::labs(pc[1] - pd[1]) +
+                              std::labs(pc[2] - pd[2]);
+            char ctx[64];
+            std::snprintf(ctx, sizeof(ctx), "capas %d y %d", c, d);
+            char detalle[96];
+            std::snprintf(detalle, sizeof(detalle), "se parecen demasiado (distancia %ld)", dist);
+            revisar(dist >= 12, ctx, detalle);
+        }
+    }
+
+    // -- los objetos no son cuadrados ---------------------------------------
+    //
+    // Un árbol tiene que tener transparencia en las esquinas: si fuera un tile
+    // macizo, un bosque volvería a ser una mancha rectangular y no habríamos
+    // ganado nada.
+    for (int v = 0; v < VARIANTES_ARBOL + VARIANTES_PIEDRA; ++v) {
+        int opacos = 0;
+        for (int y = 0; y < TILE; ++y) {
+            for (int x = 0; x < TILE; ++x) {
+                if (alfa(v, FILA_OBJETOS, x, y) != 0) ++opacos;
+            }
+        }
+        char ctx[64];
+        std::snprintf(ctx, sizeof(ctx), "objeto %d", v);
+        revisar(opacos > 40, ctx, "el objeto casi no tiene dibujo");
+        revisar(opacos < TILE * TILE - 20, ctx, "el objeto es un cuadrado macizo");
+        // Las cuatro esquinas del tile, libres: es donde se ve el suelo de abajo.
+        revisar(alfa(v, FILA_OBJETOS, 0, 0) == 0, ctx, "la esquina del objeto está pintada");
+    }
+
+    // Y las variantes de árbol tienen que ser distintas entre sí: con una sola,
+    // un bosque se lee como un sello repetido.
+    for (int i = 0; i < VARIANTES_ARBOL; ++i) {
+        for (int j = i + 1; j < VARIANTES_ARBOL; ++j) {
+            int distintos = 0;
+            for (int y = 0; y < TILE; ++y) {
+                for (int x = 0; x < TILE; ++x) {
+                    if (alfa(i, FILA_OBJETOS, x, y) != alfa(j, FILA_OBJETOS, x, y)) ++distintos;
+                }
+            }
+            char ctx[64];
+            std::snprintf(ctx, sizeof(ctx), "árboles %d y %d", i, j);
+            revisar(distintos > 8, ctx, "las dos variantes son casi el mismo dibujo");
+        }
+    }
+
+    // -- determinista --------------------------------------------------------
+    const Atlas otro = generarAtlas();
+    revisar(a.data == otro.data, "atlas", "dos llamadas dieron atlas distintos");
+
+    // -- la solidez, que no cambió -------------------------------------------
     revisar(esSolido(Tile::Agua), "solidez", "el agua tendría que frenar");
     revisar(esSolido(Tile::Piedra), "solidez", "la piedra tendría que frenar");
     revisar(esSolido(Tile::Arbol), "solidez", "los árboles tendrían que frenar");
@@ -916,6 +1016,98 @@ static void probarAtlas() {
     revisar(!esSolido(Tile::Arena), "solidez", "por la arena se camina");
     revisar(!esSolido(Tile::Musgo), "solidez", "por el musgo se camina");
 }
+
+
+/**
+ * La máscara de la grilla dual.
+ *
+ * Es una función de cuatro tiles y una capa, así que se prueba sola, sin mundo y
+ * sin atlas. Lo que se comprueba son las tres cosas de las que depende que los
+ * bordes cierren.
+ */
+static void probarGrillaDual() {
+    bloque("grilla dual");
+
+    static const Tile TODOS[] = {Tile::Pasto,  Tile::Camino,    Tile::Agua,  Tile::Piedra,
+                                 Tile::Arbol,  Tile::PastoAlto, Tile::Arena, Tile::Musgo};
+
+    // -- siempre en rango ---------------------------------------------------
+    for (Tile a : TODOS) {
+        for (Tile b : TODOS) {
+            for (Tile c : TODOS) {
+                for (Tile d : TODOS) {
+                    for (int k = 0; k < static_cast<int>(Capa::CANTIDAD); ++k) {
+                        const int m = mascaraDeEsquinas(a, b, c, d, static_cast<Capa>(k));
+                        revisar(m >= 0 && m < 16, "rango", "la máscara se fue de [0, 16)");
+                    }
+                }
+            }
+        }
+    }
+
+    // -- una región uniforme da la máscara llena, y solo esa ----------------
+    //
+    // Es la que atrapa un desfase: si las esquinas se leyeran corridas un tile,
+    // el interior de un campo daría máscaras parciales y el mundo entero sería
+    // bordes.
+    for (Tile t : TODOS) {
+        const Capa suya = capaDeSuelo(t);
+        for (int k = 0; k <= static_cast<int>(suya); ++k) {
+            const int m = mascaraDeEsquinas(t, t, t, t, static_cast<Capa>(k));
+            char ctx[64];
+            std::snprintf(ctx, sizeof(ctx), "tile %d en capa %d", static_cast<int>(t), k);
+            revisarEnteros(static_cast<uint64_t>(m), 15, ctx, "máscara de una región uniforme");
+        }
+        // Y en una capa POR ENCIMA de la suya, cero: ese material no está ahí.
+        for (int k = static_cast<int>(suya) + 1; k < static_cast<int>(Capa::CANTIDAD); ++k) {
+            const int m = mascaraDeEsquinas(t, t, t, t, static_cast<Capa>(k));
+            char ctx[64];
+            std::snprintf(ctx, sizeof(ctx), "tile %d en capa %d", static_cast<int>(t), k);
+            revisarEnteros(static_cast<uint64_t>(m), 0, ctx, "máscara de una capa que no está");
+        }
+    }
+
+    // -- cada bit corresponde a su esquina ----------------------------------
+    //
+    // Con tres esquinas de agua y una de pasto, el bit que se apaga en la capa
+    // del pasto tiene que ser el de esa esquina. Si estuvieran cruzados, las
+    // costas saldrían reflejadas y nadie se daría cuenta mirando un lago
+    // redondo.
+    {
+        const Tile A = Tile::Agua;
+        const Tile P = Tile::Pasto;
+        revisarEnteros(static_cast<uint64_t>(mascaraDeEsquinas(P, A, A, A, Capa::Pasto)), 1,
+                       "esquinas", "solo arriba-izquierda");
+        revisarEnteros(static_cast<uint64_t>(mascaraDeEsquinas(A, P, A, A, Capa::Pasto)), 2,
+                       "esquinas", "solo arriba-derecha");
+        revisarEnteros(static_cast<uint64_t>(mascaraDeEsquinas(A, A, P, A, Capa::Pasto)), 4,
+                       "esquinas", "solo abajo-izquierda");
+        revisarEnteros(static_cast<uint64_t>(mascaraDeEsquinas(A, A, A, P, Capa::Pasto)), 8,
+                       "esquinas", "solo abajo-derecha");
+    }
+
+    // -- las capas se apilan, no se excluyen --------------------------------
+    //
+    // Un tile de camino cuenta como presente para el camino Y para el pasto y el
+    // agua de abajo. Sin eso, un sendero sobre pasto le haría un agujero al
+    // pasto y se vería el agua a través del piso.
+    for (Tile t : TODOS) {
+        const int suya = static_cast<int>(capaDeSuelo(t));
+        for (int k = 0; k <= suya; ++k) {
+            char ctx[64];
+            std::snprintf(ctx, sizeof(ctx), "tile %d", static_cast<int>(t));
+            revisar(perteneceA(t, static_cast<Capa>(k)), ctx,
+                    "no cuenta para una capa de más abajo que la suya");
+        }
+    }
+
+    // El agua es el fondo del mundo: todo cuenta para ella, así que esa capa se
+    // dibuja siempre llena y nunca deja ver el vacío de atrás.
+    for (Tile t : TODOS) {
+        revisar(perteneceA(t, Capa::Agua), "fondo", "hay un tile que no cuenta para el agua");
+    }
+}
+
 
 /**
  * La tipografía. TAMPOCO tiene paridad — se comprueban propiedades.
@@ -1903,6 +2095,7 @@ int main() {
     probarBotines();
     probarSalidas();
     probarAtlas();
+    probarGrillaDual();
     probarFuente();
     probarCruzas();
     probarCodex();

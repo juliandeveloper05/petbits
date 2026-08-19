@@ -72,7 +72,7 @@ entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
 botines de expedición contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **54.267 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **79.473 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -463,6 +463,64 @@ mudó a `PuebloMapa.gd`, que no depende de nada.
 | Recolectar, hitos y semillas perdidas | ✅ |
 | `user://mundo.json` — dónde estabas | ✅ |
 | Criaturas salvajes en el pasto alto | ⬜ pide combate |
+
+### Fase 3.6 — La cara del mundo 🚧
+
+| | |
+|---|---|
+| Grilla dual: bordes orgánicos entre materiales | ✅ |
+| El atlas pasa de una fila a una grilla de capas | ✅ |
+| Arte: agua con profundidad, tres verdes, copas de árbol | ✅ |
+| El render de región dibuja tiles de verdad | ✅ |
+| El pueblo rehecho: caminos curvos, umbrales | ⬜ |
+| Props sueltos: arbustos, flores, troncos | ⬜ |
+| Cabañas y ruinas, con interior | ⬜ |
+
+**El problema era uno solo, no veinte.** Puesto al lado de una referencia de
+pixel art, el mundo se leía como una grilla y no como terreno: los materiales se
+tocaban en escalones de dieciséis píxeles. Todo lo demás —las copas agrupadas, el
+agua con profundidad— suma, pero eso era lo que decidía la lectura.
+
+**La grilla dual.** El tile que se DIBUJA no coincide con el del mundo: va corrido
+medio tile, y su aspecto lo deciden los cuatro tiles que toca en sus esquinas.
+Cuatro esquinas por dos estados son dieciséis combinaciones, y con dibujar esas
+dieciséis alcanza — un autotile de blob clásico necesita **cuarenta y siete**.
+
+Y los bordes cierran solos: cada esquina la comparten cuatro tiles dibujados
+vecinos, y como es la misma celda del mundo, los cuatro la leen igual. No hay
+nada que casar.
+
+**La curva sale de una cuenta, no de dibujar círculos.** Para cada píxel se suma,
+por cada esquina presente, cuánto pesa esa esquina ahí: `(1-du)·(1-dv)`. Con las
+cuatro, la suma da uno en todos lados y el tile queda lleno; con dos de un mismo
+lado, la cuenta se simplifica a una recta; y con UNA sola queda
+`(1-u)·(1-v) ≥ ½`, que es una hipérbola. El borde curvo aparece sin que en ningún
+lado esté escrita la palabra círculo.
+
+**Con varios materiales se apila.** Agua, arena, pasto, musgo, pasto alto,
+camino — de abajo hacia arriba, cada uno con su máscara y transparente donde no
+está. Una esquina cuenta para la capa C si su tile es de C *o de cualquier capa
+de más arriba*; sin eso, un sendero sobre pasto le haría un agujero al pasto y se
+vería el agua a través del piso.
+
+Los árboles y las piedras **no son terreno**: son objetos, van en su capa, no
+llevan transición y tienen cuatro variantes. Un árbol no se funde con el de al
+lado.
+
+**Dos números salieron de mirar el PNG.** Las copas medían seis píxeles de radio
+y un bosque se leía como lunares sobre pasto: ahora se pasan del tile y se tocan
+entre sí, que es lo que lo hace leer como bosque. Y el ribete del borde era tan
+claro que dibujaba un contorno alrededor de cada parche — el mundo parecía un
+mapa vectorial. Un borde de terreno no tiene contorno, tiene un cambio de luz.
+
+**El render de región dejó de promediar.** Reducía cada tile de 16×16 a un color,
+lo cual servía para juzgar formas grandes y era inútil para lo que ahora
+importa: promediando, una transición y un escalón se ven exactamente igual.
+
+Y `MapaAPng` pasó a dibujar solo los interiores. El pueblo dejó de tener grilla
+propia —su terreno se mudó al generador— y esa herramienta seguía pidiéndosela:
+se colgaba sin decir nada, que es como se descubrió. El pueblo ahora se mira en
+`RegionAPng`, junto al terreno que lo rodea, que es donde tiene sentido.
 
 **El mundo sale del genoma de tu primera criatura.** Es la tesis del proyecto
 llevada hasta el final: la criatura ES la semilla, y ahora el mundo también. La
