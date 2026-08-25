@@ -304,6 +304,23 @@ Partida partidaInicial(const CreatureState& criatura) {
     return p;
 }
 
+/// ¿Esa clave la interpreta el formato, o es carga opaca?
+///
+/// `otros` guarda lo que el nativo NO interpreta: las semillas, y lo que traiga
+/// una versión futura del formato. Una clave que el escritor produce por su
+/// cuenta no va ahí nunca.
+///
+/// La lista está acá y en ningún otro lado porque estuvo en dos y salió caro. El
+/// arnés de interoperabilidad metía "inventario" adentro de `otros`; el bucle
+/// del final de `guardarPartida` lo volcaba sobre la raíz, y `Json::poner`
+/// reemplaza la clave en el lugar. Así que el literal del arnés pisaba lo que
+/// había escrito el escritor de verdad, y el único chequeo que compara el
+/// archivo del nativo contra el esquema de la web validaba el literal.
+static bool claveInterpretada(const std::string& clave) {
+    return clave == "version" || clave == "guardadoMs" || clave == "criaturas" ||
+           clave == "activaId" || clave == "inventario" || clave == "codex";
+}
+
 bool cargarPartida(const std::string& texto, Partida& salida, std::string& error) {
     Json raiz;
     if (!Json::leer(texto, raiz, error)) return false;
@@ -411,10 +428,7 @@ bool cargarPartida(const std::string& texto, Partida& salida, std::string& error
     // exista.
     salida.otros = Json::objeto();
     for (const auto& [clave, valor] : raiz.campos()) {
-        if (clave == "version" || clave == "guardadoMs" || clave == "criaturas" ||
-            clave == "activaId" || clave == "inventario" || clave == "codex") {
-            continue;
-        }
+        if (claveInterpretada(clave)) continue;
         salida.otros.poner(clave, valor);
     }
 
@@ -475,7 +489,13 @@ std::string guardarPartida(const Partida& p, int64_t nowMs) {
 
     // Y al final lo que no se interpreta: las semillas y lo que traiga una
     // versión futura.
+    //
+    // Se saltean las claves que el escritor produce por su cuenta. `Json::poner`
+    // reemplaza en el lugar, así que sin este filtro un `otros` con una clave
+    // interpretada adentro le pisa la salida al escritor — en silencio, y el
+    // archivo termina llevando un dato viejo con forma de dato nuevo.
     for (const auto& [clave, valor] : p.otros.campos()) {
+        if (claveInterpretada(clave)) continue;
         raiz.poner(clave, valor);
     }
 

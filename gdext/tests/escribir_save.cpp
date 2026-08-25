@@ -54,16 +54,20 @@ int main(int argc, char** argv) {
     p.codex.rarezas = {"primordial"};
     p.codex.totalRegistradas = 4;
 
-    Json inventario = Json::objeto();
-    inventario.poner("baya", Json::numero(3));
-    inventario.poner("larva", Json::numero(1));
+    // La despensa va en `p.inventario`, que es lo que lee el escritor.
+    //
+    // Estaba armada a mano como Json y metida en `p.otros`, y eso anulaba este
+    // chequeo entero para el campo: el volcado de `otros` pisaba la salida del
+    // escritor, así que el esquema de Zod validaba este literal y no
+    // `guardarPartida`. Se veía igual de verde. El archivo decía
+    // {"baya":3,"larva":1} cuando el escritor produce las cuatro claves.
+    p.inventario.poner("larva", 1);
 
     Json semillas = Json::arreglo();
     // Un genoma por encima de 2^53, que es donde un number de JavaScript deja de
     // ser exacto. Si en algún tramo se convirtiera a número, volvería redondeado.
     semillas.agregar(Json::texto("11814994175403368200"));
 
-    p.otros.poner("inventario", std::move(inventario));
     p.otros.poner("semillas", std::move(semillas));
 
     const std::string texto = guardarPartida(p, base + 1441 * TICK_MS);

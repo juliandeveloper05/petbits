@@ -1317,6 +1317,110 @@ lineas.push("inline const VectorCodex CODEXS[] = {");
 }
 lineas.push("};");
 lineas.push("");
+
+// --- escribirNumero ---
+//
+// Cómo se escribe un double en el archivo. Es de lo que depende que un save sea
+// idéntico byte a byte del lado que lo escriba, y era lo único sin un solo
+// vector: se sostenía con un comentario.
+//
+// Los valores viajan por sus BITS y no por su texto. Escribirlos como literal
+// en C++ sería pedirle al compilador que los vuelva a parsear, y entonces el
+// vector mediría el parser del compilador además de lo que quiere medir. Con los
+// bits, los dos lados tienen exactamente el mismo double y la única diferencia
+// posible es cómo lo escriben.
+//
+// La muestra mezcla tres cosas: los bordes escritos a mano (donde JavaScript
+// cambia de notación, el cero negativo, los denormales), un barrido por el rango
+// que de verdad aparece en un save, y mil doubles sorteados por sus bits — que
+// son los que agarran las diferencias que nadie va a pensar en escribir.
+const BORDES_NUMERO: number[] = [
+  0,
+  -0,
+  1,
+  -1,
+  0.5,
+  -0.5,
+  100,
+  1e15,
+  1e16,
+  1e20,
+  1e21,
+  1e22,
+  1e-5,
+  1e-6,
+  1e-7,
+  0.0001,
+  0.1,
+  0.2,
+  0.3,
+  93.504,
+  1 / 3,
+  2 / 3,
+  5e-324,
+  -5e-324,
+  Number.MAX_VALUE,
+  -Number.MAX_VALUE,
+  Number.MIN_SAFE_INTEGER,
+  Number.MAX_SAFE_INTEGER,
+  Number.EPSILON,
+  1786406400000,
+  141561.09999999992,
+  92.1999999999997,
+  Number.POSITIVE_INFINITY,
+  Number.NEGATIVE_INFINITY,
+  Number.NaN,
+];
+
+const bitsDe = (() => {
+  const buf = new ArrayBuffer(8);
+  const dv = new DataView(buf);
+  return (v: number): bigint => {
+    dv.setFloat64(0, v);
+    return dv.getBigUint64(0);
+  };
+})();
+
+const dobleDe = (() => {
+  const buf = new ArrayBuffer(8);
+  const dv = new DataView(buf);
+  return (b: bigint): number => {
+    dv.setBigUint64(0, b & ((1n << 64n) - 1n));
+    return dv.getFloat64(0);
+  };
+})();
+
+const NUMEROS: number[] = [...BORDES_NUMERO];
+
+// El rango que aparece de verdad: stats de 0 a 100 y marcas de tiempo.
+for (let i = 0; i <= 100; i++) NUMEROS.push(i / 7);
+for (let i = 0; i < 20; i++) NUMEROS.push(1786406400000 + i * 60000);
+
+// Y mil al azar por sus bits, con la misma constante fija que el resto.
+{
+  let estado = 0x9e3779b97f4a7c15n;
+  let puestos = 0;
+  while (puestos < 1000) {
+    estado = splitmix64(estado);
+    const v = dobleDe(estado);
+    if (!Number.isFinite(v)) continue;
+    NUMEROS.push(v);
+    puestos++;
+  }
+}
+
+lineas.push("struct VectorNumero {");
+lineas.push("    uint64_t    bits;      ///< el double, por sus bits");
+lineas.push("    const char* esperado;  ///< lo que escribe JSON.stringify");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline const VectorNumero NUMEROS[] = {");
+for (const v of NUMEROS) {
+  lineas.push(`    {${hex(bitsDe(v))}, ${JSON.stringify(JSON.stringify(v))}},`);
+}
+lineas.push("};");
+lineas.push("");
+
 lineas.push("} // namespace petbits::vectores");
 lineas.push("");
 
@@ -1334,4 +1438,5 @@ console.log(`  ${SAVES.length} guardados`);
 console.log(`  ${DESTINOS.length * 6 * SALIDAS.length} botines de expedición`);
 console.log(`  ${PARES_CRUZA.length * NONCES_CRUZA.length} cruzas`);
 console.log(`  ${SEEDS_CODEX.length + 2} pasos de codex`);
+console.log(`  ${NUMEROS.length} números escritos`);
 console.log("\nAhora compilá y corré los tests de C++ — ver gdext/tests/README.md");

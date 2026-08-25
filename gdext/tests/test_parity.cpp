@@ -1940,6 +1940,41 @@ static void probarMundo() {
     }
 }
 
+/**
+ * Cómo se escribe un double en el archivo.
+ *
+ * Es de lo que depende la promesa central del proyecto —que un save sea idéntico
+ * byte a byte del lado que lo escriba— y era lo único sin un solo vector: vivía
+ * en un comentario que decía "con to_chars los dos lados producen byte a byte lo
+ * mismo". Sorteando cien mil doubles, mil seiscientos diecisiete salían
+ * distintos: `to_chars` elige entre fija y científica la más corta, JavaScript
+ * usa fija en todo [1e-6, 1e21); `to_chars` rellena el exponente a dos dígitos,
+ * JavaScript no; y el atajo de enteros escribía `-0`, que en JavaScript es `0`.
+ *
+ * Los valores llegan por sus BITS y no como literales. Un literal de C++
+ * obligaría al compilador a volver a parsearlos, y entonces esto mediría el
+ * parser del compilador además de lo que quiere medir.
+ */
+static void probarNumeros() {
+    bloque("números escritos");
+
+    for (const auto& v : vectores::NUMEROS) {
+        double d = 0.0;
+        std::memcpy(&d, &v.bits, sizeof(d));
+
+        const std::string obtenido = Json::numero(d).escribir();
+
+        char ctx[128];
+        std::snprintf(ctx, sizeof(ctx), "bits 0x%016llx",
+                      static_cast<unsigned long long>(v.bits));
+        char detalle[320];
+        std::snprintf(detalle, sizeof(detalle), "C++ escribió %s, el TS escribe %s",
+                      obtenido.c_str(), v.esperado);
+        revisar(obtenido == v.esperado, ctx, detalle);
+    }
+}
+
+
 /** El JSON tiene que aguantar entradas rotas sin reventar el arranque. */
 static void probarJsonRoto() {
     bloque("guardados corruptos");
@@ -2100,6 +2135,7 @@ int main() {
     probarCruzas();
     probarCodex();
     probarMundo();
+    probarNumeros();
     probarJsonRoto();
     probarParticion();
     probarRelojAtras();

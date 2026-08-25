@@ -4,10 +4,12 @@
 
 #include "json.h"
 
+#include <algorithm>
 #include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <system_error>
 
 namespace petbits {
@@ -123,30 +125,49 @@ static void escribirTexto(const std::string& s, std::string& salida) {
 }
 
 /**
- * Un número, escrito como lo escribiría JavaScript.
- *
- * Los enteros salen sin coma. No es cosmético: el esquema de la web valida
- * varios campos con `.int()`, y un "1786406400000.0000000" en el archivo es
- * ilegible y hace pensar que hay pérdida de precisión donde no la hay.
- *
- * El resto usa `std::to_chars` sin formato, que da **la cadena más corta que
- * vuelve al mismo double** — exactamente el algoritmo de JSON.stringify.
+ * Un número, escrito **exactamente** como lo escribe `JSON.stringify`.
  *
  * ---
  *
- * ANTES ESTO ERA %.17g, Y ANDABA. EL PROBLEMA ERA OTRO.
+ * POR QUÉ IMPORTA QUE SEA EXACTO Y NO PARECIDO.
  *
- * Diecisiete dígitos significativos garantizan recuperar el mismo double, así
- * que no había pérdida de precisión: 93.504000000000005 y 93.504 son el mismo
- * número, bit por bit.
+ * Antes esto era `%.17g`, y andábamos bien en cuanto a precisión: diecisiete
+ * dígitos significativos garantizan recuperar el mismo double, así que
+ * 93.504000000000005 y 93.504 son el mismo número bit por bit.
  *
  * Pero los dos lados escribían el MISMO valor con cadenas distintas, y eso se
  * notó recién al pasar una partida real por web → nativo → web: cada salto
  * cambiaba el aspecto de casi todos los números. Un diff entre dos saves daba
- * diferencias en todos lados aunque nada hubiera cambiado, y comparar archivos
- * —o sumarles un checksum algún día— habría sido imposible.
+ * diferencias en todos lados aunque nada hubiera cambiado.
  *
- * Con to_chars los dos lados producen byte a byte lo mismo.
+ * ---
+ *
+ * Y POR QUÉ `to_chars` SOLO NO ALCANZA.
+ *
+ * Acá decía "con to_chars los dos lados producen byte a byte lo mismo". Es casi
+ * cierto, y casi no sirve. `std::to_chars` sin formato da la cadena más corta
+ * que vuelve al mismo double —que es la mitad del algoritmo de JavaScript— pero
+ * la OTRA mitad, cómo se acomodan esos dígitos, es distinta:
+ *
+ *   - `to_chars` elige entre fija y científica la que dé menos caracteres.
+ *     JavaScript usa fija en todo el rango [1e-6, 1e21) aunque salga más larga.
+ *     Un 0.000010238147347856556 sale `1.0238147347856556e-05` de un lado.
+ *   - `to_chars` rellena el exponente a dos dígitos, como printf: `1e-07`.
+ *     JavaScript escribe `1e-7`.
+ *   - El atajo de enteros con `%.0f` escribía `-0` para el cero negativo.
+ *     `JSON.stringify(-0)` es `0`.
+ *
+ * Sorteando cien mil doubles al azar por sus bits, mil seiscientos diecisiete
+ * salían distintos — el 1,6%. Ninguno alcanzable con los valores que hay hoy en
+ * un save (los stats van de 0 a 100 y las marcas de tiempo andan por 1,7e12),
+ * así que no rompía nada; pero "byte a byte" no es una promesa que se pueda
+ * sostener por casualidad, y el día que aparezca un campo con un flotante chico
+ * la casualidad se termina.
+ *
+ * Así que acá está el algoritmo de verdad: `Number::toString` de ECMAScript
+ * (§6.1.6.1.20). `to_chars` en modo científico da los dígitos más cortos `s` y
+ * el exponente; el resto es acomodarlos como manda la norma. Con esto los cien
+ * mil coinciden, y también el cero negativo, los denormales y DBL_MAX.
  */
 static void escribirNumero(double v, std::string& salida) {
     if (!std::isfinite(v)) {
@@ -156,25 +177,65 @@ static void escribirNumero(double v, std::string& salida) {
         return;
     }
 
-    char buf[40];
-    if (v == std::floor(v) && std::abs(v) < 1e15) {
-        std::snprintf(buf, sizeof(buf), "%.0f", v);
+    // Antes del signo: `JSON.stringify(-0)` es "0".
+    if (v == 0.0) {
+        salida += '0';
+        return;
+    }
+
+    if (v < 0) {
+        salida += '-';
+        v = -v;
+    }
+
+    char buf[64];
+    const auto r = std::to_chars(buf, buf + sizeof(buf), v, std::chars_format::scientific);
+    if (r.ec != std::errc()) {
+        // No debería pasar con 64 bytes, pero si pasa es mejor un número feo que
+        // un archivo cortado.
+        std::snprintf(buf, sizeof(buf), "%.17g", v);
         salida += buf;
         return;
     }
 
-#if defined(__cpp_lib_to_chars)
-    const auto r = std::to_chars(buf, buf + sizeof(buf), v);
-    if (r.ec == std::errc()) {
-        salida.append(buf, r.ptr);
-        return;
+    const std::string cientifica(buf, r.ptr);
+    const std::size_t pos_e = cientifica.find('e');
+    std::string digitos = cientifica.substr(0, pos_e);
+    const int exponente = std::atoi(cientifica.c_str() + pos_e + 1);
+    digitos.erase(std::remove(digitos.begin(), digitos.end(), '.'), digitos.end());
+
+    // La convención de la norma: v = s × 10^(n-k), con k dígitos en s.
+    // `to_chars` da d.ddd × 10^E, o sea s × 10^(E-(k-1)), así que n = E + 1.
+    const int k = static_cast<int>(digitos.size());
+    const int n = exponente + 1;
+
+    if (k <= n && n <= 21) {
+        // Entero: los dígitos y ceros hasta la coma.
+        salida += digitos;
+        salida.append(static_cast<std::size_t>(n - k), '0');
+    } else if (0 < n && n <= 21) {
+        // Coma adentro de los dígitos.
+        salida.append(digitos, 0, static_cast<std::size_t>(n));
+        salida += '.';
+        salida.append(digitos, static_cast<std::size_t>(n), std::string::npos);
+    } else if (-6 < n && n <= 0) {
+        // Chico pero no tanto: JavaScript lo escribe con ceros, no en científica.
+        salida += "0.";
+        salida.append(static_cast<std::size_t>(-n), '0');
+        salida += digitos;
+    } else {
+        // Científica, con el exponente SIN rellenar de ceros.
+        if (k == 1) {
+            salida += digitos;
+        } else {
+            salida += digitos[0];
+            salida += '.';
+            salida.append(digitos, 1, std::string::npos);
+        }
+        salida += 'e';
+        salida += (n - 1 < 0) ? '-' : '+';
+        salida += std::to_string(n - 1 < 0 ? -(n - 1) : (n - 1));
     }
-#endif
-    // Sin to_chars para punto flotante —GCC anterior a la 11, por ejemplo— se
-    // vuelve a los 17 dígitos. Sigue siendo correcto: cambia el aspecto del
-    // archivo, no el valor.
-    std::snprintf(buf, sizeof(buf), "%.17g", v);
-    salida += buf;
 }
 
 static void escribirValor(const Json& j, std::string& salida) {
