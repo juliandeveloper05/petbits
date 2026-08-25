@@ -161,3 +161,7 @@ godot/assets/sprites/*.png.import
 # La región del mundo se regenera con un comando, igual que el mapa.
 godot/region.png
 godot/region.png.import
+
+# Las capturas del juego corriendo: se regeneran con un comando.
+godot/captura_*.png
+godot/captura_*.png.import

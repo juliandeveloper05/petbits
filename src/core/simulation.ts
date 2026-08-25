@@ -55,7 +55,7 @@ const NIGHT_START_HOUR = 23;
 const NIGHT_END_HOUR = 7;
 
 /** Techo de eventos devueltos. Lo que se recorta se informa en el resumen. */
-const MAX_EVENTS = 60;
+export const MAX_EVENTS = 60;
 
 // Desgaste por tick, interpolado según el gen de metabolismo (0-7).
 // Aletargado agota 100 puntos de energía en ~48 h; Frenético, en ~12 h.

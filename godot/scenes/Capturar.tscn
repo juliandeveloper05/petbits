@@ -1,0 +1,11 @@
+; Corre capturar.gd. No tiene nodos: todo lo hace el script.
+;
+; Esta escena se corre CON ventana, no headless: es la unica forma de que Godot
+; dibuje y de que las capturas no salgan negras.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/capturar.gd" id="1_tool"]
+
+[node name="Capturar" type="Node"]
+script = ExtResource("1_tool")

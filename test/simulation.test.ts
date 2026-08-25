@@ -3,6 +3,7 @@ import { BOND_DAILY_CAP, acariciar, alimentar, jugar } from "../src/core/actions
 import {
   type CreatureState,
   LETHARGY_TICKS,
+  MAX_EVENTS,
   TICK_MS,
   buildAbsenceDigest,
   createCreature,
@@ -315,8 +316,31 @@ describe("resumen de ausencia", () => {
   });
 
   it("los eventos recortados se informan, no se ocultan", () => {
-    const result = simulate(fresh(), T0 + 40 * HOUR);
+    // Un año, no cuarenta horas.
+    //
+    // Con 40 h esto emitía NUEVE eventos y el techo son sesenta: `omitted` daba
+    // cero siempre y la rama del recorte —lo único que el test dice cubrir— no
+    // se ejecutaba nunca. La afirmación quedaba en 9 + 0 === 9, que se cumple
+    // sola. El recorte recién empieza cerca de los treinta días.
+    const result = simulate(fresh(), T0 + 365 * DAY);
+
+    // Que el recorte haya pasado DE VERDAD. Sin esto, lo de abajo no prueba nada.
+    expect(result.omitted).toBeGreaterThan(0);
+    expect(result.events.length).toBe(MAX_EVENTS);
+
+    // Nada se oculta: lo que se muestra más lo que se omitió es todo lo que pasó.
+    // Es lo que atrapa un `summary` calculado DESPUÉS del recorte.
     const totalInSummary = Object.values(result.summary).reduce((a, b) => a + b, 0);
     expect(result.events.length + result.omitted).toBe(totalInSummary);
+
+    // Y los que quedan son los MÁS RECIENTES, que es lo que promete el tipo.
+    // Quedándose con los más viejos —`slice(0, MAX_EVENTS)` en vez de
+    // `slice(-MAX_EVENTS)`— el último evento caería cerca del arranque del año en
+    // vez de cerca del final, y las tres afirmaciones de arriba seguirían dando
+    // verde igual: son todas sobre cantidades.
+    const ultimo = result.events.at(-1);
+    expect(ultimo).toBeDefined();
+    if (!ultimo) return;
+    expect(ultimo.atMs).toBeGreaterThan(T0 + 364 * DAY);
   });
 });

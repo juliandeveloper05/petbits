@@ -30,6 +30,15 @@ const Mapas = preload("res://scripts/Mapas.gd")
 
 var _fallas := 0
 
+## Si `_correr()` llegó hasta el final.
+##
+## En Godot un error de script no es una excepción: mata la corrutina y el
+## `await` de arriba devuelve el control como si hubiera terminado bien. Sin
+## esta marca, un test que revienta en su tercera línea imprime "Todo bien" y
+## sale con cero — que es lo que pasó, durante toda una tanda de trabajo.
+var _termino := false
+
+
 
 func _ready() -> void:
 	if not ClassDB.class_exists("PetBitsCore"):
@@ -62,6 +71,12 @@ func _ready() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(RUTA))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://verificacion_interiores_mundo.json"))
 
+	if not _termino:
+		_fallas += 1
+		print("\n  FALLA  _correr() no llegó al final.")
+		print("         Buscá un SCRIPT ERROR más arriba: la corrutina murió y")
+		print("         las afirmaciones que faltan nunca se evaluaron.")
+
 	if _fallas == 0:
 		print("\nTodo bien: los dos interiores se caminan y la cruza funciona.")
 	else:
@@ -85,6 +100,21 @@ func _correr() -> void:
 	# fuera de rango no revienta, dibuja cualquier cosa.
 	for id in Mapas.todos():
 		var def = Mapas.script_de(id)
+
+		# El pueblo dejó de tener grilla propia cuando su terreno se mudó al
+		# generador infinito: no tiene `generar()`, ni `ANCHO`, ni `ALTO`. Se le
+		# hacen las mismas preguntas, pero al generador, que es donde ahora vive
+		# la respuesta.
+		#
+		# Sin esta rama la llamada de abajo tira un error de script, y un error
+		# de script en Godot no es una excepción: mata la corrutina y la
+		# ejecución sigue en `_ready()` como si nada. Este test estuvo
+		# imprimiendo "Todo bien" habiendo corrido UNA de sus cuarenta
+		# afirmaciones.
+		if def.INFINITO:
+			_verificar_infinito(id, def)
+			continue
+
 		var grilla: Array = def.generar()
 		_afirmar(grilla.size() == def.ALTO, "%s tiene %d filas" % [id, def.ALTO])
 
@@ -129,6 +159,13 @@ func _correr() -> void:
 	mundo._mirar_alrededor()
 	_afirmar(mundo._cerca.get("mapa", "") == "criadero", "pararse en la puerta la reconoce")
 
+	# Como si hubiera caminado hasta acá, que es lo que pasa jugando: `_process`
+	# escribe `Partida.donde` en cada cuadro que la criatura se mueve. Este test
+	# le ponía la posición a mano y nunca corría `_process`, así que `donde`
+	# quedaba en cero — el único valor con el que el error de abajo no aparece.
+	# Se entraba al criadero por la pared y los tests decían que todo bien.
+	Partida.donde = mundo._criatura.position
+
 	mundo._usar()
 	# El fundido es asincrónico: hay que dejarlo terminar antes de mirar.
 	await _esperar_fundido()
@@ -136,6 +173,15 @@ func _correr() -> void:
 	_afirmar(mundo._mapa_id == "criadero", "la puerta lleva al criadero")
 	_afirmar(Partida.mapa == "criadero", "y la partida se acuerda de dónde estás")
 	_afirmar(Partida.venir_de == "pueblo", "y de dónde venías")
+
+	# Y se entra POR LA PUERTA. Cruzar una puerta no conserva la posición: la
+	# posición guardada vale para continuar la partida, no para atravesar paredes.
+	var entrada: Vector2 = Mapas.script_de("criadero").ENTRADA
+	_afirmar(
+		mundo._criatura.position.is_equal_approx(entrada),
+		"se entra por la entrada del criadero y no por donde estabas en el pueblo (quedó en %s, va %s)"
+		% [mundo._criatura.position, entrada]
+	)
 
 	# Las paredes frenan y el piso se camina.
 	_afirmar(mundo._choca(Vector2(8, 8)), "la pared del criadero frena")
@@ -250,8 +296,35 @@ func _correr() -> void:
 	mundo.queue_free()
 	await get_tree().process_frame
 
+	_termino = true
+
 
 ## El primer punto de ese tipo, filtrando además por mapa/categoría si se pide.
+## Las mismas preguntas que a un interior, contra el generador del mundo.
+##
+## No se puede pedir la grilla entera —es infinita—, así que se consulta tile por
+## tile en las coordenadas que importan: la entrada y los puntos interactivos.
+func _verificar_infinito(id: String, def) -> void:
+	var semilla: String = Partida.semilla_mundo
+
+	var celda := Vector2i(int(floor(def.ENTRADA.x / 16)), int(floor(def.ENTRADA.y / 16)))
+	_afirmar(
+		not Partida.core.tile_solido(Partida.core.mundo_tile(semilla, celda.x, celda.y)),
+		"%s: la entrada no cae sobre un tile sólido" % id
+	)
+
+	var vecinos: Array[Vector2i] = [
+		Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)
+	]
+	for punto in def.PUNTOS:
+		var alcanzable := false
+		for d in vecinos:
+			var v: Vector2i = Vector2i(punto["x"], punto["y"]) + d
+			if not Partida.core.tile_solido(Partida.core.mundo_tile(semilla, v.x, v.y)):
+				alcanzable = true
+		_afirmar(alcanzable, "%s: se puede llegar a %s" % [id, punto["nombre"]])
+
+
 func _punto_de(mundo: Node2D, tipo: String, detalle: String) -> Dictionary:
 	for punto in mundo._def.PUNTOS:
 		if punto["tipo"] != tipo:

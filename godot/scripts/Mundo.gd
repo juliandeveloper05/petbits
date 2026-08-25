@@ -193,12 +193,31 @@ func _cargar_mapa(id: String, con_fundido: bool) -> void:
 ##
 ## Si venís del pueblo, en la entrada del interior. Si volvés al pueblo, sobre la
 ## puerta por la que saliste — no en el medio de la plaza, que sería teletransporte.
+##
+## ---
+##
+## LA POSICIÓN GUARDADA VALE UNA SOLA VEZ.
+##
+## La primera carga de la sesión es la que continúa la partida, y es la única que
+## tiene que respetar dónde estabas. De ahí en más se está cruzando una puerta, y
+## cruzar una puerta te deja en la entrada.
+##
+## Estaba escrito de una forma que hacía exactamente lo contrario. La marca de
+## "ya se usó" se ponía SOLO SI la rama se tomaba, y en una partida nueva
+## `Partida.donde` arranca en cero: la primera carga no la tomaba, la marca
+## quedaba sin poner, y la rama la terminaba tomando la SEGUNDA carga — que es
+## justo cruzar una puerta. Se entraba al criadero y se aparecía en las
+## coordenadas que traías del mundo: contra la pared, a siete tiles del
+## mostrador, con Enter sin hacer nada porque no había ningún punto cerca.
+##
+## (La condición `Partida.mapa == _mapa_id` que también había no filtraba nada:
+## `_cargar_mapa` escribe `Partida.mapa = id` veinte líneas antes de llegar acá.
+## Era comparar una variable consigo misma.)
 func _volver_donde_corresponde() -> Vector2:
-	# Si hay una posición guardada de este mapa, esa manda: es donde dejaste de
-	# jugar. Solo vale la primera vez que se carga el mapa en esta sesión —
-	# después ya estás caminando y `Partida.donde` te sigue.
-	if not _restaurada and Partida.mapa == _mapa_id and Partida.donde != Vector2.ZERO:
-		_restaurada = true
+	var primera_carga := not _restaurada
+	_restaurada = true
+
+	if primera_carga and Partida.donde != Vector2.ZERO:
 		return Partida.donde
 
 	if _mapa_id == "pueblo" and Partida.venir_de != "":

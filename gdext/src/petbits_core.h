@@ -288,6 +288,18 @@ public:
     /** Un tile suelto, para preguntar por dónde se puede caminar. */
     int64_t mundo_tile(const String& semilla, int64_t x, int64_t y) const;
 
+    /**
+     * El rectángulo del pueblo en coordenadas de mundo: {x, y, ancho, alto}.
+     *
+     * Existe para que esos cuatro números estén escritos en un solo lado. Viven
+     * en `world_gen.h` porque el generador los necesita para dibujar el pueblo;
+     * del lado de GDScript los quería el test que comprueba que se pueda salir
+     * por los cuatro huecos del borde de árboles, y los tenía **copiados a
+     * mano**. Con la copia, mover el pueblo un tile dejaba al test probando los
+     * bordes viejos — y pasando.
+     */
+    Dictionary pueblo_rect() const;
+
     /** Cómo se llama el lugar donde estás parado: "el bosque", "la orilla". */
     String mundo_bioma(const String& semilla, int64_t x, int64_t y) const;
 

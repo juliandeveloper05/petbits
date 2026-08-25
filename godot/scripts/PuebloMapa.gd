@@ -24,7 +24,7 @@
 ##
 ## Antes iban de (0,0) a (29,16), que era el mapa entero. Ahora el pueblo está
 ## centrado en el origen del mundo, así que van de (-15,-8) a (14,8). El
-## rectángulo lo define `world_gen.h` y `PetBitsCore.pueblo_rect()` lo expone,
+## rectángulo lo define `world_gen.h` y `PetBitsCore.pueblo_rect()` lo expone
 ## para que no haya dos lugares donde esté escrito dónde empieza el pueblo.
 
 extends RefCounted

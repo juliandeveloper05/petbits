@@ -28,6 +28,15 @@ const RUTA_MUNDO := "user://verificacion_infinito_mundo.json"
 
 var _fallas := 0
 
+## Si `_correr()` llegó hasta el final.
+##
+## En Godot un error de script no es una excepción: mata la corrutina y el
+## `await` de arriba devuelve el control como si hubiera terminado bien. Sin
+## esta marca, un test que revienta en su tercera línea imprime "Todo bien" y
+## sale con cero — que es lo que pasó, durante toda una tanda de trabajo.
+var _termino := false
+
+
 
 func _ready() -> void:
 	if not ClassDB.class_exists("PetBitsCore"):
@@ -60,6 +69,12 @@ func _ready() -> void:
 
 	for r in [RUTA, RUTA_MUNDO]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(r))
+
+	if not _termino:
+		_fallas += 1
+		print("\n  FALLA  _correr() no llegó al final.")
+		print("         Buscá un SCRIPT ERROR más arriba: la corrutina murió y")
+		print("         las afirmaciones que faltan nunca se evaluaron.")
 
 	if _fallas == 0:
 		print("\nTodo bien: el mundo se camina, da cosas y se acuerda de vos.")
@@ -191,6 +206,8 @@ func _correr() -> void:
 
 	mundo.queue_free()
 	await get_tree().process_frame
+
+	_termino = true
 
 
 func _cuanto(id: String) -> int:

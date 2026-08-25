@@ -122,6 +122,7 @@ void PetBitsCore::_bind_methods() {
                          &PetBitsCore::mundo_objeto_columna);
     ClassDB::bind_method(D_METHOD("tile_de_grilla", "tile"), &PetBitsCore::tile_de_grilla);
     ClassDB::bind_method(D_METHOD("mundo_tile", "semilla", "x", "y"), &PetBitsCore::mundo_tile);
+    ClassDB::bind_method(D_METHOD("pueblo_rect"), &PetBitsCore::pueblo_rect);
     ClassDB::bind_method(D_METHOD("mundo_bioma", "semilla", "x", "y"), &PetBitsCore::mundo_bioma);
     ClassDB::bind_method(D_METHOD("mundo_hallazgo", "semilla", "x", "y"),
                          &PetBitsCore::mundo_hallazgo);
@@ -1081,6 +1082,16 @@ String PetBitsCore::mundo_bioma(const String& semilla, int64_t x, int64_t y) con
     return aGodot(petbits::nombreBioma(
         petbits::biomaEn(valor, static_cast<int32_t>(x), static_cast<int32_t>(y))));
 }
+
+Dictionary PetBitsCore::pueblo_rect() const {
+    Dictionary d;
+    d["x"] = static_cast<int64_t>(petbits::PUEBLO_X);
+    d["y"] = static_cast<int64_t>(petbits::PUEBLO_Y);
+    d["ancho"] = static_cast<int64_t>(petbits::PUEBLO_ANCHO);
+    d["alto"] = static_cast<int64_t>(petbits::PUEBLO_ALTO);
+    return d;
+}
+
 
 Dictionary PetBitsCore::mundo_hallazgo(const String& semilla, int64_t x, int64_t y) const {
     Dictionary d;

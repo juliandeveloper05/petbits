@@ -33,6 +33,15 @@ const RUTA := "user://verificacion_mundo.json"
 
 var _fallas := 0
 
+## Si `_correr()` llegó hasta el final.
+##
+## En Godot un error de script no es una excepción: mata la corrutina y el
+## `await` de arriba devuelve el control como si hubiera terminado bien. Sin
+## esta marca, un test que revienta en su tercera línea imprime "Todo bien" y
+## sale con cero — que es lo que pasó, durante toda una tanda de trabajo.
+var _termino := false
+
+
 
 func _ready() -> void:
 	if not ClassDB.class_exists("PetBitsCore"):
@@ -59,6 +68,12 @@ func _ready() -> void:
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(RUTA))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://verificacion_mundo_mundo.json"))
+
+	if not _termino:
+		_fallas += 1
+		print("\n  FALLA  _correr() no llegó al final.")
+		print("         Buscá un SCRIPT ERROR más arriba: la corrutina murió y")
+		print("         las afirmaciones que faltan nunca se evaluaron.")
 
 	if _fallas == 0:
 		print("\nTodo bien: las dos pantallas juegan la misma partida.")
@@ -108,26 +123,60 @@ func _correr() -> void:
 	# falló con razón.
 	_afirmar(not mundo._choca(Vector2(8, 8)), "la plaza se camina")
 
+	# El rectángulo del pueblo se le PREGUNTA al core. Estos cuatro números
+	# estaban copiados a mano acá y viven en `world_gen.h`: con la copia, mover el
+	# pueblo un tile dejaba a este bloque probando los bordes de antes — y
+	# pasando, que es lo peor que puede hacer un test.
+	var rect: Dictionary = Partida.core.pueblo_rect()
+	var px: int = rect["x"]
+	var py: int = rect["y"]
+	var pancho: int = rect["ancho"]
+	var palto: int = rect["alto"]
+
 	# Una esquina del borde de árboles: sigue siendo pared.
-	_afirmar(mundo._choca(Vector2(-15 * 16 + 8, -8 * 16 + 8)), "el borde de árboles frena")
+	_afirmar(
+		mundo._choca(Vector2(px * 16 + 8, py * 16 + 8)), "el borde de árboles frena"
+	)
 
 	# Y los huecos del borde SE CRUZAN. Es lo que convierte el mundo infinito en
 	# algo más que un fondo de pantalla: sin esto el pueblo seguiría amurallado y
 	# no habría forma de llegar a lo generado.
 	var salidas := {
-		"norte": Vector2(8, (-8 - 1) * 16 + 8),
-		"sur": Vector2(8, (8 + 1) * 16 + 8),
-		"oeste": Vector2((-15 - 1) * 16 + 8, 8),
-		"este": Vector2((14 + 1) * 16 + 8, 8),
+		"norte": Vector2(8, (py - 1) * 16 + 8),
+		"sur": Vector2(8, (py + palto) * 16 + 8),
+		"oeste": Vector2((px - 1) * 16 + 8, 8),
+		"este": Vector2((px + pancho) * 16 + 8, 8),
 	}
 	for lado in salidas:
 		_afirmar(not mundo._choca(salidas[lado]), "se puede salir del pueblo por el %s" % lado)
 
 	# Y afuera hay mundo de verdad, no vacío.
-	var lejos := Vector2(400 * 16, 400 * 16)
+	#
+	# Esto decía `mundo_tile(...) >= 0`, que NO PUEDE FALLAR: `mundo_tile`
+	# devuelve un cast de `Tile`, que es un enum sobre `uint8_t`, y ante una
+	# semilla ilegible devuelve `Tile::Pasto`, que vale cero. La comprobación
+	# daba verde con el generador roto, con la semilla vacía y con un mundo
+	# entero de un solo tile — justo el caso que "no vacío" quería descartar.
+	# De paso calculaba `lejos` y no lo usaba.
+	#
+	# Lo que hay que preguntar es si a cuatrocientos tiles el generador sigue
+	# dando terreno VÁLIDO y VARIADO.
+	var lejos := Vector2i(400, 400)
+	var vistos := {}
+	var fuera_de_rango := 0
+	for dy in 16:
+		for dx in 16:
+			var t: int = Partida.core.mundo_tile(
+				Partida.semilla_mundo, lejos.x + dx, lejos.y + dy
+			)
+			if t < 0 or t >= Partida.core.cantidad_tiles():
+				fuera_de_rango += 1
+			vistos[t] = true
+	_afirmar(fuera_de_rango == 0, "a cuatrocientos tiles todos los tiles existen")
 	_afirmar(
-		Partida.core.mundo_tile(Partida.semilla_mundo, 400, 400) >= 0,
-		"a cuatrocientos tiles del pueblo sigue habiendo terreno"
+		vistos.size() >= 2,
+		"a cuatrocientos tiles del pueblo hay terreno variado (%d tiles distintos en 16×16)"
+		% vistos.size()
 	)
 	_afirmar(Partida.semilla_mundo != "", "el mundo tiene semilla")
 
@@ -226,6 +275,8 @@ func _correr() -> void:
 
 	vuelta.queue_free()
 	await get_tree().process_frame
+
+	_termino = true
 
 
 func _afirmar(condicion: bool, que: String) -> void:
