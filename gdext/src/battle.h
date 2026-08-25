@@ -9,10 +9,30 @@
  * en una tabla 8×8, igual que los tipos en Pokémon.
  *
  * No tiene equivalente en el TS — es una feature nativa de Godot.
+ *
+ * ---
+ *
+ * OJO: ACÁ NO HAY NADA IMPLEMENTADO TODAVÍA.
+ *
+ * Este header es el diseño de la Fase 4, escrito antes de empezarla. Las siete
+ * funciones que declara no tienen definición en ningún .cpp: llamar a cualquiera
+ * de ellas compila y falla al linkear.
+ *
+ * Y hasta hace un rato ni siquiera compilaba. Usaba `CreatureState` sin incluir
+ * `simulation.h`, que es de donde sale; como nadie lo incluía, nadie se enteraba.
+ * Un header roto adentro de src/ parece código que anda.
+ *
+ * Por eso ahora existe `battle.cpp`, que no hace más que incluir este archivo:
+ * lo pone en la lista de fuentes de CMake y así el compilador lo revisa en cada
+ * build. La próxima vez que `CreatureState` cambie de forma, el build lo dice.
  */
 
+// `simulation.h` trae CreatureState y Stats, y adentro ya incluye evolution.h
+// (Form) y genome.h (Seed). Los tres van igual, explícitos: un header declara
+// lo que usa y no se cuelga de lo que otro arrastre.
 #include "evolution.h"
 #include "genome.h"
+#include "simulation.h"
 
 #include <array>
 #include <cstdint>

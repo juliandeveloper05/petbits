@@ -5,7 +5,7 @@ en el nativo. Es la promesa central del proyecto: si esto falla, los saves no
 son compatibles y las rarezas que muestra cada plataforma no coinciden.
 
 **No hacen falta Godot, SCons, godot-cpp ni ningún framework de tests.** Los
-tres módulos que se verifican son C++ puro y no incluyen un solo header del
+módulos que se verifican son C++ puro y no incluyen un solo header del
 motor, así que alcanza con un compilador. Se pueden correr el primer día,
 antes de instalar nada más.
 
@@ -41,20 +41,41 @@ Desde una consola *Developer Command Prompt for VS 2022* (la común no tiene `cl
 en el PATH):
 
 ```bash
-cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\src\actions.cpp ..\src\inventory.cpp ..\src\expeditions.cpp ..\src\json.cpp ..\src\save_manager.cpp && run_tests.exe
-ng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\srcctions.cpp ..\src\inventory.cpp ..\src\json.cpp ..\src\save_manager.cpp && run_tests.exe
+cd .. && cmake --build --preset msvc-release && .\build\release\run_tests.exe
 ```
 
-`/utf-8` no es adorno: los catálogos están llenos de acentos y sin esa opción
-MSVC lee los archivos con la codificación regional de Windows. Los nombres
-llegan con la acentuación rota y algún vector de `parseSeed` falla sin motivo
-aparente.
+`/utf-8` no es adorno, y por eso lo pone `CMakeLists.txt`: los catálogos están
+llenos de acentos y sin esa opción MSVC lee los archivos con la codificación
+regional de Windows. Los nombres llegan con la acentuación rota y algún vector
+de `parseSeed` falla sin motivo aparente.
 
-### Windows — MinGW, Linux o macOS
+### MinGW, Linux o macOS
+
+Los presets son de MSVC, pero CMake anda igual sin ellos:
 
 ```bash
-g++ -std=c++17 -O2 test_parity.cpp ../src/genome.cpp ../src/traits.cpp ../src/evolution.cpp ../src/rng.cpp ../src/simulation.cpp ../src/palette.cpp ../src/sprite_gen.cpp ../src/actions.cpp ../src/inventory.cpp ../src/expeditions.cpp ../src/json.cpp ../src/save_manager.cpp -o run_tests && ./run_tests
+cd gdext && cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release && cmake --build build/release && ./build/release/run_tests
 ```
+
+---
+
+### Por qué acá ya no hay un comando con la lista de archivos
+
+Había uno para `cl` y otro para `g++`, con los `.cpp` escritos a mano. Los dos
+habían quedado viejos: les faltaban `breeding`, `codex`, `tileset_gen`,
+`world_gen` y `font_gen` —cinco módulos de dieciocho— así que copiar y pegar
+cualquiera de los dos daba un error de enlazado por cada símbolo de esos cinco.
+
+Uno de los dos tenía además, pegada abajo, una línea partida a la mitad que la
+consola iba a intentar correr como un segundo comando — y adentro un carecter
+de control invisible: el `\a` de `..\src\actions.cpp` se había interpretado
+como escape y quedó un BEL (0x07) literal en el archivo. Se veía como
+`..\srcctions.cpp` en cualquier grep, que es lo que lo hizo difícil de leer.
+
+No es que alguien se haya olvidado de actualizarlos. La lista de fuentes estaba
+escrita en **tres** lugares —`CMakeLists.txt` y estos dos bloques— y una lista
+en tres lugares tiene dos copias que se van a quedar atrás. Ahora está en
+`CMakeLists.txt` y en ningún otro lado.
 
 ### Desde Visual Studio 2022
 
@@ -71,7 +92,7 @@ VS lo detecta solo y configura todo. Después:
 | Correr sin depurar | `Ctrl+F5` |
 
 Elegí la configuración **msvc-release** para correr la paridad y **msvc-debug**
-para depurar. Los cincuenta mil chequeos tardan unas décimas de segundo en
+para depurar. Los ochenta mil chequeos tardan unas décimas de segundo en
 release y alrededor de un segundo en debug, así que la diferencia no molesta:
 elegí por lo que necesites, no por la velocidad.
 
@@ -96,7 +117,9 @@ leyendo un número al final.
 ```
 PetBits — paridad TypeScript <-> C++
 2010 genomas, 80 crianzas, 21 parseos, 12 hashes, 14 simulaciones,
-780 rampas de color, 2560 sprites, 23 escenarios de acciones
+780 rampas de color, 2560 sprites, 23 escenarios de acciones,
+3 guardados, 108 botines de expedición, 72 cruzas,
+38 pasos de codex
 
 decodeGenome / formatSeed
 parseSeed
@@ -122,7 +145,7 @@ guardados corruptos
 invariante de partición
 reloj hacia atrás
 
-79473 comprobaciones, 0 fallas
+80629 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
@@ -235,12 +258,28 @@ en 64 bits. Son exactamente los valores donde un port se rompe.
 
 ## Qué falta
 
-`breeding.cpp` y `expeditions.cpp` todavía no están portados, así que no hay
-vectores para ellos. Cuando se porten, se agregan al generador y acá.
+`inventory.cpp` es el único módulo portado **sin un solo vector generado**.
+`verify_parity.ts` no importa `src/core/inventory.ts`, así que toda la cobertura
+de la despensa son unas pocas comprobaciones con los números tipeados a mano en
+`test_parity.cpp` — exactamente lo que este archivo dice en su primera sección
+que no sirve. Cambiar `inventarioInicial()` del lado TS no cambia un byte del
+header generado, el C++ sigue devolviendo lo de antes y la suite da cero fallas,
+con la web arrancando con una despensa y el nativo con otra.
 
-`battle.cpp` es distinto: no existe del lado web, así que no hay contra qué
-comparar. Ese va a necesitar tests propios, escritos como tests de verdad y no
-como vectores de paridad.
+Tampoco tienen vectores tres funciones exportadas que sí están portadas y que no
+llama nadie del lado TS: `saludPromedio`, `yaVolvio` y `conoceRareza`. Que hoy
+las seis implementaciones coincidan es una casualidad que nada sostiene.
+
+Y las ramas no nulas de `expedicion` y `ultimaCruzaMs` del escritor: los tres
+vectores de `SAVES` salen de una criatura recién creada, así que los dos campos
+viajan en `null` y el código que los serializa con valor no se ejecuta en ninguna
+de las tres suites.
+
+`battle.h` es otra cosa: no existe del lado web, así que no hay contra qué
+comparar, y además no tiene ninguna función implementada todavía. Lo único que se
+verifica hoy de él es que **compile**, y para eso existe `battle.cpp`, que no
+hace más que incluirlo. Cuando la Fase 4 arranque va a necesitar tests propios,
+escritos como tests de verdad y no como vectores de paridad.
 
 ---
 

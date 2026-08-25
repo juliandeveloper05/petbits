@@ -3,7 +3,7 @@
 Estado real de cada pieza, sin optimismo. Un ✅ acá significa que existe, corre
 y está verificado; si algo funciona a medias lo dice.
 
-Última revisión: 11 de agosto de 2026.
+Última revisión: 25 de agosto de 2026.
 
 ---
 
@@ -43,7 +43,7 @@ Sin GitHub Actions: el CI vive dentro de `npm run build`, que corre typecheck,
 lint y tests antes de compilar. Vercel ejecuta ese comando, así que código roto
 no llega a producción.
 
-### Fase 1 — Port del núcleo a C++ 🚧
+### Fase 1 — Port del núcleo a C++ ✅
 
 Los catorce módulos, todos con paridad verificada contra vectores generados
 ejecutando el TypeScript.
@@ -72,7 +72,7 @@ entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
 botines de expedición contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **79.473 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **80.629 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -141,7 +141,7 @@ que afirmaba que ya era así cuando no lo era. El orden no cambia el significado
 pero sí el diff entre un save de la web y uno del nativo, y ese diff es la
 herramienta con la que se encontró el bug del inventario.
 
-### Fase 2 — Criatura en pantalla 🚧
+### Fase 2 — Criatura en pantalla ✅
 
 | | |
 |---|---|
@@ -195,7 +195,7 @@ Una fuente a la que le falte uno no falla ruidosamente: dibuja un cuadrado
 vacío, y eso aparece en producción.
 
 Los tests del C++ comprueban cobertura, que ningún glifo se repita —el error de
-copiar y pegar más fácil de cometer en una tabla de ciento dieciséis entradas— y
+copiar y pegar más fácil de cometer en una tabla de ciento diecisiete entradas— y
 que las acentuadas sean su base más algo, arriba y sin comerle tinta. Del lado
 de Godot hay otra verificación, porque entre el atlas y la pantalla hay una
 traducción entera que puede perder una letra sin avisar:
@@ -268,15 +268,15 @@ aparte coincida con lo que calcula la web. Portándolo, el sprite entra en la
 misma disciplina que todo lo demás: los vectores salen de ejecutar el
 TypeScript y se compara el buffer completo.
 
-`tools/sprite_gen.py` queda obsoleto. Era un boceto en HSL sin paridad; ahora
-hay una implementación de verdad y conviene borrarlo antes de que alguien lo
-use creyendo que sirve.
+`tools/sprite_gen.py` **se borró** (sigue en el historial). Era un boceto en HSL
+sin paridad, y con una implementación de verdad al lado era una trampa: alguien
+iba a generar assets con él creyendo que servían.
 
 ### Fase 3 — Mundo navegable 🚧
 
 | | |
 |---|---|
-| `tileset_gen.cpp` — los 8 tiles, generados por código | ✅ |
+| `tileset_gen.cpp` — los tiles, generados por código | ✅ 12: ocho de afuera y cuatro de interior |
 | El pueblo: caminos, plaza, estanque, borde de árboles | ✅ |
 | Caminar con colisiones | ✅ |
 | `mapa_a_png.gd` — compone el mundo en un PNG para poder mirarlo | ✅ |
@@ -332,7 +332,7 @@ faltaba era convertirlas en criaturas, igual que hace la web.
 godot --headless --path godot res://scenes/VerificarInteriores.tscn
 ```
 
-Cuarenta comprobaciones: que las tres grillas estén completas y sin índices de
+Cincuenta comprobaciones: que las grillas estén completas y sin índices de
 tile inventados, que las entradas no caigan sobre un tile sólido, que a cada
 punto se pueda llegar, que las puertas lleven a algún lado, que salir te deje en
 la puerta por la que entraste, y que cruzar produzca una tercera criatura que
@@ -439,7 +439,7 @@ pantalla rota se ve igual de bien—:
 godot --headless --path godot res://scenes/VerificarMundo.tscn
 ```
 
-Diecisiete comprobaciones que siguen a una criatura desde PetView al pueblo,
+Treinta y cuatro comprobaciones que siguen a una criatura desde PetView al pueblo,
 la mandan al patio caminando, releen el archivo con un core nuevo que no sabe
 nada de lo que acaba de pasar, y vuelven a PetView a confirmar que sigue afuera.
 
@@ -472,6 +472,7 @@ mudó a `PuebloMapa.gd`, que no depende de nada.
 | El atlas pasa de una fila a una grilla de capas | ✅ |
 | Arte: agua con profundidad, tres verdes, copas de árbol | ✅ |
 | El render de región dibuja tiles de verdad | ✅ |
+| `Capturar.tscn` — el juego con ventana, caminando y cronometrado | ✅ |
 | El pueblo rehecho: caminos curvos, umbrales | ⬜ |
 | Props sueltos: arbustos, flores, troncos | ⬜ |
 | Cabañas y ruinas, con interior | ⬜ |
@@ -653,6 +654,114 @@ importar saves de la web arrastrando el archivo.
 ### Fase 6 — Exportables ⬜
 
 Windows, Linux y Android. Binarios en GitHub Releases.
+
+---
+
+## Deuda conocida
+
+Lo de abajo no está roto hoy: está **sin verificar**, que es otra cosa y a veces
+peor. Un módulo con un bug se nota; un módulo que coincide de casualidad se nota
+el día que deja de coincidir, en la máquina de otro, con una partida vieja.
+
+Cada entrada dice **cómo se manifestaría**, porque una lista de pendientes sin
+eso no es accionable — es una lista de culpas.
+
+### `inventory.cpp` no tiene un solo vector generado
+
+`tools/verify_parity.ts` no importa `src/core/inventory.ts`. Es el único de los
+catorce módulos portados en esa situación: toda la cobertura de la despensa son
+las comprobaciones de `probarDespensa` en `gdext/tests/test_parity.cpp`, con los
+números **tipeados a mano**.
+
+*Cómo se manifiesta:* alguien cambia `inventarioInicial()` del lado TypeScript a
+`{baya: 5, ...}`. `npm run parity` no cambia un byte del header —no hay vector
+que regenerar—, el C++ sigue devolviendo 3, la suite da cero fallas. La web
+arranca con cinco bayas y el nativo con tres, y el primer save que cruce de una
+plataforma a la otra pisa una despensa con la otra.
+
+*Qué habría que hacer:* importar el módulo en el generador y emitir
+`inventarioInicial()`, `agregar()` y `agregarVarios()` como el resto.
+
+### `SAVE_VERSION` está escrito tres veces
+
+- `src/state/save.ts:20` — `export const SAVE_VERSION = 5`
+- `tools/verify_parity.ts:1010` — el literal `version: 5` adentro de `armar()`
+- `gdext/src/save_manager.h:35` — `inline constexpr int64_t SAVE_VERSION = 5`,
+  con un comentario que dice "tiene que coincidir con SAVE_VERSION del TS"
+
+Nada las ata. Y los tres guardados de referencia se **arman a mano**: el
+generador nunca llama a `createSave`, que es la función que la web usa de verdad.
+
+*Cómo se manifiesta:* se sube `SAVE_VERSION` a 6 en la web y se escribe la
+migración, que es el flujo normal cuando cambia el formato. Los vectores siguen
+emitiendo `"version":5`, el C++ los lee bien, `probarGuardado` da verde — y el
+archivo que la web escribe ahora es v6, que `cargarPartida` rechaza.
+
+*Qué habría que hacer:* que el generador importe `createSave` y `SAVE_VERSION` de
+`src/state/save.ts` y arme los fixtures con la función de verdad; y que el C++
+compruebe su constante contra la del vector en vez de tenerla suelta.
+
+### Seis catálogos de nombres se retipean del otro lado
+
+`lineageName`, `temperamentName`, `affinityName`, `metabolismName`,
+`paletteModeName` y `formDescription` devuelven cadenas que el C++ vuelve a
+escribir a mano, y ninguna afirmación las compara. No aparecen en
+`verify_parity.ts`.
+
+*Cómo se manifiesta:* una tilde de más o de menos en uno de los dos lados. El
+codex de la web muestra "Petreo" y el del nativo "Pétreo", o al revés, y las dos
+suites siguen en verde.
+
+### Tres funciones portadas que nadie llama del lado TypeScript
+
+`saludPromedio` (`src/core/evolution.ts`), `yaVolvio` (`expeditions.ts`) y
+`conoceRareza` (`codex.ts`). Están exportadas, tienen gemelo en C++, y no las
+importa ningún archivo de `src/`, `test/`, `tools/` ni `scripts/`.
+
+*Cómo se manifiesta:* se le da vuelta el `>=` a `yaVolvio` en uno solo de los dos
+lados y todo pasa. Que hoy las seis implementaciones coincidan no lo sostiene
+nada.
+
+### El escritor tiene dos ramas que ningún test toca
+
+Los tres guardados de referencia salen de criaturas recién creadas, así que
+`expedicion` y `ultimaCruzaMs` viajan en `null` en los tres. El código de
+`save_manager.cpp` que los serializa **con valor** no se ejecuta ni en
+`npm run parity`, ni en `probarGuardado`, ni en `npm run validar-save`.
+
+*Cómo se manifiesta:* esas líneas escriben una clave mal, o el número como texto,
+o se olvidan un campo. Las tres suites siguen en verde y el error aparece la
+primera vez que alguien manda una criatura de expedición y cierra el juego.
+
+### `battle.h`: diseño sin implementación
+
+Siete funciones declaradas, cero definidas. Llamar a cualquiera compila y falla
+al enlazar. Lo único que se verifica hoy es que el header **compile**, y para eso
+existe `battle.cpp`, que no hace más que incluirlo — porque estuvo roto sin que
+nadie se enterara justamente por no incluirlo nadie.
+
+Es la Fase 4 entera, y de ella depende la única fila abierta de la Fase 3.5.
+
+### Cómo se ve el mundo
+
+Medido mirando el juego con ventana, no deducido:
+
+- **El pasto alto se lee como niebla.** El salto de luminancia contra el pasto
+  base es enorme y la textura de adentro no dice "alto".
+- **El pueblo termina en un rectángulo.** Su verde es `#91AE7B` y el del mundo
+  `#7EA24C`; se encuentran en la línea recta que define `enElPueblo()`. Hoy lo
+  tapa el cordón de árboles, pero los huecos de las sendas lo van a mostrar.
+- **El sprite del árbol se repite.** La *colocación* está bien —se midió: las
+  columnas con copa son tramos contiguos, no un patrón periódico— lo que se
+  repite es el dibujo, con cuatro variantes.
+
+### Suelto
+
+- `open_codex` está declarada como acción de entrada en `godot/project.godot` y
+  no la maneja ningún script. Quedó de cuando el codex era un menú.
+- `godot/scripts/capturar.gd` todavía no tiene su `.uid`. Godot lo va a generar
+  la primera vez que se abra el editor, y ahí conviene commitearlo: los `.uid`
+  sí se versionan.
 
 ---
 

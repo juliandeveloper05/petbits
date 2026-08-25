@@ -54,6 +54,8 @@ add_library(petbits_nucleo STATIC
     src/tileset_gen.cpp
     src/world_gen.cpp
     src/font_gen.cpp
+    # Sin implementar: compila el header para que no se pudra. Ver battle.cpp.
+    src/battle.cpp
 )
 target_include_directories(petbits_nucleo PUBLIC src)
 

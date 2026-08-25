@@ -276,16 +276,16 @@ npm run parity
 ```
 
 Ese comando **ejecuta el TypeScript** de `src/` y vuelca lo que devuelve —2010
-genomas, 80 crianzas, 21 entradas de parseo, 12 hashes, 14 escenarios de
-simulación, 780 rampas de color y 2560 sprites y 23 escenarios de acciones— en un header de C++. Después,
-desde el _Developer Command Prompt_ en `gdext/tests`:
+genomas, 80 crianzas, 21 entradas de `parseSeed`, 14 escenarios de simulación,
+780 rampas de color, 2560 sprites, 23 escenarios de acciones, 3 guardados, 108
+botines de expedición, 72 cruzas y 38 pasos de codex— en un header de C++.
+Después, desde el _Developer Command Prompt_:
 
 ```bash
-cl /std:c++17 /EHsc /utf-8 /O2 /Fe:run_tests.exe test_parity.cpp ..\src\genome.cpp ..\src\traits.cpp ..\src\evolution.cpp ..\src\rng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\src\actions.cpp ..\src\inventory.cpp ..\src\expeditions.cpp ..\src\json.cpp ..\src\save_manager.cpp && run_tests.exe
-ng.cpp ..\src\simulation.cpp ..\src\palette.cpp ..\src\sprite_gen.cpp ..\srcctions.cpp && run_tests.exe
+cd gdext && cmake --build --preset msvc-release && .\build\release\run_tests.exe
 ```
 
-Estado actual: **79.473 comprobaciones, 0 fallas.**
+Estado actual: **80.629 comprobaciones, 0 fallas.**
 
 No hacen falta Godot ni SCons ni godot-cpp: los módulos portados son C++ puro.
 Con un compilador alcanza, así que la paridad se puede comprobar antes de
@@ -322,10 +322,11 @@ petbits/
 │   └── godot-cpp/          submódulo, fijado a 4.3
 │
 ├── godot/                  Proyecto de Godot 4
-│   ├── scenes/             pantalla de arranque (por ahora)
+│   ├── scenes/             las dos pantallas jugables, los arneses de
+│   │                       verificación y las herramientas de PNG
 │   └── scripts/            GDScript
 │
-├── tools/                  verify_parity.ts, sprite_gen.py
+├── tools/                  verify_parity.ts, validar_save.ts
 ├── scripts/                herramientas de desarrollo del lado web
 ├── test/                   168 tests de Vitest
 └── legacy/                 la versión original en JS, como referencia
@@ -351,10 +352,12 @@ npm run lint         # Biome
 ### Herramientas de desarrollo
 
 ```bash
-npm run sheet        # hoja de contacto con N criaturas generadas
-npm run formas       # todas las formas evolutivas posibles, en pixel art
-npm run simular      # simula N días y muestra el log de eventos
-npm run parity       # regenera los vectores de paridad para el C++
+npm run sheet          # hoja de contacto con N criaturas generadas
+npm run formas         # todas las formas evolutivas posibles, en pixel art
+npm run iconos         # los iconos de la PWA
+npm run simular        # simula N días y muestra el log de eventos
+npm run parity         # regenera los vectores de paridad para el C++
+npm run validar-save   # pasa un save por el esquema de la web
 ```
 
 `sheet`, `formas` y `simular` existen porque leer el código no alcanza para
@@ -364,9 +367,46 @@ los tests no.
 ### Nativo
 
 ```bash
-cd gdext && scons                          # debug
-cd gdext && scons target=template_release  # release
+cd gdext && scons                          # la GDExtension, debug
+cd gdext && scons target=template_release  # la GDExtension, release
 ```
+
+El núcleo portado —que es C++ puro y no necesita Godot— se compila y se
+verifica aparte:
+
+```bash
+cd gdext && cmake --build --preset msvc-release && .\build\release\run_tests.exe
+```
+
+### Los arneses de Godot
+
+Cada uno corre una parte del juego de verdad y sale con el número de fallas como
+código de salida. Sin ventana, salvo el último.
+
+```bash
+godot --headless --path godot res://scenes/VerificarInfinito.tscn    # el mundo infinito
+godot --headless --path godot res://scenes/VerificarMundo.tscn       # las dos pantallas, una partida
+godot --headless --path godot res://scenes/VerificarInteriores.tscn  # criadero, codex y la cruza
+godot --headless --path godot res://scenes/VerificarFuente.tscn      # los 117 glifos
+godot --headless --path godot res://scenes/VerificarDialogo.tscn     # el corte de línea de la caja
+godot --headless --path godot res://scenes/VerificarSaveRoto.tscn    # un save ilegible no se pisa
+godot --headless --path godot res://scenes/MedirLayout.tscn          # que PetView entre en 480x270
+godot --headless --path godot --script res://scripts/verificar_puente.gd
+godot --headless --path godot --script res://scripts/probar_guardado.gd
+```
+
+Y para mirar, que es otra cosa que verificar:
+
+```bash
+godot --headless --path godot res://scenes/RegionAPng.tscn   # → godot/region.png
+godot --headless --path godot res://scenes/MapaAPng.tscn     # → godot/mapa.png
+godot --path godot res://scenes/Capturar.tscn                # → godot/captura_*.png
+```
+
+`Capturar` corre **con ventana** a propósito: Godot sin ventana no dibuja, y
+pedirle una captura devuelve negro. Camina con el sistema de entrada de verdad,
+saca siete capturas y cronometra cada cuadro. Es la única forma de ver cómo se
+ve el juego en movimiento — y de saber si cruzar un borde de chunk da un tirón.
 
 ---
 
@@ -402,14 +442,73 @@ contenido de otra. Un save que no valida se pone en cuarentena, nunca se borra.
 
 ## Estado y qué sigue
 
-El detalle completo está en el **[roadmap](ROADMAP.md)**. En dos líneas:
+El detalle completo está en el **[roadmap](ROADMAP.md)**. En tres líneas:
 
 - La web está terminada y desplegada.
-- Del nativo hay cinco módulos portados con paridad verificada (41.051
-  comprobaciones, 0 fallas) y la GDExtension cargando en Godot 4.7.1. La
-  criatura ya vive del lado nativo: envejece, evoluciona y entra en letargo con
-  los mismos números que la web. **Lo próximo es la Fase 2**, poner eso en
-  pantalla.
+- **Los catorce módulos del núcleo están portados**, con paridad verificada
+  contra vectores generados ejecutando el TypeScript: 80.629 comprobaciones, 0
+  fallas. La criatura vive del lado nativo —envejece, evoluciona, entra en
+  letargo, se cruza— con los mismos números que la web.
+- Se camina un **mundo infinito** con pueblo, interiores, recolección y
+  guardado propio. En curso la **Fase 3.6**: que ese mundo se vea como tiene que
+  verse. Después viene el combate.
+
+---
+
+## Qué falta y qué está flojo
+
+Esta sección existe porque un repo que solo cuenta lo que anda es un repo en el
+que no se puede confiar. Todo lo que sigue está comprobado contra el código, con
+archivo y línea en el [roadmap](ROADMAP.md) y en
+[gdext/tests/README.md](gdext/tests/README.md).
+
+### Cobertura que no está
+
+La promesa del proyecto es que una misma semilla da la misma criatura de los dos
+lados, y que el archivo de guardado es idéntico byte a byte. Estos huecos son
+lugares donde esa promesa **hoy se sostiene por casualidad y no por verificación**:
+
+- **`inventory.cpp` es el único módulo portado sin un solo vector generado.**
+  Cambiar `inventarioInicial()` del lado TypeScript no mueve un byte del header
+  de vectores, el C++ sigue devolviendo lo de antes, la suite da cero fallas — y
+  la web arranca con una despensa y el nativo con otra.
+- **`SAVE_VERSION` está escrito tres veces sin nada que las ate**: en
+  `src/state/save.ts`, como literal `version: 5` en los fixtures de
+  `tools/verify_parity.ts`, y en `gdext/src/save_manager.h` — cuyo comentario
+  dice "tiene que coincidir con SAVE_VERSION del TS". Los fixtures de guardados
+  se arman a mano: el generador nunca llama a `createSave`.
+- **Seis funciones tienen gemelo en C++ y cero vectores**: `lineageName`,
+  `temperamentName`, `affinityName`, `metabolismName`, `paletteModeName` y
+  `formDescription`. Las cadenas se retipean del otro lado y nada las compara.
+- **`saludPromedio`, `yaVolvio` y `conoceRareza` no las llama nadie** del lado
+  TypeScript, y están portadas igual.
+- **Las ramas no nulas de `expedicion` y `ultimaCruzaMs` del escritor** no las
+  ejerce ninguna suite: los tres guardados de referencia salen de criaturas
+  recién creadas, así que los dos campos viajan en `null`.
+
+### Se ve mal, no está roto
+
+Visto corriendo el juego con ventana, no deducido:
+
+- **El pasto alto se lee como niebla.** El salto de luz contra el pasto base es
+  enorme y adentro no hay textura que diga "alto".
+- **El pueblo termina en un rectángulo.** Su verde (`#91AE7B`) y el del mundo
+  (`#7EA24C`) se encuentran en una línea recta. Hoy lo tapa el cordón de
+  árboles; en los huecos de las sendas se va a ver.
+- **El pueblo sigue sin rehacerse**: caminos en ele de un tile, entradas de una
+  piedra suelta, plaza rectangular. Está en el plan de la Fase 3.6 y no se hizo.
+
+### Fases que no arrancaron
+
+- **Fase 4, combate.** `battle.h` tiene el diseño y **ninguna** de sus siete
+  funciones implementada; lo único que se verifica de él es que compile. Las
+  criaturas salvajes del pasto alto dependen de esto.
+- **Fase 5** (audio y pulido) y **Fase 6** (exportables).
+
+### Suelto
+
+- La acción de entrada `open_codex` está declarada en `project.godot` y no la
+  maneja nadie. Quedó de cuando el codex era un menú y ahora es un lugar.
 
 ---
 

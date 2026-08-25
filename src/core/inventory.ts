@@ -10,8 +10,6 @@
  * estómago. Por eso vive en el estado de la partida y no en cada criatura.
  */
 
-import type { FoodKind } from "./evolution.ts";
-
 export type Inventario = Record<string, number>;
 
 /**
@@ -61,11 +59,3 @@ export function agregarVarios(inventario: Inventario, botin: Inventario): Invent
   }
   return resultado;
 }
-
-/** Qué tipo de comida es cada id. Lo usa el botín de las expediciones. */
-export const TIPO_POR_ALIMENTO: Record<string, FoodKind> = {
-  baya: "dulce",
-  raiz: "mineral",
-  larva: "proteina",
-  cristal: "raro",
-};
