@@ -108,6 +108,17 @@ var ruta_mundo := RUTA_MUNDO
 ## datos del usuario se llenaba de saves de prueba que nadie borraba nunca.
 var guardar_al_salir := true
 
+## Si esta sesión tiene PROHIBIDO guardar.
+##
+## Se prende cuando había un save que no se pudo leer y tampoco se pudo apartar.
+## En ese caso no sabemos qué tiene adentro, no lo pudimos poner a salvo, y
+## escribirle encima sería destruir la partida de alguien — puede ser el archivo
+## lockeado por otra copia del juego, o el antivirus mirándolo en el arranque,
+## que son dos cosas que se arreglan solas en cinco minutos.
+##
+## Se juega igual. Lo que no pasa es que se escriba.
+var guardar_bloqueado := false
+
 ## Con qué genoma nace la criatura si no hay partida guardada.
 ##
 ## Vacío significa al azar, que es lo que corresponde jugando. Los tests lo fijan
@@ -227,8 +238,16 @@ func _cargar_o_nacer() -> void:
 
 	var archivo := FileAccess.open(ruta_save, FileAccess.READ)
 	if archivo == null:
-		anotar("No se pudo abrir la partida guardada. Empezamos de nuevo.", "aviso")
-		_nacer_nueva()
+		# El archivo ESTÁ —`file_exists` dijo que sí— y no se pudo abrir. No
+		# sabemos qué tiene adentro, así que lo último que hay que hacer es
+		# escribirle encima.
+		#
+		# Esta rama llamaba derecho a `_nacer_nueva()`, que termina en `guardar()`,
+		# que abre el archivo con WRITE — y WRITE trunca. Una partida de meses se
+		# perdía por un lock de cinco minutos, y sin dejar ningún `.rota.json`,
+		# que es justo lo que la constante de más arriba promete que no pasa.
+		anotar("No se pudo abrir la partida guardada.", "aviso")
+		_empezar_sin_pisar()
 		return
 
 	var texto := archivo.get_as_text()
@@ -236,13 +255,11 @@ func _cargar_o_nacer() -> void:
 
 	var r: Dictionary = core.cargar(texto)
 	if not r["ok"]:
+		# Acá sí se apartaba el save — pero se ignoraba si el renombrado había
+		# funcionado, y si fallaba se seguía a `_nacer_nueva()` igual. El mismo
+		# agujero que la rama de arriba, un paso más tarde.
 		anotar("La partida guardada no se pudo leer: %s" % r["mensaje"], "aviso")
-		anotar("Se guardó una copia en %s por las dudas." % ruta_cuarentena, "tenue")
-		DirAccess.rename_absolute(
-			ProjectSettings.globalize_path(ruta_save),
-			ProjectSettings.globalize_path(ruta_cuarentena)
-		)
-		_nacer_nueva()
+		_empezar_sin_pisar()
 		return
 
 	# El tiempo corrió mientras el juego estaba cerrado. Esta es la llamada que
@@ -251,6 +268,46 @@ func _cargar_o_nacer() -> void:
 	anotar("Volviste.", "bien")
 	if sim.get("ticks", 0) > 0:
 		anotar_eventos(sim)
+
+
+## Empieza de nuevo SIN pisar el save que no se pudo leer.
+##
+## El orden importa y es el único que no pierde datos:
+##
+##   1. Se intenta apartar el archivo. Si sale bien, el original está a salvo con
+##      otro nombre y recién ahí se puede nacer de nuevo y guardar encima.
+##   2. Si NO sale bien, se juega igual pero esta sesión no guarda nada. Un juego
+##      que arranca y no guarda es una molestia; un juego que arranca borrando la
+##      partida de alguien es otra cosa.
+##
+## Nacer primero y apartar después no sirve: `_nacer_nueva()` termina en
+## `guardar()`, y para cuando el renombrado falle el archivo ya no está.
+func _empezar_sin_pisar() -> void:
+	if _apartar_el_ilegible():
+		_nacer_nueva()
+		return
+
+	guardar_bloqueado = true
+	anotar("No se pudo apartar la partida vieja, así que esta sesión no se guarda.", "aviso")
+	anotar("Cerrá lo que esté usando %s y volvé a abrir el juego." % ruta_save, "tenue")
+	_nacer_nueva()
+
+
+## Corre el save ilegible a la cuarentena. Dice si lo logró.
+##
+## Va aparte de `_empezar_sin_pisar()` para que se pueda probar sola: el camino
+## entero pasa por `iniciar()`, que es idempotente, así que un solo proceso puede
+## ejercerlo una sola vez. El caso "la cuarentena SÍ se pudo escribir" queda
+## afuera de ese único intento y necesita esta puerta.
+func _apartar_el_ilegible() -> bool:
+	var err := DirAccess.rename_absolute(
+		ProjectSettings.globalize_path(ruta_save),
+		ProjectSettings.globalize_path(ruta_cuarentena)
+	)
+	if err != OK:
+		return false
+	anotar("Se guardó una copia en %s por las dudas." % ruta_cuarentena, "tenue")
+	return true
 
 
 func _nacer_nueva() -> void:
@@ -320,6 +377,11 @@ func marcar_recolectado(celda: Vector2i) -> void:
 
 func guardar() -> void:
 	if core == null:
+		return
+	# La única escritura sobre el save compartido de todo el programa. Si esta
+	# sesión arrancó sin poder leer ni apartar el archivo de antes, acá es donde
+	# se frena.
+	if guardar_bloqueado:
 		return
 	var texto: String = core.guardar(ahora_ms())
 	if texto == "":

@@ -1,0 +1,12 @@
+; Corre verificar_save_roto.gd. Sin nodos: todo lo arma el script.
+;
+; Es una ESCENA y no un `--script` porque necesita el autoload `Partida`, y con
+; `--script` Godot reemplaza el bucle principal y los autoloads nunca se
+; instancian.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/verificar_save_roto.gd" id="1_tool"]
+
+[node name="VerificarSaveRoto" type="Node"]
+script = ExtResource("1_tool")
