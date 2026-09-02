@@ -154,14 +154,45 @@ constexpr uint64_t CAMPO_HITO = 0x81707ULL;
 // generadores de islas, al revés. Lejos del pueblo el mundo es el que el ruido
 // quiera; cerca, hay suelo.
 
-/** Hasta dónde llega la mano. Más allá de esto el ruido manda solo. */
+/** Hasta dónde llega la mano para LEVANTAR el terreno. Más allá manda el ruido. */
 constexpr double RADIO_TIERRA_FIRME = 150.0;
+
+/**
+ * El techo que saca al pueblo del roquedal, que es una mano MUCHO más chica.
+ *
+ * Tenía el mismo radio que el piso, y eso dejaba ciento cincuenta tiles sin una
+ * piedra ni una veta: cinco pantallas en cada dirección sin mineral, que es la
+ * comida de la rama pétrea. Medido en las tres semillas, cero en todos los
+ * anillos hasta el 150 y encendido de golpe justo ahí.
+ *
+ * La garantía que hace falta es sobre el pueblo, que mide treinta por diecisiete
+ * — o sea diecisiete tiles del origen a la esquina. Adentro del núcleo el techo
+ * manda entero; entre el núcleo y el borde se suelta con una S; afuera no existe.
+ */
+constexpr double NUCLEO_SIN_ROCA = 25.0;
+constexpr double RADIO_SIN_ROCA = 55.0;
+
+/**
+ * Cuánto manda el techo en ese punto: 1 adentro del núcleo, 0 pasado el borde.
+ *
+ * La S es la de Hermite, que llega a los dos extremos con pendiente cero. Con
+ * una rampa lineal se vería el círculo, y con el coseno elevado del piso se cae
+ * demasiado rápido: a diecisiete tiles —la esquina del pueblo— ya valía 0,38, y
+ * el pueblo se despertaba con un veinte por ciento de piedra alrededor.
+ */
+double sinRoca(double x, double y) {
+    const double d = std::sqrt(x * x + y * y);
+    if (d <= NUCLEO_SIN_ROCA) return 1.0;
+    if (d >= RADIO_SIN_ROCA) return 0.0;
+    const double u = (d - NUCLEO_SIN_ROCA) / (RADIO_SIN_ROCA - NUCLEO_SIN_ROCA);
+    return 1.0 - u * u * (3.0 - 2.0 * u);
+}
 
 /** Cuánto se levanta el terreno justo en el origen. */
 constexpr double FUERZA_TIERRA_FIRME = 0.30;
 
-double tierraFirme(double x, double y) {
-    const double d = std::sqrt(x * x + y * y) / RADIO_TIERRA_FIRME;
+double tierraFirme(double x, double y, double radio) {
+    const double d = std::sqrt(x * x + y * y) / radio;
     if (d >= 1.0) return 0.0;
     // Coseno elevado: llega a cero con pendiente cero, así que no se ve el borde
     // del círculo. Con una rampa lineal aparecería un anillo en el terreno.
@@ -377,7 +408,7 @@ Bioma biomaEn(Seed semilla, int32_t x, int32_t y) {
     const double fx = static_cast<double>(x);
     const double fy = static_cast<double>(y);
 
-    const double cerca = tierraFirme(fx, fy);
+    const double cerca = tierraFirme(fx, fy, RADIO_TIERRA_FIRME);
     double altura = contraste(fbm(semilla, fx / ESCALA_ALTURA, fy / ESCALA_ALTURA, CAMPO_ALTURA, 4),
                               CONTRASTE_ALTURA) +
                     cerca;
@@ -387,12 +418,28 @@ Bioma biomaEn(Seed semilla, int32_t x, int32_t y) {
     // origen sobre un pedregal, que es sólido y tampoco se camina. El techo es
     // la otra mitad del piso.
     //
-    // Solo se acota adentro del radio. Más allá el mundo puede tener todas las
-    // montañas que quiera — la garantía es sobre el barrio del jugador, no sobre
-    // el mundo.
-    if (cerca > 0.0) {
+    // ---
+    //
+    // PERO EL TECHO NO PUEDE TENER EL MISMO RADIO QUE EL PISO.
+    //
+    // Lo tenía, y `cerca > 0.0` es cierto para CUALQUIER punto de adentro del
+    // círculo de ciento cincuenta. Así que no había una sola piedra —ni una sola
+    // veta, que es la comida de la rama pétrea— en ciento cincuenta tiles a la
+    // redonda: cinco pantallas en cada dirección, medido en las tres semillas y
+    // dando cero en todos los anillos hasta el 150.
+    //
+    // La garantía que hacía falta era sobre el PUEBLO, que mide treinta por
+    // diecisiete. Cuarenta tiles de radio lo cubren con margen y dejan que el
+    // mineral exista a una pantalla y media de la plaza.
+    //
+    // Y se suelta con una mezcla y no con un corte. Un clamp duro dibuja un
+    // círculo perfecto en el terreno: cualquier montaña que cruce el borde queda
+    // cortada con regla, que es exactamente el anillo que el coseno del piso se
+    // toma el trabajo de evitar.
+    const double manda = sinRoca(fx, fy);
+    if (manda > 0.0) {
         const double techo = NIVEL_ROCA - 0.02;
-        if (altura > techo) altura = techo;
+        if (altura > techo) altura += manda * (techo - altura);
     }
 
     if (altura < NIVEL_AGUA) return Bioma::Lago;

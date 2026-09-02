@@ -1750,10 +1750,23 @@ static void probarMundo() {
     // El mismo tile del mundo, preguntado como parte de dos chunks vecinos.
     // Si el generador guardara cualquier estado entre tile y tile, acá se
     // partiría el mundo en cuadrículas visibles.
+    //
+    // Cada chunk se compara contra `tileEnMundo`, que es la función pura, y no
+    // contra el chunk de al lado. Es más fuerte: dos chunks pueden coincidir
+    // entre sí y estar los dos mal.
+    //
+    // Y entre las dos comprobaciones se toca el borde entero. `cierraX` barre la
+    // columna 0 del vecino de la derecha en sus treinta y dos filas; `cierraY`
+    // barre la fila 0 del de abajo en sus treinta y dos columnas. Comprobado
+    // ensuciando la última columna de `generarChunk` a propósito: saltan
+    // cuarenta fallas por la comprobación horizontal.
     for (Seed semilla : SEMILLAS) {
         for (int32_t cx = -2; cx <= 2; ++cx) {
             for (int32_t cy = -2; cy <= 2; ++cy) {
-                const Chunk izq = generarChunk(semilla, cx, cy);
+                // El de la derecha y el de abajo. El propio no hace falta: lo
+                // cubre esta misma vuelta cuando le toca ser el vecino de otro.
+                // Acá se generaba también, mil veinticuatro tiles por vuelta,
+                // setenta y cinco vueltas por semilla — y no se leía nunca.
                 const Chunk der = generarChunk(semilla, cx + 1, cy);
                 const Chunk abajo = generarChunk(semilla, cx, cy + 1);
 
@@ -1843,12 +1856,29 @@ static void probarMundo() {
     // Sobre una región grande, ningún tile puede comerse el mundo ni faltar del
     // todo. El fallo típico de un generador mal calibrado es pasto hasta el
     // horizonte, y eso pasa la costura y el determinismo con nota perfecta.
+    // La ventana se mira LEJOS DEL PUEBLO, y esa es la parte importante.
+    //
+    // Antes empezaba en el (0, 0), que es el centro de la plaza. El pueblo va de
+    // x -15 a 14 y de y -8 a 8, así que se solapaban en un rincón de quince por
+    // nueve — y ese rincón trae, a mano, estanque, borde de árboles, la arena de
+    // la orilla y las piedras de las entradas.
+    //
+    // O sea que las siete afirmaciones de "este tile aparece al menos una vez"
+    // las cumplía el PUEBLO, no el generador. Comprobado poniendo
+    // `NIVEL_AGUA = -1` —ni un lago en todo el mundo— y volviendo a correr:
+    // cero fallas. El bloque que existe para atrapar "pasto hasta el horizonte"
+    // no miraba el horizonte.
+    //
+    // Desde el mil está fuera del pueblo y fuera del radio de tierra firme, así
+    // que lo que se mide es el generador solo.
+    const int32_t ORIGEN = 1000;
+
     for (Seed semilla : SEMILLAS) {
         int cuenta[static_cast<size_t>(Tile::CANTIDAD)] = {};
         const int LADO = 256;
         for (int32_t y = 0; y < LADO; ++y) {
             for (int32_t x = 0; x < LADO; ++x) {
-                ++cuenta[static_cast<size_t>(tileEnMundo(semilla, x, y))];
+                ++cuenta[static_cast<size_t>(tileEnMundo(semilla, ORIGEN + x, ORIGEN + y))];
             }
         }
         const int total = LADO * LADO;
@@ -1880,6 +1910,34 @@ static void probarMundo() {
             revisar(cuenta[static_cast<size_t>(t)] == 0, "variedad",
                     "se generó un tile de interior a la intemperie");
         }
+    }
+
+    // -- 3b. Y cerca del pueblo hay mineral ---------------------------------
+    //
+    // Lo de arriba mira el mundo lejano. Esto mira el barrio, que es otra
+    // pregunta y tiene otra respuesta.
+    //
+    // El techo que saca al pueblo del roquedal tenía el mismo radio que el piso
+    // —ciento cincuenta tiles— así que no había una sola veta en cinco pantallas
+    // a la redonda. La veta es la comida de la rama pétrea: una criatura de ese
+    // linaje no tenía qué comer sin caminar media hora.
+    //
+    // No se puede pedir una cantidad, porque depende de la semilla: de las tres
+    // que se prueban, una tiene el veinte por ciento de piedra a treinta tiles y
+    // otra casi nada hasta los setenta. Lo que sí se puede pedir es que EXISTA.
+    for (Seed semilla : SEMILLAS) {
+        int vetas = 0;
+        const int32_t CERCA = 100;
+        for (int32_t y = -CERCA; y <= CERCA && vetas == 0; y += 2) {
+            for (int32_t x = -CERCA; x <= CERCA; x += 2) {
+                if (hallazgoEn(semilla, x, y) == Hallazgo::Veta) {
+                    ++vetas;
+                    break;
+                }
+            }
+        }
+        revisar(vetas > 0, "mineral cerca del pueblo",
+                "no hay una sola veta en cien tiles a la redonda del origen");
     }
 
     // -- 4. Caminabilidad ---------------------------------------------------
