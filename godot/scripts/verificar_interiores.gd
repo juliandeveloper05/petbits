@@ -174,6 +174,16 @@ func _correr() -> void:
 	_afirmar(Partida.mapa == "criadero", "y la partida se acuerda de dónde estás")
 	_afirmar(Partida.venir_de == "pueblo", "y de dónde venías")
 
+	# Y `Partida.donde` quedó al día. Si no, cerrar el juego acá mismo —sin haber
+	# movido un píxel desde que se cruzó— guardaría el criadero con las
+	# coordenadas que la criatura tenía en el pueblo, y al reabrir aparecería
+	# afuera de la sala.
+	_afirmar(
+		Partida.donde.is_equal_approx(mundo._criatura.position),
+		"cruzar la puerta deja Partida.donde al día (donde %s, criatura %s)"
+		% [Partida.donde, mundo._criatura.position]
+	)
+
 	# Y se entra POR LA PUERTA. Cruzar una puerta no conserva la posición: la
 	# posición guardada vale para continuar la partida, no para atravesar paredes.
 	var entrada: Vector2 = Mapas.script_de("criadero").ENTRADA

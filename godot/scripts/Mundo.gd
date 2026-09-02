@@ -178,6 +178,21 @@ func _cargar_mapa(id: String, con_fundido: bool) -> void:
 	# del criadero es lo que uno espera, y guardarla obligaría a decidir qué pasa
 	# cuando el mapa cambia de forma.
 	_criatura.position = _volver_donde_corresponde()
+
+	# Y `Partida.donde` queda al día EN ESTE MISMO MOMENTO.
+	#
+	# No es lo mismo que lo de arriba. Arriba se decide dónde aparecés; acá se
+	# mantiene consistente el par (mapa, posición) que se guarda en disco.
+	#
+	# `Partida.donde` se escribía únicamente en `_process`, o sea solo al caminar.
+	# Así que cruzar una puerta y cerrar el juego sin mover un píxel —durante el
+	# fundido, o parado leyendo el cartel— guardaba el mapa NUEVO con la posición
+	# del VIEJO: {mapa: "criadero", x: -168}, que es la puerta del criadero vista
+	# desde el pueblo, con x negativa. Adentro de una sala de 30×17 eso está
+	# afuera. Al reabrir, `_volver_donde_corresponde()` restauraba ese par y
+	# aparecías fuera del cuarto.
+	Partida.donde = _criatura.position
+
 	if _infinito():
 		_actualizar_chunks()
 	_ubicar_camara(true)
