@@ -346,6 +346,20 @@ func _cargar_mundo() -> void:
 
 
 func guardar_mundo() -> void:
+	# Si la partida no arrancó, no hay nada que guardar y sí hay algo que perder.
+	#
+	# `Partida` es un autoload: se instancia con SOLO ABRIR una escena, la
+	# mencione o no. Cinco escenas del proyecto no llaman nunca a `iniciar()`
+	# —MapaAPng, RegionAPng, MedirLayout, VerificarDialogo y Arranque— y todas
+	# terminan pasando por `_notification`, que llama acá.
+	#
+	# Sin este guard, regenerar el PNG del mapa te borraba dónde estabas parado y
+	# todo lo que hubieras levantado del suelo: `recolectado` vale {} y `donde`
+	# vale cero, así que se escribía un mundo vacío encima del tuyo. `guardar()`
+	# ya tiene el mismo guard; acá faltaba.
+	if core == null:
+		return
+
 	var claves: Array = recolectado.keys()
 	# Si se pasó del tope, se tiran las más viejas. `keys()` conserva el orden de
 	# inserción en GDScript, así que las primeras son las primeras que se

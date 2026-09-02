@@ -55,6 +55,18 @@ func _ready() -> void:
 
 	print("\nPetBits — un save que no se puede leer no se pisa\n")
 
+	# ---- Antes de arrancar nada -------------------------------------------
+	#
+	# `Partida` es un autoload: existe con SOLO ABRIR una escena, la mencione o
+	# no. Cinco escenas del proyecto no llaman nunca a `iniciar()` —MapaAPng,
+	# RegionAPng, MedirLayout, VerificarDialogo y Arranque— y todas pasan por
+	# `_notification` al cerrarse, que llama a `guardar()` y `guardar_mundo()`.
+	#
+	# `guardar_mundo()` no tenía el guard que sí tenía `guardar()`, así que
+	# regenerar el PNG del mapa escribía un mundo vacío encima del tuyo: te
+	# borraba dónde estabas y todo lo que hubieras levantado del suelo.
+	_probar_que_sin_iniciar_no_escribe()
+
 	_limpiar()
 
 	# El save "de antes", el que hay que no perder.
@@ -108,6 +120,29 @@ func _ready() -> void:
 	else:
 		print("\n%d falla(s)." % _fallas)
 	get_tree().quit(_fallas)
+
+
+## Sin `iniciar()`, nada se escribe. Ni el save ni el mundo.
+func _probar_que_sin_iniciar_no_escribe() -> void:
+	var save := "user://verificacion_sin_iniciar.json"
+	var mundo := "user://verificacion_sin_iniciar_mundo.json"
+	for r in [save, mundo]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(r))
+
+	Partida.ruta_save = save
+	Partida.ruta_mundo = mundo
+
+	# Es exactamente lo que hace `_notification` al cerrar una escena.
+	Partida.guardar()
+	Partida.guardar_mundo()
+
+	_afirmar(not FileAccess.file_exists(save), "sin iniciar(), guardar() no escribe")
+	_afirmar(
+		not FileAccess.file_exists(mundo), "sin iniciar(), guardar_mundo() tampoco"
+	)
+
+	for r in [save, mundo]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(r))
 
 
 ## Con una cuarentena escribible, el save ilegible se aparta en vez de perderse.

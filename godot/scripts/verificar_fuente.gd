@@ -29,6 +29,19 @@ var _fallas := 0
 
 
 func _ready() -> void:
+	# Los seams van ANTES de `iniciar()`, siempre.
+	#
+	# Este arnés no ponía ninguno, así que `ruta_save` seguía siendo
+	# "user://partida.json": leía la partida de quien lo corriera, le simulaba la
+	# criatura hasta la hora actual, y al salir se la reescribía — porque
+	# `guardar_al_salir` arranca en true. Correr un test de tipografía te movía la
+	# criatura. Y el comando está documentado en el README.
+	Partida.guardar_al_salir = false
+	Partida.ruta_save = "user://verificacion_fuente.json"
+	Partida.ruta_cuarentena = "user://verificacion_fuente.rota.json"
+	Partida.ruta_mundo = "user://verificacion_fuente_mundo.json"
+	Partida.semilla_inicial = "A3F0-91C4-77BE-2D08"
+
 	if not Partida.iniciar():
 		print("La GDExtension no cargó.")
 		get_tree().quit(1)
@@ -101,6 +114,13 @@ func _ready() -> void:
 		int(ancho_ajeno) != avance,
 		"un carácter ajeno a la fuente no mide un avance (midió %d)" % int(ancho_ajeno)
 	)
+
+	for r in [
+		"user://verificacion_fuente.json",
+		"user://verificacion_fuente.rota.json",
+		"user://verificacion_fuente_mundo.json",
+	]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(r))
 
 	if _fallas == 0:
 		print("\nTodo bien: Godot encuentra los %d glifos." % Partida.core.fuente_glifos().size())
