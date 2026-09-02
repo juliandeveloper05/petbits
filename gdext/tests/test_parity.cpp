@@ -693,27 +693,59 @@ static void probarGuardado() {
 static void probarDespensa() {
     bloque("la despensa se gasta");
 
+    // ---- La secuencia, contra vectores generados -------------------------
+    //
+    // Los valores esperados salen de EJECUTAR el TypeScript. Acá estaban
+    // escritos a mano —tres bayas, cero cristales, total siete— y eso dejaba a
+    // `inventory.cpp` como el único módulo portado que podía divergir del TS sin
+    // que nada avisara: cambiar `inventarioInicial()` del otro lado no movía un
+    // byte del header generado, el C++ seguía devolviendo lo de antes, y esto
+    // daba verde con la web arrancando con una despensa y el nativo con otra.
+    //
+    // Se compara el estado ENTERO después de cada paso, con las claves en orden.
+    // El orden importa tanto como las cantidades: es el que decide cómo salen en
+    // `partida.json`, y por lo tanto si el archivo es idéntico byte a byte del
+    // lado que lo escriba.
+    Inventario despensa = inventarioInicial();
+    bool primera = true;
+
+    for (const auto& v : vectores::DESPENSAS) {
+        char ctx[192];
+
+        if (primera) {
+            std::snprintf(ctx, sizeof(ctx), "la despensa recién empezada");
+            primera = false;
+        } else if (v.esConsumir) {
+            std::snprintf(ctx, sizeof(ctx), "consumir \"%s\"", v.id);
+            const bool pudo = despensa.consumir(v.id);
+            revisarEnteros(pudo ? 1 : 0, v.pudo, ctx, "¿pudo?");
+        } else {
+            std::snprintf(ctx, sizeof(ctx), "agregar %lld de \"%s\"",
+                          static_cast<long long>(v.cantidad), v.id);
+            despensa.agregar(v.id, v.cantidad);
+        }
+
+        std::string estado;
+        for (const auto& [id, cantidad] : despensa.items()) {
+            if (!estado.empty()) estado += ',';
+            estado += id;
+            estado += ':';
+            estado += std::to_string(cantidad);
+        }
+        const std::string detalle =
+            "C++ dejó \"" + estado + "\", el TS deja \"" + std::string(v.estado) + "\"";
+        revisar(estado == v.estado, ctx, detalle.c_str());
+
+        revisarEnteros(static_cast<uint64_t>(despensa.total()),
+                       static_cast<uint64_t>(v.total), ctx, "total");
+    }
+
+    // ---- Lo que los vectores NO pueden cubrir ----------------------------
+    //
+    // El circuito completo con una acción que falla. Es de las pocas cosas de
+    // este archivo que no se pueden expresar como un vector, porque cruza dos
+    // módulos: la despensa y las acciones.
     const Inventario inicial = inventarioInicial();
-    revisarEnteros(static_cast<uint64_t>(inicial.cuanto("baya")), 3, "inicial", "bayas");
-    revisarEnteros(static_cast<uint64_t>(inicial.cuanto("cristal")), 0, "inicial", "cristales");
-    revisarEnteros(static_cast<uint64_t>(inicial.total()), 7, "inicial", "total");
-
-    // Consumir descuenta de a una y se planta en cero.
-    Inventario i = inicial;
-    revisar(i.consumir("baya"), "consumir", "tendría que haber bayas");
-    revisarEnteros(static_cast<uint64_t>(i.cuanto("baya")), 2, "consumir", "quedan 2");
-    revisar(i.consumir("baya"), "consumir", "tendría que haber bayas");
-    revisar(i.consumir("baya"), "consumir", "tendría que haber bayas");
-    revisar(!i.consumir("baya"), "consumir", "sin bayas no se puede consumir");
-    revisarEnteros(static_cast<uint64_t>(i.cuanto("baya")), 0, "consumir", "no baja de cero");
-
-    // El cristal arranca en cero: es lo raro y tiene que sentirse así.
-    revisar(!inicial.hay("cristal"), "cristal", "arranca sin cristales");
-
-    // Un id que no existe no rompe ni inventa comida.
-    Inventario j = inicial;
-    revisar(!j.consumir("piedra"), "id inexistente", "no debería consumir nada");
-    revisarEnteros(static_cast<uint64_t>(j.total()), 7, "id inexistente", "el total no cambió");
 
     // Y el circuito completo: la copia se descarta si la acción falla. Se simula
     // con una criatura de expedición, que rechaza toda acción.

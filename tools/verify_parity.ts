@@ -37,6 +37,13 @@ import { type Crianza, resolverAdulto, resolverJuvenil } from "../src/core/evolu
 import { DESTINOS, describirBotin, resolverBotin } from "../src/core/expeditions.ts";
 import { GENOME_LAYOUT } from "../src/core/genome.ts";
 import { type Genes, decodeGenome, formatSeed, hashString, parseSeed } from "../src/core/genome.ts";
+import {
+  type Inventario,
+  agregar,
+  consumir,
+  inventarioInicial,
+  total,
+} from "../src/core/inventory.ts";
 import { buildRamp } from "../src/core/palette.ts";
 import { deriveSeed, mulberry32, splitmix64 } from "../src/core/rng.ts";
 import { TICK_MS, createCreature, localDayIndex, simulate } from "../src/core/simulation.ts";
@@ -1445,6 +1452,90 @@ for (const v of NUMEROS) {
 lineas.push("};");
 lineas.push("");
 
+// --- inventory ---
+//
+// Era el único módulo portado sin un solo vector. Toda la cobertura de la
+// despensa eran unos números tipeados a mano en `test_parity.cpp`, que es
+// exactamente lo que este archivo existe para no hacer: cambiar
+// `inventarioInicial()` de este lado no movía un byte del header, el C++ seguía
+// devolviendo lo de antes, y la suite daba cero fallas con la web arrancando con
+// una despensa y el nativo con otra.
+//
+// Se emite una SECUENCIA de operaciones con el estado completo después de cada
+// una. El orden de las claves importa tanto como las cantidades: es el que
+// decide en qué orden salen en `partida.json`, y por lo tanto si el archivo es
+// idéntico byte a byte del lado que lo escriba.
+//
+// Los casos raros están a propósito y son los que separan un port bueno de uno
+// que anda de casualidad: consumir algo que está en cero, consumir algo que no
+// existe, agregar cero, agregar negativo, y una clave nueva —que tiene que ir
+// al FINAL y no ordenarse.
+type OpDespensa = { op: "agregar"; id: string; cantidad: number } | { op: "consumir"; id: string };
+
+const OPS_DESPENSA: OpDespensa[] = [
+  { op: "agregar", id: "baya", cantidad: 5 },
+  { op: "consumir", id: "raiz" },
+  { op: "consumir", id: "cristal" },
+  { op: "agregar", id: "hongo", cantidad: 3 },
+  { op: "agregar", id: "baya", cantidad: 0 },
+  { op: "agregar", id: "larva", cantidad: -2 },
+  { op: "consumir", id: "hongo" },
+  { op: "consumir", id: "noexiste" },
+  { op: "agregar", id: "cristal", cantidad: 1 },
+  { op: "consumir", id: "larva" },
+  { op: "consumir", id: "larva" },
+  { op: "consumir", id: "larva" },
+  { op: "agregar", id: "raiz", cantidad: 100 },
+  { op: "consumir", id: "cristal" },
+];
+
+lineas.push("struct VectorDespensa {");
+lineas.push("    uint8_t     esConsumir;");
+lineas.push("    const char* id;");
+lineas.push("    int64_t     cantidad;   ///< solo para agregar");
+lineas.push("    uint8_t     pudo;       ///< resultado de consumir; 1 para agregar");
+lineas.push('    const char* estado;     ///< "baya:8,raiz:1,...", EN ORDEN de claves');
+lineas.push("    int64_t     total;");
+lineas.push("};");
+lineas.push("");
+lineas.push("inline const VectorDespensa DESPENSAS[] = {");
+
+{
+  let despensa = inventarioInicial();
+  const serializar = (i: Inventario) =>
+    Object.entries(i)
+      .map(([k, v]) => `${k}:${v}`)
+      .join(",");
+
+  // El estado inicial, antes de tocar nada.
+  lineas.push(
+    `    {0, "", 0LL, 1, ${JSON.stringify(serializar(despensa))}, ${total(despensa)}LL},`,
+  );
+
+  for (const o of OPS_DESPENSA) {
+    let pudo = 1;
+    if (o.op === "consumir") {
+      const r = consumir(despensa, o.id);
+      pudo = r === null ? 0 : 1;
+      if (r !== null) despensa = r;
+    } else {
+      despensa = agregar(despensa, o.id, o.cantidad);
+    }
+    const campos = [
+      o.op === "consumir" ? 1 : 0,
+      JSON.stringify(o.id),
+      `${o.op === "agregar" ? o.cantidad : 0}LL`,
+      pudo,
+      JSON.stringify(serializar(despensa)),
+      `${total(despensa)}LL`,
+    ];
+    lineas.push(`    {${campos.join(", ")}},`);
+  }
+}
+
+lineas.push("};");
+lineas.push("");
+
 lineas.push("} // namespace petbits::vectores");
 lineas.push("");
 
@@ -1463,4 +1554,5 @@ console.log(`  ${DESTINOS.length * 6 * SALIDAS.length} botines de expedición`);
 console.log(`  ${PARES_CRUZA.length * NONCES_CRUZA.length} cruzas`);
 console.log(`  ${SEEDS_CODEX.length + 2} pasos de codex`);
 console.log(`  ${NUMEROS.length} números escritos`);
+console.log(`  ${OPS_DESPENSA.length + 1} pasos de despensa`);
 console.log("\nAhora compilá y corré los tests de C++ — ver gdext/tests/README.md");

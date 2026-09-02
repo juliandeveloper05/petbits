@@ -285,7 +285,7 @@ Después, desde el _Developer Command Prompt_:
 cd gdext && cmake --build --preset msvc-release && .\build\release\run_tests.exe
 ```
 
-Estado actual: **80.629 comprobaciones, 0 fallas.**
+Estado actual: **80.659 comprobaciones, 0 fallas.**
 
 No hacen falta Godot ni SCons ni godot-cpp: los módulos portados son C++ puro.
 Con un compilador alcanza, así que la paridad se puede comprobar antes de
@@ -446,7 +446,7 @@ El detalle completo está en el **[roadmap](ROADMAP.md)**. En tres líneas:
 
 - La web está terminada y desplegada.
 - **Los catorce módulos del núcleo están portados**, con paridad verificada
-  contra vectores generados ejecutando el TypeScript: 80.629 comprobaciones, 0
+  contra vectores generados ejecutando el TypeScript: 80.659 comprobaciones, 0
   fallas. La criatura vive del lado nativo —envejece, evoluciona, entra en
   letargo, se cruza— con los mismos números que la web.
 - Se camina un **mundo infinito** con pueblo, interiores, recolección y
@@ -468,15 +468,6 @@ La promesa del proyecto es que una misma semilla da la misma criatura de los dos
 lados, y que el archivo de guardado es idéntico byte a byte. Estos huecos son
 lugares donde esa promesa **hoy se sostiene por casualidad y no por verificación**:
 
-- **`inventory.cpp` es el único módulo portado sin un solo vector generado.**
-  Cambiar `inventarioInicial()` del lado TypeScript no mueve un byte del header
-  de vectores, el C++ sigue devolviendo lo de antes, la suite da cero fallas — y
-  la web arranca con una despensa y el nativo con otra.
-- **`SAVE_VERSION` está escrito tres veces sin nada que las ate**: en
-  `src/state/save.ts`, como literal `version: 5` en los fixtures de
-  `tools/verify_parity.ts`, y en `gdext/src/save_manager.h` — cuyo comentario
-  dice "tiene que coincidir con SAVE_VERSION del TS". Los fixtures de guardados
-  se arman a mano: el generador nunca llama a `createSave`.
 - **Seis funciones tienen gemelo en C++ y cero vectores**: `lineageName`,
   `temperamentName`, `affinityName`, `metabolismName`, `paletteModeName` y
   `formDescription`. Las cadenas se retipean del otro lado y nada las compara.

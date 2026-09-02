@@ -72,7 +72,7 @@ entradas de parseo, 12 hashes, 7 semillas de PRNG, 14 escenarios de simulación,
 botines de expedición contra lo que devuelve el TypeScript. No hacen falta Godot ni SCons: un
 compilador y un comando.
 
-Estado medido con MSVC 2022 sobre Windows: **80.629 comprobaciones, 0 fallas.**
+Estado medido con MSVC 2022 sobre Windows: **80.659 comprobaciones, 0 fallas.**
 
 Además se comprueba el **invariante de partición** —simular de una vez da lo
 mismo que simular en pedazos— con diez cortes distintos, y el caso del reloj
@@ -665,41 +665,6 @@ el día que deja de coincidir, en la máquina de otro, con una partida vieja.
 
 Cada entrada dice **cómo se manifestaría**, porque una lista de pendientes sin
 eso no es accionable — es una lista de culpas.
-
-### `inventory.cpp` no tiene un solo vector generado
-
-`tools/verify_parity.ts` no importa `src/core/inventory.ts`. Es el único de los
-catorce módulos portados en esa situación: toda la cobertura de la despensa son
-las comprobaciones de `probarDespensa` en `gdext/tests/test_parity.cpp`, con los
-números **tipeados a mano**.
-
-*Cómo se manifiesta:* alguien cambia `inventarioInicial()` del lado TypeScript a
-`{baya: 5, ...}`. `npm run parity` no cambia un byte del header —no hay vector
-que regenerar—, el C++ sigue devolviendo 3, la suite da cero fallas. La web
-arranca con cinco bayas y el nativo con tres, y el primer save que cruce de una
-plataforma a la otra pisa una despensa con la otra.
-
-*Qué habría que hacer:* importar el módulo en el generador y emitir
-`inventarioInicial()`, `agregar()` y `agregarVarios()` como el resto.
-
-### `SAVE_VERSION` está escrito tres veces
-
-- `src/state/save.ts:20` — `export const SAVE_VERSION = 5`
-- `tools/verify_parity.ts:1010` — el literal `version: 5` adentro de `armar()`
-- `gdext/src/save_manager.h:35` — `inline constexpr int64_t SAVE_VERSION = 5`,
-  con un comentario que dice "tiene que coincidir con SAVE_VERSION del TS"
-
-Nada las ata. Y los tres guardados de referencia se **arman a mano**: el
-generador nunca llama a `createSave`, que es la función que la web usa de verdad.
-
-*Cómo se manifiesta:* se sube `SAVE_VERSION` a 6 en la web y se escribe la
-migración, que es el flujo normal cuando cambia el formato. Los vectores siguen
-emitiendo `"version":5`, el C++ los lee bien, `probarGuardado` da verde — y el
-archivo que la web escribe ahora es v6, que `cargarPartida` rechaza.
-
-*Qué habría que hacer:* que el generador importe `createSave` y `SAVE_VERSION` de
-`src/state/save.ts` y arme los fixtures con la función de verdad; y que el C++
-compruebe su constante contra la del vector en vez de tenerla suelta.
 
 ### Seis catálogos de nombres se retipean del otro lado
 

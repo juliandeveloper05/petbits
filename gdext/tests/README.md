@@ -145,7 +145,7 @@ guardados corruptos
 invariante de partición
 reloj hacia atrás
 
-80629 comprobaciones, 0 fallas
+80659 comprobaciones, 0 fallas
 Paridad OK: el C++ da exactamente lo mismo que el TypeScript.
 ```
 
@@ -258,15 +258,7 @@ en 64 bits. Son exactamente los valores donde un port se rompe.
 
 ## Qué falta
 
-`inventory.cpp` es el único módulo portado **sin un solo vector generado**.
-`verify_parity.ts` no importa `src/core/inventory.ts`, así que toda la cobertura
-de la despensa son unas pocas comprobaciones con los números tipeados a mano en
-`test_parity.cpp` — exactamente lo que este archivo dice en su primera sección
-que no sirve. Cambiar `inventarioInicial()` del lado TS no cambia un byte del
-header generado, el C++ sigue devolviendo lo de antes y la suite da cero fallas,
-con la web arrancando con una despensa y el nativo con otra.
-
-Tampoco tienen vectores tres funciones exportadas que sí están portadas y que no
+No tienen vectores tres funciones exportadas que sí están portadas y que no
 llama nadie del lado TS: `saludPromedio`, `yaVolvio` y `conoceRareza`. Que hoy
 las seis implementaciones coincidan es una casualidad que nada sostiene.
 

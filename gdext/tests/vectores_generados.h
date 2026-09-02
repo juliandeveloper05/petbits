@@ -7126,4 +7126,31 @@ inline const VectorNumero NUMEROS[] = {
     {0x1059AB8D5FC558B7ULL, "6.613804006523697e-230"},
 };
 
+struct VectorDespensa {
+    uint8_t     esConsumir;
+    const char* id;
+    int64_t     cantidad;   ///< solo para agregar
+    uint8_t     pudo;       ///< resultado de consumir; 1 para agregar
+    const char* estado;     ///< "baya:8,raiz:1,...", EN ORDEN de claves
+    int64_t     total;
+};
+
+inline const VectorDespensa DESPENSAS[] = {
+    {0, "", 0LL, 1, "baya:3,raiz:2,larva:2,cristal:0", 7LL},
+    {0, "baya", 5LL, 1, "baya:8,raiz:2,larva:2,cristal:0", 12LL},
+    {1, "raiz", 0LL, 1, "baya:8,raiz:1,larva:2,cristal:0", 11LL},
+    {1, "cristal", 0LL, 0, "baya:8,raiz:1,larva:2,cristal:0", 11LL},
+    {0, "hongo", 3LL, 1, "baya:8,raiz:1,larva:2,cristal:0,hongo:3", 14LL},
+    {0, "baya", 0LL, 1, "baya:8,raiz:1,larva:2,cristal:0,hongo:3", 14LL},
+    {0, "larva", -2LL, 1, "baya:8,raiz:1,larva:2,cristal:0,hongo:3", 14LL},
+    {1, "hongo", 0LL, 1, "baya:8,raiz:1,larva:2,cristal:0,hongo:2", 13LL},
+    {1, "noexiste", 0LL, 0, "baya:8,raiz:1,larva:2,cristal:0,hongo:2", 13LL},
+    {0, "cristal", 1LL, 1, "baya:8,raiz:1,larva:2,cristal:1,hongo:2", 14LL},
+    {1, "larva", 0LL, 1, "baya:8,raiz:1,larva:1,cristal:1,hongo:2", 13LL},
+    {1, "larva", 0LL, 1, "baya:8,raiz:1,larva:0,cristal:1,hongo:2", 12LL},
+    {1, "larva", 0LL, 0, "baya:8,raiz:1,larva:0,cristal:1,hongo:2", 12LL},
+    {0, "raiz", 100LL, 1, "baya:8,raiz:101,larva:0,cristal:1,hongo:2", 112LL},
+    {1, "cristal", 0LL, 1, "baya:8,raiz:101,larva:0,cristal:0,hongo:2", 111LL},
+};
+
 } // namespace petbits::vectores
