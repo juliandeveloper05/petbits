@@ -165,3 +165,7 @@ godot/region.png.import
 # Las capturas del juego corriendo: se regeneran con un comando.
 godot/captura_*.png
 godot/captura_*.png.import
+
+# El video de treinta segundos: se regenera con tools/armar_video.ps1.
+godot/demo.avi
+godot/demo*.mp4

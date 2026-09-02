@@ -1,0 +1,11 @@
+; Corre demo.gd. Sin nodos: todo lo arma el script.
+;
+; Se corre CON ventana y con `--write-movie`. Godot sin ventana no dibuja, así
+; que headless graba treinta segundos de negro.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/demo.gd" id="1_tool"]
+
+[node name="Demo" type="Node"]
+script = ExtResource("1_tool")
