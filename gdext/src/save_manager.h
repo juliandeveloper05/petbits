@@ -31,7 +31,14 @@
 
 namespace petbits {
 
-/** La versión que escribe este código. Tiene que coincidir con SAVE_VERSION del TS. */
+/**
+ * La versión que escribe este código.
+ *
+ * Tiene que coincidir con `SAVE_VERSION` de `src/state/save.ts`, y desde que el
+ * generador la emite como vector eso lo comprueba `probarGuardado`: si sube de
+ * un lado y no del otro, la paridad falla en la primera comprobación. Antes era
+ * un pedido escrito en un comentario.
+ */
 inline constexpr int64_t SAVE_VERSION = 5;
 
 struct Partida {

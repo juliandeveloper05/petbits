@@ -528,6 +528,18 @@ static void probarAcciones() {
 static void probarGuardado() {
     bloque("cargar y guardar la partida");
 
+    // La versión del formato, primero. Estaba escrita en tres lugares —acá al
+    // lado en `save_manager.h`, en `src/state/save.ts`, y como literal adentro
+    // de los fixtures del generador— con un comentario que pedía que
+    // coincidieran y nada que lo hiciera cumplir.
+    //
+    // Ahora el generador la emite y esta comprobación es la que la ata: subir
+    // SAVE_VERSION del lado web hace fallar acá hasta que se suba también de
+    // este lado, que es exactamente cuando hay que mirar las migraciones.
+    revisarEnteros(static_cast<uint64_t>(SAVE_VERSION),
+                   static_cast<uint64_t>(vectores::SAVE_VERSION_TS), "versión del formato",
+                   "SAVE_VERSION del C++ contra la del TypeScript");
+
     for (const auto& v : vectores::SAVES) {
         Partida p;
         std::string error;
@@ -631,11 +643,19 @@ static void probarGuardado() {
         // El inventario NO va en `otros`: se interpreta, porque el juego lo
         // gasta. Que llegue acá con los valores del save es lo que hace que
         // alimentar pueda cobrar.
-        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("baya")), 3, v.nombre,
-                       "inventario.baya leído");
-        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("raiz")), 1, v.nombre,
-                       "inventario.raiz leído");
-        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("cristal")), 0, v.nombre,
+        // Los valores esperados salen del VECTOR, no de un literal. Estaban
+        // escritos a mano —baya 3, raiz 1, cristal 0— copiados del fixture que
+        // el generador armaba también a mano. El día que los fixtures pasaron a
+        // usar `createSave`, con el inventario que corresponde a una partida
+        // nueva, estas tres líneas fallaron: eran la copia de una copia.
+        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("baya")),
+                       static_cast<uint64_t>(v.invBaya), v.nombre, "inventario.baya leído");
+        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("raiz")),
+                       static_cast<uint64_t>(v.invRaiz), v.nombre, "inventario.raiz leído");
+        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("larva")),
+                       static_cast<uint64_t>(v.invLarva), v.nombre, "inventario.larva leído");
+        revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("cristal")),
+                       static_cast<uint64_t>(v.invCristal), v.nombre,
                        "inventario.cristal leído");
         // Y sobrevive la ida y vuelta por el archivo.
         revisarEnteros(static_cast<uint64_t>(q.inventario.cuanto("baya")),
