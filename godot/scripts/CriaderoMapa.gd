@@ -58,7 +58,12 @@ const PEDESTAL_DER := Vector2i(17, 5)
 const PUNTOS := [
 	{"x": 15, "y": 6, "nombre": "Los pedestales", "tipo": "cruzar"},
 	{"x": 15, "y": 15, "nombre": "La puerta", "tipo": "puerta", "mapa": "pueblo"},
+	{"x": 7, "y": 10, "nombre": "La incubadora", "tipo": "incubar"},
 ]
+
+## Dónde está la incubadora. Es un pedestal más, con su propio ramal de alfombra
+## desde el camino principal: la alfombra ya enseña adónde ir, sin cartel.
+const INCUBADORA := Vector2i(7, 10)
 
 
 static func generar() -> Array:
@@ -96,5 +101,10 @@ static func generar() -> Array:
 	# La puerta: un hueco en la pared de abajo. Se camina, y pararse ahí es lo
 	# que dispara la salida.
 	mapa[ALTO - 1][15] = T.ALFOMBRA
+
+	# La incubadora, a la izquierda, con su ramal de alfombra.
+	mapa[INCUBADORA.y][INCUBADORA.x] = T.PEDESTAL
+	for x in range(INCUBADORA.x + 1, 15):
+		mapa[INCUBADORA.y][x] = T.ALFOMBRA
 
 	return mapa

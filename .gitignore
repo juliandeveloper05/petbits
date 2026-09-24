@@ -169,3 +169,8 @@ godot/captura_*.png.import
 # El video de treinta segundos: se regenera con tools/armar_video.ps1.
 godot/demo.avi
 godot/demo*.mp4
+
+# El recorrido del tester, capturado: se regenera con CapturarRecorrido.tscn.
+godot/recorrido_*.png
+godot/recorrido_*.png.import
+

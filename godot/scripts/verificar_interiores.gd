@@ -210,16 +210,61 @@ func _correr() -> void:
 	_afirmar(antes == 1, "y NO nació nadie (había %d)" % antes)
 	mundo._caja.cerrar()
 
-	# ---- Incubar una segunda y cruzar de verdad ----------------------------
+	# ---- La incubadora, por donde la usa el jugador --------------------------
+	#
+	# Antes esto llamaba a `core.incubar()` directo, con una semilla inventada.
+	# Pasaba, y no probaba nada del juego: ninguna pantalla llamaba a `incubar()`,
+	# así que el criadero era un callejón sin salida y este test decía que no.
+	# Ahora se hace como lo hace el jugador: se levanta una semilla de un círculo
+	# de piedra y se la lleva a la incubadora.
+	var incubadora := _punto_de(mundo, "incubar", "")
+	_afirmar(not incubadora.is_empty(), "el criadero tiene incubadora")
+	mundo._criatura.position = Vector2((incubadora["x"] + 1.5) * 16, (incubadora["y"] + 0.5) * 16)
+	mundo._mirar_alrededor()
+	_afirmar(mundo._cerca.get("tipo", "") == "incubar", "la incubadora se reconoce")
+
+	# Vacía, dice qué hacer y no rompe nada.
+	mundo._usar()
+	_afirmar(mundo._caja.abierta(), "vacía, la incubadora contesta algo")
+	_afirmar(Partida.core.criaturas(Partida.ahora_ms()).size() == 1, "y no nace nadie")
+	mundo._caja.cerrar()
+
+	# Una semilla de verdad, de un círculo de piedra del mundo.
+	var hito := _buscar_hito()
+	_afirmar(hito != Vector2i(999999, 999999), "hay un círculo de piedra cerca del pueblo")
+	var levantar: Dictionary = Partida.core.recolectar(Partida.semilla_mundo, hito.x, hito.y)
+	_afirmar(levantar["ok"], "el círculo de piedra deja una semilla: %s" % levantar.get("mensaje", ""))
+	_afirmar(Partida.core.semillas().size() == 1, "y queda guardada para incubar")
+
+	# Los objetivos de antes, como si se hubieran hecho: así el de "incubar" es
+	# el que está a la vista y se puede comprobar que avisa al cumplirse.
+	for id in ["comer", "pueblo", "vecino", "expedicion"]:
+		Partida.objetivos_hechos[id] = true
+	_afirmar(Partida.objetivo_actual() == "incubar",
+		"con una semilla, el objetivo es incubar (es %s)" % Partida.objetivo_actual())
+
+	var avisados: Array = []
+	var anotar_aviso := func(id): avisados.append(id)
+	Partida.objetivo_cumplido.connect(anotar_aviso)
+
+	mundo._mirar_alrededor()
+	mundo._usar()
+
+	Partida.objetivo_cumplido.disconnect(anotar_aviso)
+	_afirmar(
+		Partida.core.criaturas(Partida.ahora_ms()).size() == 2,
+		"la incubadora abrió la semilla: ahora hay dos criaturas"
+	)
+	_afirmar(Partida.core.semillas().is_empty(), "y la semilla se gastó")
+	# El aviso sale aunque el objetivo se deduzca del estado — ver marcar_si_era.
+	_afirmar("incubar" in avisados, "y se avisó el objetivo cumplido (avisos: %s)" % str(avisados))
+	_afirmar(Partida.objetivo_actual() == "cruza", "el siguiente es cruzar")
+	mundo._caja.cerrar()
+
+	# ---- Cruzar de verdad ---------------------------------------------------
 	#
 	# Las dos tienen que ser adultas, sanas y con vínculo, que es lo que pide la
 	# regla — y se llega ahí criándolas de verdad, ver `_criar`.
-	var r: Dictionary = Partida.core.incubar("FEDC-BA98-7654-3210", Partida.ahora_ms(), -180)
-	_afirmar(r["ok"], "se puede incubar una semilla: %s" % r["mensaje"])
-	_afirmar(
-		Partida.core.criaturas(Partida.ahora_ms()).size() == 2,
-		"ahora hay dos criaturas"
-	)
 
 	_volver_adultas()
 
@@ -234,6 +279,12 @@ func _correr() -> void:
 		listas.size() == 2,
 		"las dos pueden cruzar (%d pudieron; %s)" % [listas.size(), " | ".join(porques)]
 	)
+
+	# De vuelta a los pedestales: la incubadora está en otro lado de la sala, y
+	# `_usar()` hace lo que corresponde a donde esté parada.
+	mundo._criatura.position = Vector2((pedestales["x"] + 0.5) * 16, (pedestales["y"] + 0.5) * 16)
+	mundo._mirar_alrededor()
+	_afirmar(mundo._cerca.get("tipo", "") == "cruzar", "de vuelta en los pedestales")
 
 	mundo._usar()
 	var despues: Array = Partida.core.criaturas(Partida.ahora_ms())
@@ -362,6 +413,19 @@ func _punto_de(mundo: Node2D, tipo: String, detalle: String) -> Dictionary:
 ## Además hay que acariciar antes de que pasen 48 horas sin atención, o entra en
 ## letargo y ahí tampoco puede cruzar. O sea que este bucle es, literalmente, la
 ## partida mínima que hace falta jugar para llegar al criadero.
+## El círculo de piedra más cercano al pueblo, buscado en anillos.
+func _buscar_hito() -> Vector2i:
+	var s: String = Partida.semilla_mundo
+	for radio in range(20, 400, 4):
+		for x in range(-radio, radio + 1, 2):
+			for y in [-radio, radio]:
+				if Partida.core.mundo_hallazgo(s, x, y)["tipo"] == "hito":
+					return Vector2i(x, y)
+				if Partida.core.mundo_hallazgo(s, y, x)["tipo"] == "hito":
+					return Vector2i(y, x)
+	return Vector2i(999999, 999999)
+
+
 func _criar(id: String) -> void:
 	Partida.core.activar(id)
 

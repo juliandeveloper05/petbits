@@ -55,6 +55,7 @@ extends Node2D
 
 const Mapas = preload("res://scripts/Mapas.gd")
 const CajaDialogo = preload("res://scripts/CajaDialogo.gd")
+const Historia = preload("res://scripts/Historia.gd")
 
 const TILE := 16
 const VELOCIDAD := 46.0
@@ -86,6 +87,13 @@ var _layout := {}
 var _criatura: Sprite2D = null
 var _cartel: Label = null
 var _estado: Label = null
+
+## Debajo del objetivo: si está de expedición, cuánto le falta.
+var _expedicion: Label = null
+
+## El rectángulo del pueblo, pedido una vez al núcleo. Adentro del pueblo el
+## cartel de abajo muestra los controles; afuera, dónde estás.
+var _pueblo: Rect2i = Rect2i()
 var _caja: Control = null
 var _velo: ColorRect = null
 var _camara: Camera2D = null
@@ -134,11 +142,33 @@ func _ready() -> void:
 	_construir_caja()
 	_construir_velo()
 
+	var r: Dictionary = Partida.core.pueblo_rect()
+	_pueblo = Rect2i(int(r["x"]), int(r["y"]), int(r["ancho"]), int(r["alto"]))
+
 	_cargar_mapa(Partida.mapa, false)
 
 	Partida.cambio.connect(_refrescar_estado)
+	Partida.objetivo_cumplido.connect(_al_cumplir)
+	Partida.volvio.connect(_al_volver)
 	_refrescar_estado()
 	set_process(true)
+
+
+## Se cumplió el objetivo que estaba a la vista: se cuenta en la caja.
+## `decir` y no `decir_ya`: si justo estaba hablando el vecino, no se lo corta.
+func _al_cumplir(id: String) -> void:
+	if Historia.CUMPLIDO.has(id):
+		_caja.decir(Historia.CUMPLIDO[id])
+
+
+## Volvió de expedición mientras estabas en el mapa.
+##
+## `Partida` emitía esta señal y no la escuchaba nadie: si estabas caminando, no
+## te enterabas de que había vuelto — solo cambiaba de color el cartel de arriba.
+func _al_volver(r: Dictionary) -> void:
+	_caja.decir("Volvió %s. %s" % [r["destino"], r["mensaje"]])
+	if r["semilla"] != "":
+		_caja.decir("¡Trajo una semilla! Llevala al criadero.")
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +232,11 @@ func _cargar_mapa(id: String, con_fundido: bool) -> void:
 
 	if con_fundido:
 		await _fundir(0.0)
+
+	# Después del fundido, no antes: si no, el aviso aparecería sobre la pantalla
+	# en negro y se leería a medias.
+	if id == "pueblo":
+		Partida.marcar("pueblo")
 
 
 ## Dónde aparece la criatura al entrar a un mapa.
@@ -497,10 +532,13 @@ func _construir_carteles() -> void:
 	var vp := _viewport()
 	_cartel = _etiqueta(Vector2(6 - vp.x / 2, vp.y / 2 - 18), TEXTO)
 	_estado = _etiqueta(Vector2(6 - vp.x / 2, 4 - vp.y / 2), FOSFORO)
+	_expedicion = _etiqueta(Vector2(6 - vp.x / 2, 17 - vp.y / 2), AVISO)
 
 
 func _construir_caja() -> void:
 	_caja = CajaDialogo.new()
+	# Mismo motivo que los carteles: cuelga de la cámara y no hereda el tema.
+	_caja.theme = get_tree().root.theme
 	_camara.add_child(_caja)
 
 	var vp := _viewport()
@@ -537,10 +575,30 @@ func _viewport() -> Vector2:
 func _etiqueta(donde: Vector2, color: Color) -> Label:
 	var etiqueta := Label.new()
 	etiqueta.position = donde
+	# El tema a mano, no heredado: estos carteles cuelgan de la cámara, que es un
+	# Node2D, y el tema de la raíz no atraviesa nodos 2D. Sin esto el mapa se
+	# dibujaba con la letra suavizada de Godot mientras el resto del juego usaba
+	# la de pixel art.
+	etiqueta.theme = get_tree().root.theme
 	etiqueta.add_theme_font_size_override("font_size", Partida.tam_fuente)
 	etiqueta.add_theme_color_override("font_color", color)
-	etiqueta.add_theme_color_override("font_outline_color", SOMBRA)
-	etiqueta.add_theme_constant_override("outline_size", 2)
+	# Una sombra de un píxel y no un contorno. La fuente de pixel art no tiene
+	# contorno —se genera solo para su tamaño, sin borde—, y una sombra corrida
+	# es lo que usaban las consolas para que el texto se lea sobre cualquier fondo.
+	etiqueta.add_theme_color_override("font_shadow_color", SOMBRA)
+	etiqueta.add_theme_constant_override("shadow_offset_x", 1)
+	etiqueta.add_theme_constant_override("shadow_offset_y", 1)
+	etiqueta.add_theme_constant_override("shadow_outline_size", 0)
+	# Y una franja oscura detrás. El fósforo sobre el pasto claro se leía justo, y
+	# el objetivo de arriba es lo que más tiene que leer alguien que acaba de
+	# abrir el juego.
+	var franja := StyleBoxFlat.new()
+	franja.bg_color = Color(SOMBRA, 0.72)
+	franja.content_margin_left = 3
+	franja.content_margin_right = 3
+	franja.content_margin_top = 1
+	franja.content_margin_bottom = 1
+	etiqueta.add_theme_stylebox_override("normal", franja)
 	_camara.add_child(etiqueta)
 	return etiqueta
 
@@ -657,8 +715,13 @@ func _mirar_alrededor() -> void:
 
 func _texto_de_ayuda() -> String:
 	if _infinito():
-		return "Flechas para caminar · Esc para volver"
-	return "Flechas para caminar · Esc para salir"
+		return "Flechas: caminar · Enter: usar · Esc: volver a la ficha"
+	return "Flechas: caminar · Enter: usar · Esc: salir"
+
+
+## ¿Esa celda es del pueblo?
+func _en_el_pueblo(celda: Vector2i) -> bool:
+	return _infinito() and _pueblo.has_point(celda)
 
 
 ## Qué dice el cartel al pararse sobre un punto.
@@ -669,7 +732,15 @@ func _texto_de_ayuda() -> String:
 func _anunciar(punto: Dictionary) -> String:
 	match punto["tipo"]:
 		"puerta":
+			# La puerta de un interior lleva AFUERA. Decía "Enter para entrar".
+			if punto.get("mapa", "") == "pueblo":
+				return "%s — Enter para salir" % punto["nombre"]
 			return "%s — Enter para entrar" % punto["nombre"]
+		"incubar":
+			var cuantas: int = Partida.core.semillas().size()
+			if cuantas == 0:
+				return "La incubadora — vacía"
+			return "La incubadora — Enter para incubar (%d)" % cuantas
 		"cruzar":
 			return "Los pedestales — Enter para cruzar"
 		"estante":
@@ -731,6 +802,8 @@ func _usar() -> void:
 			_enviar()
 		"cruzar":
 			_cruzar()
+		"incubar":
+			_incubar()
 		"estante":
 			_mirar_estante(_cerca["categoria"])
 		"npc":
@@ -769,6 +842,7 @@ func _enviar() -> void:
 	# la mandó, no tener que acordarse de una caja que ya se cerró.
 	if r["ok"]:
 		Partida.anotar(r["mensaje"], "bien")
+		Partida.marcar("expedicion")
 
 
 ## La cruza.
@@ -808,6 +882,7 @@ func _cruzar() -> void:
 
 	Partida.anotar("Nació %s. %s" % [r["seed"], r["descripcion"]], "bien")
 	_refrescar_sprite()
+	Partida.marcar("cruza")
 
 
 ## Por qué no hay pareja, dicho de la forma más útil posible.
@@ -818,7 +893,10 @@ func _cruzar() -> void:
 func _por_que_no_se_puede_cruzar(ahora: int) -> String:
 	var todas: Array = Partida.core.criaturas(ahora)
 	if todas.size() < 2:
-		return "Hace falta otra criatura. Con una sola no hay cruza."
+		return (
+			"Hace falta otra criatura. Buscá una semilla en los círculos de piedra "
+			+ "y usá la incubadora de acá al lado."
+		)
 
 	for c in todas:
 		if not c["puede_cruzar"]:
@@ -832,12 +910,53 @@ func _por_que_no_se_puede_cruzar(ahora: int) -> String:
 ## tres frases juntas da exactamente la conversación que uno espera. Meter acá
 ## una máquina de estados de diálogo sería reimplementar lo que la caja hace.
 func _hablar(punto: Dictionary) -> void:
-	var dice: Array = punto["dice"]
+	# El vecino habla con lo de `Historia.gd`: es el texto que va a cambiar
+	# cuando llegue la historia, y tiene que poder cambiarse sin tocar el mapa.
+	var dice: Array = Historia.VECINO if punto["tipo"] == "npc" else punto.get("dice", [])
 	if dice.is_empty():
 		return
 	_caja.decir_ya(dice[0])
 	for i in range(1, dice.size()):
 		_caja.decir(dice[i])
+	Partida.marcar("vecino")
+
+
+## La incubadora: abre la primera semilla encontrada.
+##
+## `incubar()` existía en el C++ y ninguna pantalla lo llamaba: las semillas de
+## los círculos de piedra y de las expediciones se acumulaban en el save sin
+## servir para nada, y los pedestales decían siempre "hace falta otra criatura".
+## Era el loop más interesante del juego —encontrar, incubar, cruzar, llenar el
+## codex— cortado en la interfaz.
+func _incubar() -> void:
+	var semillas: Array = Partida.core.semillas()
+	if semillas.is_empty():
+		_caja.decir_ya(
+			"La incubadora está vacía. Hay semillas en los círculos de piedra, "
+			+ "afuera del pueblo, y a veces las traen de expedición."
+		)
+		return
+
+	# `semillas()` devuelve diccionarios —semilla, linaje y rarezas—, no textos.
+	# La primera versión de esto tomaba el primero como texto y reventaba: lo
+	# agarró el test del criadero, que ahora usa la incubadora como el jugador.
+	var semilla: Dictionary = semillas[0]
+	var seed: String = semilla["seed"]
+	# El objetivo se pregunta ANTES: después de incubar ya hay dos criaturas y
+	# "incubar" deja de ser el actual — ver `Partida.marcar_si_era`.
+	var antes: String = Partida.objetivo_actual()
+	var r: Dictionary = Partida.actuar(func(): return Partida.core.incubar(
+		seed, Partida.ahora_ms(), Partida._tz_min()
+	))
+	if not r["ok"]:
+		_caja.decir_ya(r["mensaje"])
+		return
+
+	_caja.decir_ya("La semilla %s se abrió. Es de linaje %s." % [seed, semilla["linaje"]])
+	Partida.anotar("Nació de una semilla: %s." % seed, "bien")
+	_refrescar_sprite()
+	Partida.marcar_si_era("incubar", antes)
+	_cartel.text = _anunciar(_cerca)
 
 
 ## Qué dice el cartel cuando estás en el campo, sin nada delante.
@@ -850,12 +969,23 @@ func _texto_del_suelo(celda: Vector2i) -> String:
 	if semilla == "":
 		return _texto_de_ayuda()
 
-	var donde: String = Partida.core.mundo_bioma(semilla, celda.x, celda.y)
-
 	var h: Dictionary = Partida.core.mundo_hallazgo(semilla, celda.x, celda.y)
-	if h["tipo"] != "nada" and not Partida.ya_recolectado(celda):
+	var hay_algo: bool = h["tipo"] != "nada" and not Partida.ya_recolectado(celda)
+
+	# Adentro del pueblo, los controles. Antes este cartel mostraba el bioma y las
+	# coordenadas también en la plaza —"el bosque · 0, 0"— y pisaba la ayuda en el
+	# cuadro siguiente de haberla escrito, así que nadie la leía nunca.
+	if _en_el_pueblo(celda):
+		if hay_algo:
+			return "%s — Enter para juntar" % h["nombre"]
+		return _texto_de_ayuda()
+
+	var donde: String = Partida.core.mundo_bioma(semilla, celda.x, celda.y)
+	if hay_algo:
 		return "%s · %s — Enter para juntar" % [donde, h["nombre"]]
 
+	# Afuera, el bioma y la posición. Las coordenadas quedan a propósito: son lo
+	# que el tester tiene que anotar si algo se rompe.
 	return "%s · %d, %d" % [donde, celda.x, celda.y]
 
 
@@ -884,6 +1014,7 @@ func _recolectar() -> void:
 		_caja.decir_ya("Acá ya no queda nada. Va a volver a crecer.")
 		return
 
+	var antes: String = Partida.objetivo_actual()
 	var r: Dictionary = Partida.actuar(func(): return Partida.core.recolectar(
 		semilla, celda.x, celda.y
 	))
@@ -898,6 +1029,8 @@ func _recolectar() -> void:
 	# PetView tiene que quedar rastro de que encontraste algo.
 	if h["tipo"] == "hito":
 		Partida.anotar(r["mensaje"], "raro")
+		if Partida.core.semillas().size() > 0:
+			Partida.marcar_si_era("semilla", antes)
 
 
 func _mirar_estante(categoria: String) -> void:
@@ -961,17 +1094,22 @@ func _refrescar_estado() -> void:
 	if e.is_empty():
 		return
 
+	# Arriba, lo que hay que hacer. Antes estaba la semilla sola, que en el mapa
+	# no le decía nada a nadie.
+	var id: String = Partida.objetivo_actual()
+	_estado.text = "→ " + (Historia.TODO_HECHO if id == "" else Historia.OBJETIVOS[id])
+
 	var falta: int = Partida.core.falta_para_volver(Partida.ahora_ms())
 	if falta > 0:
 		# Minutos redondeados hacia arriba: decir "vuelve en 0 min" cuando todavía
 		# faltan cuarenta segundos es mentir.
-		_estado.text = "%s · vuelve en %d min" % [e["seed"], ceili(falta / 60000.0)]
-		_estado.add_theme_color_override("font_color", AVISO)
+		_expedicion.text = "De expedición · vuelve en %d min" % ceili(falta / 60000.0)
 		_criatura.modulate = Color(1, 1, 1, 0.35)
 	else:
-		_estado.text = e["seed"]
-		_estado.add_theme_color_override("font_color", FOSFORO)
+		_expedicion.text = ""
 		_criatura.modulate = Color(1, 1, 1, 1)
+	# Vacío, igual dibujaría su franja: un cuadradito oscuro suelto en la pantalla.
+	_expedicion.visible = _expedicion.text != ""
 
 	_refrescar_sprite()
 

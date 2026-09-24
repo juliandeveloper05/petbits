@@ -37,6 +37,7 @@
 extends Node
 
 const Tipografia = preload("res://scripts/Tipografia.gd")
+const Tema = preload("res://scripts/Tema.gd")
 
 ## Algo pasó en el mundo y las pantallas tienen que redibujarse.
 signal cambio
@@ -275,6 +276,12 @@ func preparar() -> bool:
 	# Hacerlo al revés dejaría el primer cuadro dibujado con la fuente de Godot.
 	fuente = Tipografia.instalar(core)
 	tam_fuente = int(core.fuente_metricas()["alto"])
+
+	# El tema va en la RAÍZ, así lo heredan todas las pantallas —también el mapa,
+	# que es un Node2D y cuyos carteles no cuelgan de ningún Control con tema— y
+	# la caja de diálogo. Una sola vez, para todo el juego.
+	if get_tree() != null and get_tree().root != null:
+		get_tree().root.theme = Tema.construir(tam_fuente, fuente)
 	return true
 
 
@@ -285,6 +292,48 @@ func hay_juego() -> bool:
 ## ¿Hay una partida guardada para continuar?
 func hay_partida_guardada() -> bool:
 	return FileAccess.file_exists(ruta_save)
+
+
+## ¿Se está jugando una partida en esta sesión?
+##
+## El título lo pregunta para saber si viene de arrancar el programa —y entonces
+## pasa los créditos— o de apretar Esc en la ficha, y entonces va derecho al menú.
+func partida_cargada() -> bool:
+	return _cargada
+
+
+## Guarda la partida en curso y la suelta, para poder cargar otra.
+##
+## Es lo que hace "Nueva partida" cuando ya se estaba jugando. `iniciar()` es
+## idempotente a propósito, así que para empezar otra hay que deshacer lo que
+## hizo: guardar lo último, parar el reloj, y dejar el estado como recién abierto.
+##
+## El core se descarta entero y se crea otro. Reusarlo andaría —`nacer()`
+## reemplaza la partida de adentro— pero un core nuevo no puede arrastrar nada
+## de la anterior por un camino que no se previó.
+func descargar() -> void:
+	if not _cargada:
+		return
+	guardar()
+	guardar_mundo()
+
+	if _reloj != null:
+		_reloj.stop()
+		_reloj.queue_free()
+		_reloj = null
+
+	_iniciada = false
+	_cargada = false
+	core = null
+	partida_nueva = false
+	desfase_ms = 0
+	objetivos_hechos = {}
+	recolectado = {}
+	bitacora = []
+	mapa = "pueblo"
+	venir_de = ""
+	donde = Vector2.ZERO
+	semilla_mundo = ""
 
 
 ## Aparta la partida actual para empezar otra. NO BORRA NADA.
@@ -635,6 +684,7 @@ func _consultar() -> void:
 ## haber estado cerrado durante toda la salida, así que "volvió" no es un evento
 ## que ocurra mientras mirás, es una condición que se comprueba.
 func _revisar_regreso() -> void:
+	var antes := objetivo_actual()
 	var r: Dictionary = core.recibir(ahora_ms())
 	if not r.get("volvio", false):
 		return
@@ -642,6 +692,7 @@ func _revisar_regreso() -> void:
 	anotar("Volvió %s. %s" % [r["destino"], r["mensaje"]], "bien")
 	if r["semilla"] != "":
 		anotar("Encontró una semilla: %s" % r["semilla"], "raro")
+		marcar_si_era("semilla", antes)
 	volvio.emit(r)
 	guardar()
 
@@ -710,12 +761,21 @@ func _cantidad_de_criaturas() -> int:
 ## Se puede llamar de más: marcar algo ya marcado no hace nada. Eso deja a quien
 ## llama despreocuparse de si el objetivo era el actual o no.
 func marcar(id: String) -> void:
-	var era_el_actual := objetivo_actual() == id
+	marcar_si_era(id, objetivo_actual())
+
+
+## Lo mismo, pero con "cuál era el objetivo" preguntado ANTES de actuar.
+##
+## Hace falta para los que se deducen del estado. Al terminar de incubar ya hay
+## dos criaturas, así que preguntar después "¿era 'incubar' el objetivo?" da que
+## no — ya se cumplió, y el actual es el siguiente — y el aviso de "¡nació!" no
+## salía nunca. Quien llama pregunta antes y lo pasa.
+func marcar_si_era(id: String, antes: String) -> void:
 	if objetivos_hechos.has(id):
 		return
 	objetivos_hechos[id] = true
 	guardar_mundo()
-	if era_el_actual:
+	if antes == id:
 		objetivo_cumplido.emit(id)
 	cambio.emit()
 

@@ -89,6 +89,27 @@ func _correr() -> void:
 	# una pantalla que nunca había entrado al árbol y daba todo verde igual.
 	await get_tree().process_frame
 
+	# ---- Las teclas que anuncian los carteles existen ----------------------
+	#
+	# `action_cancel` tenía el código del Enter NUMÉRICO en vez del de Escape.
+	# Los carteles decían "Esc para volver" y Esc no hacía nada en todo el juego:
+	# desde el pueblo no había forma de volver a la ficha. Ningún test lo vio
+	# porque ninguno miraba el mapa de teclas — todos llamaban a las funciones.
+	var teclas_esperadas := {
+		"action_confirm": KEY_ENTER,
+		"action_cancel": KEY_ESCAPE,
+		"move_up": KEY_UP,
+		"move_down": KEY_DOWN,
+		"move_left": KEY_LEFT,
+		"move_right": KEY_RIGHT,
+	}
+	for accion in teclas_esperadas:
+		var tiene := false
+		for ev in InputMap.action_get_events(accion):
+			if ev is InputEventKey and ev.keycode == teclas_esperadas[accion]:
+				tiene = true
+		_afirmar(tiene, "%s responde a %s" % [accion, OS.get_keycode_string(teclas_esperadas[accion])])
+
 	# ---- PetView ----------------------------------------------------------
 	var petview: Control = load("res://scenes/PetView.tscn").instantiate()
 	get_tree().root.add_child(petview)

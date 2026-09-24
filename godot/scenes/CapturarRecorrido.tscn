@@ -1,0 +1,9 @@
+; Corre capturar_recorrido.gd CON VENTANA. Headless no dibuja y las capturas
+; salen negras.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/capturar_recorrido.gd" id="1_tool"]
+
+[node name="CapturarRecorrido" type="Node"]
+script = ExtResource("1_tool")

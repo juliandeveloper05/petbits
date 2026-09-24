@@ -26,6 +26,18 @@
 
 extends Control
 
+const Tema = preload("res://scripts/Tema.gd")
+const Historia = preload("res://scripts/Historia.gd")
+const CajaDialogo = preload("res://scripts/CajaDialogo.gd")
+
+## Los nombres que se muestran. Antes pasaban por `capitalize()`, que sabe
+## poner mayúsculas pero no tildes: la ficha decía "Energia", "Animo", "Vinculo"
+## y "Bebe".
+const NOMBRE_BARRA := {
+	"energia": "Energía", "animo": "Ánimo", "salud": "Salud", "vinculo": "Vínculo",
+}
+const NOMBRE_ETAPA := {"bebe": "Bebé", "juvenil": "Juvenil", "adulto": "Adulto"}
+
 # La consola verde fósforo que el proyecto ya tenía del lado web. Se mantiene
 # porque es lo mejor que tiene su identidad visual.
 const FONDO := Color("#0a0e0a")
@@ -53,6 +65,24 @@ var _botones_salida := {}
 var _parpadeando := false
 var _proximo_parpadeo := INTERVALO_PARPADEO
 
+## Lo que hay que hacer ahora. Una línea arriba de todo, siempre visible.
+var _objetivo: Label = null
+
+## Las rarezas de la criatura, que el C++ calcula desde el principio y la ficha
+## no mostraba nunca.
+var _rarezas: Label = null
+
+## Cambiar de criatura, cuando hay más de una. Sin esto, incubar una segunda
+## hacía desaparecer a la primera de la vista.
+var _selector: HBoxContainer = null
+var _contador: Label = null
+
+## La caja de diálogo: la intro de una partida nueva, y los objetivos cumplidos.
+var _caja: Control = null
+
+## A dónde va el foco del teclado al entrar a la pantalla.
+var _primer_boton: Button = null
+
 
 func _ready() -> void:
 	if not Partida.iniciar():
@@ -70,10 +100,25 @@ func _ready() -> void:
 	Partida.nota.connect(func(t, tono): _anotar(t, _color_de_tono(tono)))
 	Partida.avanzo.connect(func(_r): _refrescar_sprite())
 	Partida.cambio.connect(_refrescar_estado)
+	Partida.objetivo_cumplido.connect(_al_cumplir)
 
 	_refrescar_sprite()
 	_refrescar_estado()
 	set_process(true)
+
+	# Sin foco inicial, el teclado y el joystick no tienen desde dónde empezar y
+	# esta pantalla solo andaba con el mouse.
+	if _primer_boton != null:
+		_primer_boton.call_deferred("grab_focus")
+
+	# La intro, una sola vez por partida. Se marca como vista al terminarla o al
+	# saltearla con Esc: nadie quiere leerla de nuevo cada vez que vuelve del
+	# pueblo.
+	if not Partida.objetivos_hechos.has("intro"):
+		if OS.is_debug_build():
+			_anotar("Versión de prueba: " + Historia.AYUDA_PRUEBA + ".", TENUE)
+		for pagina in Historia.INTRO:
+			_caja.decir(pagina)
 
 
 # ---------------------------------------------------------------------------
@@ -96,11 +141,68 @@ func _process(delta: float) -> void:
 
 
 # ---------------------------------------------------------------------------
+# Entrada
+# ---------------------------------------------------------------------------
+
+## `_input` y no `_unhandled_input`: con la caja abierta, Enter tiene que pasar
+## de página y NO apretar el botón que tiene el foco — y los botones se quedan
+## con el Enter antes de que llegue a `_unhandled_input`.
+func _input(evento: InputEvent) -> void:
+	if _caja != null and _caja.abierta():
+		var avanza: bool = (
+			evento.is_action_pressed("action_confirm")
+			or (evento is InputEventMouseButton and evento.pressed)
+		)
+		if avanza:
+			get_viewport().set_input_as_handled()
+			_caja.avanzar()
+		elif evento.is_action_pressed("action_cancel"):
+			get_viewport().set_input_as_handled()
+			_caja.cerrar()
+			_al_cerrar_caja()
+		return
+
+	if evento.is_action_pressed("action_cancel"):
+		get_viewport().set_input_as_handled()
+		get_tree().change_scene_to_file("res://scenes/Inicio.tscn")
+
+
+# ---------------------------------------------------------------------------
 # Acciones
 # ---------------------------------------------------------------------------
 
-func _actuar(accion: Callable) -> void:
-	_on_accion(Partida.actuar(accion))
+func _actuar(accion: Callable, objetivo: String = "") -> void:
+	var r: Dictionary = Partida.actuar(accion)
+	_on_accion(r)
+	if r.get("ok", false) and objetivo != "":
+		Partida.marcar(objetivo)
+
+
+## Pasa a la criatura siguiente o anterior de la colección.
+func _cambiar_criatura(paso: int) -> void:
+	var lista: Array = Partida.core.criaturas(_ahora_ms())
+	if lista.size() < 2:
+		return
+	var actual := 0
+	for i in lista.size():
+		if lista[i]["activa"]:
+			actual = i
+	var otra: Dictionary = lista[(actual + paso + lista.size()) % lista.size()]
+	Partida.core.activar(otra["id"])
+	Partida.guardar()
+	_refrescar_sprite()
+	Partida.cambio.emit()
+
+
+func _al_cumplir(id: String) -> void:
+	if Historia.CUMPLIDO.has(id):
+		_caja.decir(Historia.CUMPLIDO[id])
+
+
+## Se vació la caja. Si era la intro, queda vista.
+func _al_cerrar_caja() -> void:
+	if not Partida.objetivos_hechos.has("intro"):
+		Partida.marcar("intro")
 
 
 func _on_accion(resultado: Dictionary) -> void:
@@ -129,6 +231,9 @@ func _construir_interfaz() -> void:
 	raiz.add_theme_constant_override("separation", 4)
 	add_child(raiz)
 
+	_objetivo = _linea(raiz, FOSFORO)
+	_objetivo.clip_text = true
+
 	_construir_ficha(raiz)
 	raiz.add_child(HSeparator.new())
 	_construir_botones(raiz)
@@ -138,7 +243,21 @@ func _construir_interfaz() -> void:
 	_registro.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_registro.add_theme_color_override("default_color", TENUE)
 	_registro.add_theme_font_size_override("normal_font_size", Partida.tam_fuente)
+	_registro.scroll_following = true
 	raiz.add_child(_registro)
+
+	# La caja va encima del registro, abajo de todo, como en el mapa.
+	_caja = CajaDialogo.new()
+	add_child(_caja)
+	_caja.anchor_left = 0.0
+	_caja.anchor_right = 1.0
+	_caja.anchor_top = 1.0
+	_caja.anchor_bottom = 1.0
+	_caja.offset_left = 4
+	_caja.offset_right = -4
+	_caja.offset_bottom = -4
+	_caja.offset_top = -4 - _caja.custom_minimum_size.y
+	_caja.termino.connect(_al_cerrar_caja)
 
 
 ## Fila de arriba: el sprite a la izquierda, la ficha y las barras a la derecha.
@@ -160,9 +279,25 @@ func _construir_ficha(padre: Node) -> void:
 	ficha.add_theme_constant_override("separation", 1)
 	fila.add_child(ficha)
 
-	_etiquetas["seed"] = _linea(ficha, FOSFORO)
+	# La semilla con su rótulo, y a la derecha el selector de criatura.
+	var fila_seed := HBoxContainer.new()
+	fila_seed.add_theme_constant_override("separation", 4)
+	ficha.add_child(fila_seed)
+
+	_etiquetas["seed"] = _linea(fila_seed, FOSFORO)
+	_etiquetas["seed"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	_selector = HBoxContainer.new()
+	_selector.add_theme_constant_override("separation", 2)
+	fila_seed.add_child(_selector)
+	_boton_chico(_selector, "<", func(): _cambiar_criatura(-1))
+	_contador = _linea(_selector, TENUE)
+	_boton_chico(_selector, ">", func(): _cambiar_criatura(1))
+
 	_etiquetas["quien"] = _linea(ficha, TEXTO)
 	_etiquetas["etapa"] = _linea(ficha, TENUE)
+	_rarezas = _linea(ficha, Color("#c07cff"))
+	_rarezas.clip_text = true
 
 	var aire := Control.new()
 	aire.custom_minimum_size = Vector2(0, 4)
@@ -181,7 +316,12 @@ func _construir_botones(padre: Node) -> void:
 	# solo. Repetir la lista acá sería tener dos fuentes de verdad para lo mismo.
 	for alimento in Partida.core.alimentos():
 		var id: String = alimento["id"]
-		var boton := _boton(fila, alimento["nombre"], func(): _actuar(func(): return Partida.core.alimentar(id, _ahora_ms())))
+		var boton := _boton(
+			fila, alimento["nombre"],
+			func(): _actuar(func(): return Partida.core.alimentar(id, _ahora_ms()), "comer")
+		)
+		if _primer_boton == null:
+			_primer_boton = boton
 		# Se guarda para poder actualizarle el contador cuando el stock cambia.
 		_botones_comida[id] = { "boton": boton, "nombre": alimento["nombre"] }
 
@@ -197,7 +337,8 @@ func _construir_botones(padre: Node) -> void:
 	for destino in Partida.core.destinos():
 		var id: String = destino["id"]
 		_botones_salida[id] = _boton(
-			fila_salidas, destino["nombre"], func(): _actuar(func(): return Partida.core.enviar(id, _ahora_ms()))
+			fila_salidas, destino["nombre"],
+			func(): _actuar(func(): return Partida.core.enviar(id, _ahora_ms()), "expedicion")
 		)
 
 	# La puerta al mapa. Va con las salidas y no con las de cuidado porque hace
@@ -206,6 +347,16 @@ func _construir_botones(padre: Node) -> void:
 
 	_refrescar_despensa()
 	_refrescar_salidas()
+
+
+## Un botón mínimo, para el selector de criatura.
+func _boton_chico(padre: Node, texto: String, al_apretar: Callable) -> Button:
+	var boton := Button.new()
+	boton.text = texto
+	boton.add_theme_font_size_override("font_size", Partida.tam_fuente)
+	boton.pressed.connect(al_apretar)
+	padre.add_child(boton)
+	return boton
 
 
 func _boton(padre: Node, texto: String, al_apretar: Callable) -> Button:
@@ -275,7 +426,7 @@ func _barra(padre: Node, clave: String) -> Dictionary:
 	padre.add_child(fila)
 
 	var nombre := Label.new()
-	nombre.text = clave.capitalize()
+	nombre.text = NOMBRE_BARRA.get(clave, clave.capitalize())
 	nombre.custom_minimum_size = Vector2(48, 0)
 	nombre.add_theme_color_override("font_color", TENUE)
 	nombre.add_theme_font_size_override("font_size", Partida.tam_fuente)
@@ -316,10 +467,31 @@ func _refrescar_estado() -> void:
 
 	var genes: Dictionary = Partida.core.decodificar(e["seed"])
 
-	_etiquetas["seed"].text = e["seed"]
+	_etiquetas["seed"].text = "Semilla " + e["seed"]
 	_etiquetas["quien"].text = "%s · %s" % [genes["linaje"], genes["temperamento"]]
 
-	var descripcion: String = e["etapa"].capitalize()
+	var rarezas: Array = Partida.core.rarezas(e["seed"])
+	if rarezas.is_empty():
+		_rarezas.text = ""
+	else:
+		var nombres := []
+		for r in rarezas:
+			nombres.append(r["nombre"])
+		_rarezas.text = "◆ " + ", ".join(nombres)
+		_rarezas.tooltip_text = "\n".join(rarezas.map(func(r): return "%s: %s" % [r["nombre"], r["regla"]]))
+
+	var cuantas: int = Partida.core.criaturas(_ahora_ms()).size()
+	_selector.visible = cuantas > 1
+	if cuantas > 1:
+		var lista: Array = Partida.core.criaturas(_ahora_ms())
+		for i in lista.size():
+			if lista[i]["activa"]:
+				_contador.text = "%d/%d" % [i + 1, cuantas]
+
+	var id_objetivo: String = Partida.objetivo_actual()
+	_objetivo.text = "→ " + (Historia.TODO_HECHO if id_objetivo == "" else Historia.OBJETIVOS[id_objetivo])
+
+	var descripcion: String = NOMBRE_ETAPA.get(e["etapa"], e["etapa"].capitalize())
 	if e["forma"] != "Sin definir":
 		descripcion += " · " + e["forma"]
 	var falta: int = Partida.core.falta_para_volver(_ahora_ms())
