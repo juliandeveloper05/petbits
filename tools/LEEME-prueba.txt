@@ -1,0 +1,68 @@
+PetBits - versión de prueba
+===========================
+
+Gracias por probarlo. No se instala: se descomprime y se juega.
+
+
+CÓMO ABRIRLO
+------------
+
+1. ANTES de descomprimir: clic derecho en PetBits-prueba.zip
+   -> Propiedades -> tildá "Desbloquear" abajo a la derecha -> Aceptar.
+
+2. Descomprimí el .zip entero en una carpeta
+   (clic derecho -> Extraer todo).
+   No lo abras desde adentro del .zip: así no anda.
+
+3. Doble clic en PetBits.exe.
+
+   Si aparece "Windows protegió su PC":
+   Más información -> Ejecutar de todas formas.
+   Aparece porque el juego no está firmado, no porque tenga algo raro.
+
+No hace falta instalar nada más.
+
+
+CONTROLES
+---------
+
+  Flechas o WASD      caminar
+  Enter o Espacio     usar, hablar, pasar de página
+  Esc                 volver, cerrar
+  Mouse               los botones de la ficha de la criatura
+  F8                  pasan 6 horas (ver abajo)
+
+  También anda con joystick.
+
+
+LA TECLA F8
+-----------
+
+El juego es lento a propósito: la criatura crece a lo largo de días, como un
+Tamagotchi. Para que puedas ver todo en una tarde, F8 adelanta 6 horas, como si
+hubieras cerrado el juego y vuelto después. Usala cuando quieras.
+
+Pero contame igual si el ritmo real te parece lento: es parte de lo que
+quiero saber.
+
+
+QUÉ ME SIRVE QUE ME CUENTES
+---------------------------
+
+- Dónde te trabaste o no supiste qué hacer.
+- Qué te aburrió, y qué te dio ganas de seguir.
+- Si algo se rompió: qué estabas haciendo, y los números que aparecen abajo en
+  el mapa (son la posición donde estabas).
+- Si el juego se cierra solo: abrí PetBits.console.exe en vez de PetBits.exe,
+  repetí lo que hiciste, y mandame una foto de la ventana negra.
+
+
+TU PARTIDA
+----------
+
+Se guarda sola, cada vez que pasa algo, en:
+
+  %APPDATA%\PetBits\
+
+Para empezar de cero, en el menú del principio elegí "Nueva partida". La
+anterior no se borra: queda apartada en esa misma carpeta.

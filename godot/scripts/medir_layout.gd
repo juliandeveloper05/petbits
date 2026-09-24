@@ -23,6 +23,9 @@
 
 extends Node
 
+const RUTA := "user://medicion.json"
+const RUTA_MUNDO := "user://medicion_mundo.json"
+
 
 func _ready() -> void:
 	var vp := Vector2(
@@ -34,8 +37,18 @@ func _ready() -> void:
 	# La pantalla real necesita una partida real, pero medir no es jugar: la
 	# partida de prueba va a un archivo aparte para no despertarle la criatura a
 	# quien esté corriendo esto.
-	Partida.ruta_save = "user://medicion.json"
+	#
+	# LOS CUATRO, NO DOS. Acá se desviaba el save y la cuarentena, pero no el
+	# archivo del mundo ni el guardado al salir. PetView llama a `iniciar()`, y
+	# al cerrar `_notification` escribía `user://mundo.json` — el DE VERDAD, el
+	# de quien estuviera corriendo la suite. Pasó en cada corrida durante
+	# semanas: la posición y lo levantado del suelo se reseteaban solos. Además,
+	# `guardar()` volvía a crear `medicion.json` después de que la línea del
+	# final lo borraba, y quedaba tirado en la carpeta.
+	Partida.guardar_al_salir = false
+	Partida.ruta_save = RUTA
 	Partida.ruta_cuarentena = "user://medicion.rota.json"
+	Partida.ruta_mundo = RUTA_MUNDO
 
 	# Un cuadro antes de colgar nada: durante `_ready()` la raíz todavía está
 	# armando sus hijos y `add_child` falla con un error en consola en vez de una
@@ -74,5 +87,12 @@ func _ready() -> void:
 		else:
 			print("\nEntra, con %.0f px de aire abajo." % (vp.y - pedido))
 
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(Partida.ruta_save))
+	# Se borran las CONSTANTES de este archivo, nunca `Partida.ruta_*`. Si alguien
+	# le saca el desvío de arriba, `Partida.ruta_save` pasa a ser la partida de
+	# verdad y esta línea la borraría — la red de `Partida` frena las escrituras
+	# sin ventana, pero un borrado directo no pasa por ella. Así lo verificó el
+	# arreglo de este archivo: sacándole el desvío a propósito, esta limpieza
+	# borró el mundo.json real.
+	for r in [RUTA, RUTA_MUNDO]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(r))
 	get_tree().quit(fallas)
