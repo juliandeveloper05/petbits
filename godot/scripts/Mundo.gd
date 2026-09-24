@@ -101,6 +101,23 @@ var _camara: Camera2D = null
 ## Los sprites de los NPC del mapa actual. Se rehacen en cada carga.
 var _vecinos: Array[Sprite2D] = []
 
+## Lo que hace que el mapa no parezca una foto: la criatura parpadea, da un
+## saltito por paso y tiene sombra; los vecinos respiran y parpadean.
+##
+## El saltito va en `offset` y no en `position`: la posición es la del mundo —la
+## que choca, la que se guarda, la que sigue la cámara— y no tiene por qué
+## enterarse de una animación.
+const INTERVALO_PARPADEO := 4.2
+const DURACION_PARPADEO := 0.16
+const PASO_REBOTE := 0.14
+const PERIODO_RESPIRO := 1.2
+
+var _reloj := 0.0
+var _parpadeando := false
+var _proximo_parpadeo := INTERVALO_PARPADEO
+var _caminando := false
+var _textura_sombra: ImageTexture = null
+
 ## Los chunks ya volcados en el tilemap, por coordenada de chunk.
 ##
 ## Se guardan para no volver a pintarlos. Volcar un chunk son mil veinticuatro
@@ -502,6 +519,15 @@ func _construir_vecinos() -> void:
 		s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		s.scale = Vector2(0.5, 0.5)
 		s.position = Vector2((punto["x"] + 0.5) * TILE, (punto["y"] + 0.5) * TILE)
+		# Los dos juegos de ojos, hechos una vez: parpadear no tiene que pedirle un
+		# sprite nuevo al núcleo cada cuatro segundos.
+		s.set_meta("ojos", [
+			s.texture,
+			ImageTexture.create_from_image(
+				Partida.core.sprite(punto["seed"], "adulto", "guardian", true)
+			),
+		])
+		_sombra(s)
 		add_child(s)
 		_vecinos.append(s)
 
@@ -514,7 +540,59 @@ func _construir_criatura() -> void:
 	# cuatro tiles y taparía el mapa. A la mitad ocupa uno, que es la proporción
 	# de un personaje de consola portátil.
 	_criatura.scale = Vector2(0.5, 0.5)
+	_sombra(_criatura)
 	add_child(_criatura)
+
+
+## Una sombra chata a los pies.
+##
+## Hija del sprite con `show_behind_parent`: lo sigue a todos lados, se apaga con
+## él cuando está de expedición, y se queda en el suelo mientras el sprite salta,
+## porque el saltito es `offset` y el offset no mueve a los hijos.
+func _sombra(padre: Sprite2D) -> void:
+	if _textura_sombra == null:
+		# En píxeles del sprite, que está a la mitad: 11×4 en el mapa.
+		var img := Image.create_empty(22, 8, false, Image.FORMAT_RGBA8)
+		for y in 8:
+			for x in 22:
+				var dx := (x + 0.5 - 11.0) / 11.0
+				var dy := (y + 0.5 - 4.0) / 4.0
+				if dx * dx + dy * dy <= 1.0:
+					img.set_pixel(x, y, Color(0, 0, 0, 0.3))
+		_textura_sombra = ImageTexture.create_from_image(img)
+	var s := Sprite2D.new()
+	s.texture = _textura_sombra
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.show_behind_parent = true
+	s.position = Vector2(0, 12)
+	padre.add_child(s)
+
+
+func _animar(delta: float) -> void:
+	_reloj += delta
+
+	# Caminando, un píxel arriba cada dos pasos; quieta, respira. -2 en el sprite
+	# es -1 en el mapa: está a escala 0.5.
+	var arriba: bool
+	if _caminando:
+		arriba = int(_reloj / PASO_REBOTE) % 2 == 0
+	else:
+		arriba = fmod(_reloj, PERIODO_RESPIRO) < PERIODO_RESPIRO / 2.0
+	_criatura.offset.y = -2.0 if arriba else 0.0
+
+	# Cada vecino con su fase, para que el pueblo no respire a coro.
+	for i in _vecinos.size():
+		var v := _vecinos[i]
+		var fase := _reloj + i * 0.37
+		v.offset.y = -2.0 if fmod(fase, PERIODO_RESPIRO) < PERIODO_RESPIRO / 2.0 else 0.0
+		var ojos: Array = v.get_meta("ojos")
+		v.texture = ojos[1] if fmod(fase * 0.9 + i * 1.3, 5.0) < DURACION_PARPADEO else ojos[0]
+
+	_proximo_parpadeo -= delta
+	if _proximo_parpadeo <= 0.0:
+		_parpadeando = not _parpadeando
+		_proximo_parpadeo = DURACION_PARPADEO if _parpadeando else INTERVALO_PARPADEO
+		_refrescar_sprite()
 
 
 ## Las dos líneas fijas: quién sos arriba, qué podés hacer abajo.
@@ -617,6 +695,9 @@ func _process(delta: float) -> void:
 	if _criatura == null or _def == null:
 		return
 
+	_animar(delta)
+	_caminando = false
+
 	# Mientras habla no se camina. Es la regla de todos los juegos del género y
 	# no es capricho: si te pudieras ir mientras la caja escribe, el texto
 	# quedaría diciéndole algo a nadie.
@@ -634,6 +715,7 @@ func _process(delta: float) -> void:
 	if dir == Vector2.ZERO:
 		_mirar_alrededor()
 		return
+	_caminando = true
 
 	# Normalizado: sin esto, ir en diagonal sería un 41% más rápido que ir
 	# derecho, que es el bug de movimiento más viejo del mundo.
@@ -1075,7 +1157,7 @@ func _al_terminar_de_hablar() -> void:
 # ---------------------------------------------------------------------------
 
 func _refrescar_sprite() -> void:
-	var imagen: Image = Partida.core.sprite_actual(false)
+	var imagen: Image = Partida.core.sprite_actual(_parpadeando)
 	if imagen != null and _criatura != null:
 		_criatura.texture = ImageTexture.create_from_image(imagen)
 

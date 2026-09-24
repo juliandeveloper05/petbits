@@ -27,7 +27,7 @@ $ErrorActionPreference = "Stop"
 $raiz = Split-Path -Parent $PSScriptRoot
 $proyecto = Join-Path $raiz "godot"
 $carpeta = Join-Path $proyecto "teaser"
-$avi = Join-Path $carpeta "teaser.avi"
+$cuadros = Join-Path $carpeta "cuadros"
 $mp4 = Join-Path $carpeta "teaser_historias.mp4"
 
 # Godot no tiene que importar esta carpeta: son salidas, no recursos del juego.
@@ -37,10 +37,15 @@ Set-Content -Path (Join-Path $carpeta ".gdignore") -Value "" -NoNewline
 Write-Host "`n--- 1. Subtitulos ---`n"
 & godot --headless --path $proyecto --script res://scripts/teaser_textos.gd
 
+# En PNG y no en .avi: el .avi de Godot es MJPEG, y el JPEG le deja a cada
+# borde del pixel art un halo de bloques de 8x8 que al doble se ve como un
+# recuadro sucio alrededor de la criatura. Mil cuadros de 480x270 sin perdida
+# pesan menos que eso.
 Write-Host "`n--- 2. Grabando el juego ---`n"
-if (Test-Path $avi) { Remove-Item $avi }
-& godot --path $proyecto res://scenes/Teaser.tscn --write-movie $avi --fixed-fps 30 --disable-vsync
-if (-not (Test-Path $avi)) { throw "No se grabo $avi" }
+if (Test-Path $cuadros) { Remove-Item -Recurse -Force $cuadros }
+New-Item -ItemType Directory -Force $cuadros | Out-Null
+& godot --path $proyecto res://scenes/Teaser.tscn --write-movie (Join-Path $cuadros "c.png") --fixed-fps 30 --disable-vsync
+if (-not (Test-Path (Join-Path $cuadros "c00000000.png"))) { throw "No se grabo el juego en $cuadros" }
 
 $t = Get-Content (Join-Path $carpeta "tiempos.json") -Raw | ConvertFrom-Json
 $orden = @("titulo", "semilla", "cuidala", "pueblo", "mundo", "cierre")
@@ -48,7 +53,7 @@ $fin = [double]$t.fin
 
 Write-Host "`n--- 3. Armando el vertical ---`n"
 
-$entradas = @("-i", $avi)
+$entradas = @("-framerate", "30", "-i", (Join-Path $cuadros "c%08d.png"))
 foreach ($n in $orden) {
     $entradas += @("-loop", "1", "-framerate", "30", "-i", (Join-Path $carpeta "tramo_$n.png"))
 }

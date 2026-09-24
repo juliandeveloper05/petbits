@@ -55,6 +55,12 @@ const DURACION_PARPADEO := 0.16
 
 const LADO_SPRITE := 96
 
+## La respiración: un píxel arriba, un píxel abajo. Dormida respira más lento.
+## Un píxel de la pantalla de 480×270, que en la ventana son tres: se nota sin
+## marear, y queda en la grilla como el resto del pixel art.
+const PERIODO_RESPIRO := 1.2
+const PERIODO_DORMIDA := 2.6
+
 var _sprite: TextureRect = null
 var _barras := {}
 var _etiquetas := {}
@@ -64,6 +70,13 @@ var _botones_salida := {}
 
 var _parpadeando := false
 var _proximo_parpadeo := INTERVALO_PARPADEO
+
+var _respiro := 0.0
+var _durmiendo := false
+
+## El saltito cuando una acción sale, o el "no" cuando la rechaza. Mientras
+## corre, la respiración no le toca la posición.
+var _gesto: Tween = null
 
 ## Lo que hay que hacer ahora. Una línea arriba de todo, siempre visible.
 var _objetivo: Label = null
@@ -131,6 +144,8 @@ func _ahora_ms() -> int:
 
 
 func _process(delta: float) -> void:
+	_respirar(delta)
+
 	_proximo_parpadeo -= delta
 	if _proximo_parpadeo > 0.0:
 		return
@@ -138,6 +153,29 @@ func _process(delta: float) -> void:
 	_parpadeando = not _parpadeando
 	_proximo_parpadeo = DURACION_PARPADEO if _parpadeando else INTERVALO_PARPADEO
 	_refrescar_sprite()
+
+
+func _respirar(delta: float) -> void:
+	if _sprite == null or (_gesto != null and _gesto.is_running()):
+		return
+	_respiro += delta
+	var periodo := PERIODO_DORMIDA if _durmiendo else PERIODO_RESPIRO
+	_sprite.position = Vector2(0, -1 if fmod(_respiro, periodo) < periodo / 2.0 else 0)
+
+
+## Salta cuando la acción sale; niega con el cuerpo cuando no. Lo mismo que
+## decía la web con CSS, y lo que hace que apretar un botón se sienta.
+func _gesticular(salio: bool) -> void:
+	if _gesto != null:
+		_gesto.kill()
+	_sprite.position = Vector2.ZERO
+	_gesto = create_tween()
+	if salio:
+		_gesto.tween_property(_sprite, "position:y", -6.0, 0.08).set_ease(Tween.EASE_OUT)
+		_gesto.tween_property(_sprite, "position:y", 0.0, 0.14).set_ease(Tween.EASE_IN)
+	else:
+		for x in [-2.0, 2.0, -2.0, 0.0]:
+			_gesto.tween_property(_sprite, "position:x", x, 0.05)
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +248,7 @@ func _on_accion(resultado: Dictionary) -> void:
 	# energía para jugar" le dice al jugador qué hacer, y por eso se muestra
 	# igual que cualquier otro mensaje, solo que en ámbar.
 	_anotar(resultado["mensaje"], AVISO if not resultado["ok"] else TEXTO)
+	_gesticular(resultado["ok"])
 
 
 # ---------------------------------------------------------------------------
@@ -266,13 +305,21 @@ func _construir_ficha(padre: Node) -> void:
 	fila.add_theme_constant_override("separation", 10)
 	padre.add_child(fila)
 
+	# El sprite va dentro de un marco sin layout: el HBox acomoda al marco, y el
+	# sprite se mueve adentro —respira, salta— sin pelearse con el contenedor,
+	# que lo devolvería a su lugar en el cuadro siguiente.
+	var marco := Control.new()
+	marco.custom_minimum_size = Vector2(LADO_SPRITE, LADO_SPRITE)
+	fila.add_child(marco)
+
 	_sprite = TextureRect.new()
 	_sprite.custom_minimum_size = Vector2(LADO_SPRITE, LADO_SPRITE)
+	_sprite.size = Vector2(LADO_SPRITE, LADO_SPRITE)
 	_sprite.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	# Nearest-neighbor: sin esto el pixel art de 32×32 se ve borroso al ampliar,
 	# que es exactamente lo contrario de lo que se busca.
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	fila.add_child(_sprite)
+	marco.add_child(_sprite)
 
 	var ficha := VBoxContainer.new()
 	ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -465,6 +512,7 @@ func _refrescar_estado() -> void:
 	if e.is_empty():
 		return
 
+	_durmiendo = e["durmiendo"] or e["letargico"]
 	var genes: Dictionary = Partida.core.decodificar(e["seed"])
 
 	_etiquetas["seed"].text = "Semilla " + e["seed"]
