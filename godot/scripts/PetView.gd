@@ -115,7 +115,7 @@ func _ready() -> void:
 	# saltearla con Esc: nadie quiere leerla de nuevo cada vez que vuelve del
 	# pueblo.
 	if not Partida.objetivos_hechos.has("intro"):
-		if OS.is_debug_build():
+		if Partida.version_de_prueba:
 			_anotar("Versión de prueba: " + Historia.AYUDA_PRUEBA + ".", TENUE)
 		for pagina in Historia.INTRO:
 			_caja.decir(pagina)

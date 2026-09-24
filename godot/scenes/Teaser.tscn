@@ -1,0 +1,9 @@
+; La coreografía del teaser. Se corre CON ventana y con `--write-movie`:
+; ver tools/armar_teaser.ps1.
+
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/teaser.gd" id="1_tool"]
+
+[node name="Teaser" type="Node"]
+script = ExtResource("1_tool")

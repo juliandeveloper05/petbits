@@ -137,6 +137,14 @@ var guardar_bloqueado := false
 ## nada.
 var semilla_inicial := ""
 
+## Si esta es la versión de prueba: la tecla F8 y los carteles que la anuncian.
+##
+## Sale de `OS.is_debug_build()`, que es lo que se le pasa al tester. Es una
+## variable y no la llamada directa para que el teaser —que se graba desde el
+## editor, en debug— pueda apagarla: un video para Instagram no le tiene que
+## explicar a nadie la tecla del tester.
+var version_de_prueba := OS.is_debug_build()
+
 ## En qué mapa estás, y de cuál venías.
 ##
 ## NO se guardan en el archivo, y eso es deliberado: el formato del save es el de
@@ -620,12 +628,12 @@ func ahora_ms() -> int:
 ## La tecla de prueba: F8 adelanta seis horas.
 ##
 ## Solo en builds de debug, que es lo que se le pasa al tester. En un export de
-## release `OS.is_debug_build()` es falso y la tecla no existe.
+## release `version_de_prueba` es falso y la tecla no existe.
 ##
 ## `_input` y no `_unhandled_input`: tiene que andar en cualquier pantalla,
 ## aunque la pantalla se quede con las teclas que le interesan.
 func _input(evento: InputEvent) -> void:
-	if not OS.is_debug_build() or not _cargada:
+	if not version_de_prueba or not _cargada:
 		return
 	if evento.is_action_pressed("tester_adelantar"):
 		get_viewport().set_input_as_handled()

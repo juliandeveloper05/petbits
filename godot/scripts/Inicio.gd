@@ -424,7 +424,7 @@ func _texto(contenido: String, escala: int, color: Color) -> Label:
 
 func _version() -> String:
 	var v: String = ProjectSettings.get_setting("application/config/version", "")
-	if OS.is_debug_build():
+	if Partida.version_de_prueba:
 		return "v%s · versión de prueba" % v
 	return "v%s" % v
 

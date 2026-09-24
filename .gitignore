@@ -174,3 +174,7 @@ godot/demo*.mp4
 godot/recorrido_*.png
 godot/recorrido_*.png.import
 
+
+# El teaser para historias: se regenera con tools/armar_teaser.ps1.
+godot/teaser/
+
