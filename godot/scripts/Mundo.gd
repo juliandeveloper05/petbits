@@ -174,11 +174,15 @@ func _ready() -> void:
 	var r: Dictionary = Partida.core.pueblo_rect()
 	_pueblo = Rect2i(int(r["x"]), int(r["y"]), int(r["ancho"]), int(r["alto"]))
 
+	# Las señales ANTES de cargar el mapa. La primera carga es sin fundido, corre
+	# de un tirón y ahí mismo marca el objetivo "pueblo": conectadas después, el
+	# aviso salía sin nadie que lo escuchara, y nunca se leía el que dice que la
+	# vecina está a tu izquierda.
+	Partida.objetivo_cumplido.connect(_al_cumplir)
+	Partida.volvio.connect(_al_volver)
 	_cargar_mapa(Partida.mapa, false)
 
 	Partida.cambio.connect(_refrescar_estado)
-	Partida.objetivo_cumplido.connect(_al_cumplir)
-	Partida.volvio.connect(_al_volver)
 	_refrescar_estado()
 	set_process(true)
 
@@ -1195,7 +1199,13 @@ func _recolectar() -> void:
 		return
 
 	if Partida.ya_recolectado(celda):
-		_caja.decir_ya("Acá ya no queda nada. Va a volver a crecer.")
+		# Sin "va a volver a crecer": lo levantado se olvida recién después de
+		# miles de celdas, así que en una partida de prueba no vuelve nunca. Y el
+		# círculo se ve vacío: prometer que se llena sería mentirle al que espera.
+		if h["tipo"] == "hito":
+			_caja.decir_ya("Este círculo ya está vacío: la semilla la juntaste vos. Hay otros más lejos.")
+		else:
+			_caja.decir_ya("Acá ya no queda nada.")
 		return
 
 	var antes: String = Partida.objetivo_actual()

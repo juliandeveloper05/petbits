@@ -125,12 +125,21 @@ func _correr() -> void:
 	await get_tree().process_frame
 
 	# ---- El mapa ----------------------------------------------------------
+	#
+	# Como en una partida de verdad: ya comió, así que el objetivo a la vista es
+	# salir al pueblo. Al entrar, la caja tiene que contarlo —es el aviso que dice
+	# que la vecina está a tu izquierda—. Durante días no salía: Mundo marcaba el
+	# objetivo en la primera carga y conectaba la señal recién después.
+	Partida.objetivos_hechos["comer"] = true
+	_afirmar(Partida.objetivo_actual() == "pueblo", "el objetivo a la vista es salir al pueblo")
 	var mundo: Node2D = load("res://scenes/Mundo.tscn").instantiate()
 	get_tree().root.add_child(mundo)
 	await get_tree().process_frame
 	await get_tree().process_frame
 
 	_afirmar(mundo.is_inside_tree(), "el pueblo entró al árbol")
+	_afirmar(mundo._caja.abierta(), "al llegar al pueblo, la caja cuenta el objetivo cumplido")
+	mundo._caja.cerrar()
 	var seed_mapa: String = Partida.core.estado()["seed"]
 	print("El pueblo muestra: %s" % seed_mapa)
 	_afirmar(seed_mapa == seed_petview, "es la MISMA criatura en las dos pantallas")

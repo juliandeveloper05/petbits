@@ -73,7 +73,7 @@ const OBJETIVOS := {
 	"comer": "Dale de comer: elegí Baya, Raíz o Larva.",
 	"pueblo": "Salí a caminar: botón Pueblo. En la plaza te cuentan algo.",
 	"vecino": "Hablá con Doña Cuenta en la plaza: acercate y apretá Enter.",
-	"expedicion": "Mandala al patio: su cartel en el pueblo, o botón El patio.",
+	"expedicion": "Mandala al patio: la piedra de arriba a la izquierda, o botón El patio.",
 	"semilla": "Afuera del pueblo, pisá un círculo de piedras y apretá Enter.",
 	"incubar": "Volvé al pueblo (0, 0) y usá la incubadora del criadero.",
 	"cruza": "Cuando sean adultas, cruzalas en los pedestales del criadero.",
@@ -84,9 +84,9 @@ const OBJETIVOS := {
 const CUMPLIDO := {
 	"comer": "Comió, y con ganas. Ojo: lo que come decide en qué se convierte. Ahora sacala a pasear: botón Pueblo.",
 	"pueblo": "Esto es el pueblo. Caminá con las flechas; con Esc volvés a la ficha. Acá nomás, a tu izquierda, hay alguien que cuenta cuentos: acercate y apretá Enter.",
-	"vecino": "Si te olvidás de algo, volvé a hablarle: lo cuenta siempre igual. Ahora mandala al patio: acercate al cartel de arriba a la izquierda y apretá Enter. O Esc, y en la ficha, botón El patio.",
+	"vecino": "Si te olvidás de algo, volvé a hablarle: lo cuenta siempre igual. Ahora mandala al patio: caminá hasta la piedra de arriba a la izquierda, al final del caminito, y apretá Enter. O Esc, y en la ficha, botón El patio.",
 	"expedicion": "Allá fue. Vuelve sola en un rato, con algo de comer; si la ves medio transparente, es que anda lejos. Mientras, salí más allá del borde del pueblo: afuera hay círculos de piedras con semillas.",
-	"semilla": "Uno de los números que la señora enterró y olvidó: adentro duerme otra criatura. Volvé al pueblo, hacia el 0, 0 de los números de abajo, y llevá la semilla al criadero, abajo a la izquierda.",
+	"semilla": "Uno de los números que la señora enterró y olvidó: adentro duerme otra criatura. Llevá la semilla a la incubadora del criadero, en el pueblo, abajo a la izquierda. Si estás afuera, el pueblo es el 0, 0 de los números de abajo.",
 	"incubar": "¡Nació! La señora se olvidó de ella; vos no. Cambiá entre las dos con < y > en la ficha. Para cruzarlas en los pedestales tienen que ser adultas y quererte: eso lleva unos días.",
 	"cruza": "Una tercera, mezcla de las dos. A esta no la enterró la señora: la hicieron ustedes. Así se va llenando el codex: la biblioteca, arriba de la plaza.",
 }

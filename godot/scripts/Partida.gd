@@ -700,8 +700,11 @@ func _revisar_regreso() -> void:
 	anotar("Volvió %s. %s" % [r["destino"], r["mensaje"]], "bien")
 	if r["semilla"] != "":
 		anotar("Encontró una semilla: %s" % r["semilla"], "raro")
-		marcar_si_era("semilla", antes)
+	# Primero que volvió, después el objetivo: en el mapa la caja tiene que decir
+	# "Volvió del bosque... trajo una semilla" antes que qué hacer con ella.
 	volvio.emit(r)
+	if r["semilla"] != "":
+		marcar_si_era("semilla", antes)
 	guardar()
 
 

@@ -128,7 +128,9 @@ func _correr() -> void:
 		await _segundos(0.2)
 	await _caminar_hasta("move_left", Historia.VECINO_NOMBRE, 3.0)
 	await _tecla(KEY_ENTER)
-	await _segundos(3.2)          # el vecino, hablando
+	# La primera página de Doña Cuenta, entera: con un número fijo el video la
+	# cortaba a mitad de palabra en cuanto la frase creció.
+	await _segundos(Historia.VECINO[0].length() / CajaDialogo.VELOCIDAD + 1.0)
 
 	# ---- 4. El mundo: un círculo de piedras --------------------------------
 	#
