@@ -51,6 +51,7 @@
 #include <array>
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 namespace petbits {
 
@@ -164,6 +165,20 @@ enum class Hallazgo : uint8_t {
  * lago". Que ya lo hayas levantado o no es otra cosa, y se guarda aparte.
  */
 Hallazgo hallazgoEn(Seed semilla, int32_t x, int32_t y);
+
+/**
+ * Dónde hay hitos en un chunk: los índices `y * CHUNK + x` de sus celdas.
+ *
+ * Existe para que el mapa los pueda DIBUJAR. Durante semanas un hito fue una
+ * celda como cualquier otra: el único rastro era el cartel de abajo, y solo si
+ * la criatura pisaba esa celda exacta. Uno cada dos mil tiles, invisible, es un
+ * hallazgo que nadie encuentra — y con él se trababa el objetivo de incubar.
+ *
+ * Una llamada por chunk y no mil `hallazgoEn` desde GDScript: cruzar el borde de
+ * un chunk trae tres chunks nuevos, y tres mil diccionarios en un cuadro son un
+ * tirón que se ve.
+ */
+std::vector<int> hitosEnChunk(Seed semilla, int32_t cx, int32_t cy);
 
 /**
  * El genoma que deja un hito.

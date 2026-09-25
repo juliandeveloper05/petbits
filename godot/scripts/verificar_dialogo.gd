@@ -25,6 +25,7 @@
 extends Node
 
 const CajaDialogo = preload("res://scripts/CajaDialogo.gd")
+const Historia = preload("res://scripts/Historia.gd")
 
 var _fallas := 0
 
@@ -44,11 +45,28 @@ func _ready() -> void:
 		"unapalabramuchomaslargaqueelrenglonenteroynoentraniahipalos",
 	]
 
+	# Y todo lo que dice la historia, que es lo que más pasa por la caja: la
+	# intro, Doña Cuenta y lo que se dice al cumplir cada objetivo. Si alguien
+	# cambia un texto de `Historia.gd`, pasa por acá sin tener que acordarse.
+	for frase in Historia.INTRO + Historia.VECINO + Historia.CUMPLIDO.values():
+		frases.append(frase)
+
 	# Varios anchos: el de la caja de verdad y algunos apretados, que es donde
 	# los cortes de línea se rompen.
 	for columnas in [8, 12, 37, 76]:
 		for frase in frases:
 			_probar(frase, columnas)
+
+	# Los objetivos no pasan por la caja: van en la línea de arriba de la ficha,
+	# que mide 464 px —77 letras de 6— y corta lo que sobra con `clip_text`. Con
+	# el "→ " adelante, un objetivo largo se leería a medias: media instrucción,
+	# que es peor que ninguna.
+	for texto in Historia.OBJETIVOS.values() + [Historia.TODO_HECHO]:
+		var linea: String = "→ " + texto
+		_afirmar(
+			linea.length() <= 76,
+			'la línea de arriba se corta: %d letras en "%s"' % [linea.length(), texto.substr(0, 30)]
+		)
 
 	# El caso degenerado: cero columnas no tiene que colgarse ni devolver basura.
 	_afirmar(CajaDialogo.partir("hola mundo", 0).is_empty(), "con cero columnas no devuelve nada")

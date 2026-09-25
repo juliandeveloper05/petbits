@@ -168,10 +168,52 @@ func _correr() -> void:
 		mundo._criatura.position = Vector2(
 			(primer_hito.x + 0.5) * 16, (primer_hito.y + 0.5) * 16
 		)
+		mundo._actualizar_chunks()
+
+		# El círculo se VE: tiene su sprite en su celda, y lleno. Durante semanas
+		# no se dibujaba, y buscar una semilla era caminar a ciegas.
+		var sprite := _sprite_de_hito(mundo, primer_hito)
+		_afirmar(sprite != null, "el círculo de piedras se dibuja en su celda")
+		_afirmar(sprite != null and sprite.get_meta("lleno"), "y se dibuja lleno, con su semilla")
+
+		# Cada sprite puesto está sobre un hito de verdad: si los índices del
+		# chunk salieran corridos, el círculo estaría en una celda y el "Enter
+		# para juntar" en otra.
+		var sprites_puestos := 0
+		var sprites_mal := 0
+		for lista in mundo._hitos.values():
+			for s in lista:
+				sprites_puestos += 1
+				var c: Vector2i = s.get_meta("celda")
+				if Partida.core.mundo_hallazgo(semilla, c.x, c.y)["tipo"] != "hito":
+					sprites_mal += 1
+		_afirmar(
+			sprites_puestos > 0 and sprites_mal == 0,
+			"los %d círculos dibujados están sobre hitos (%d corridos)" % [sprites_puestos, sprites_mal]
+		)
+
 		mundo._recolectar()
 		_afirmar(
 			Partida.core.semillas().size() == antes_semillas + 1,
 			"un hito deja una semilla para incubar"
+		)
+		_afirmar(
+			sprite != null and not sprite.get_meta("lleno"),
+			"al levantar la semilla, el círculo queda vacío en el acto"
+		)
+
+		# Y sigue vacío después de irse lejos y volver: el chunk se vuelve a
+		# volcar, y tiene que acordarse de lo levantado.
+		mundo._criatura.position = Vector2((primer_hito.x + 8 * lado) * 16, primer_hito.y * 16)
+		mundo._actualizar_chunks()
+		mundo._criatura.position = Vector2(
+			(primer_hito.x + 0.5) * 16, (primer_hito.y + 0.5) * 16
+		)
+		mundo._actualizar_chunks()
+		var de_nuevo := _sprite_de_hito(mundo, primer_hito)
+		_afirmar(
+			de_nuevo != null and not de_nuevo.get_meta("lleno"),
+			"al volver, el círculo levantado sigue vacío"
 		)
 
 	# ---- El archivo del mundo ----------------------------------------------
@@ -208,6 +250,14 @@ func _correr() -> void:
 	await get_tree().process_frame
 
 	_termino = true
+
+
+func _sprite_de_hito(mundo: Node, celda: Vector2i) -> Sprite2D:
+	for lista in mundo._hitos.values():
+		for s in lista:
+			if s.get_meta("celda") == celda and not s.is_queued_for_deletion():
+				return s
+	return null
 
 
 func _cuanto(id: String) -> int:

@@ -1940,6 +1940,44 @@ static void probarMundo() {
                 "no hay una sola veta en cien tiles a la redonda del origen");
     }
 
+    // -- 3c. Los hitos de un chunk, para dibujarlos -------------------------
+    //
+    // El mapa los dibuja con lo que diga `hitosEnChunk`. Si los índices salieran
+    // traspuestos o corridos, el círculo aparecería en una celda y el cartel de
+    // "Enter para juntar" en otra: se vería, y no se podría levantar.
+    //
+    // Se recorren los 49 chunks alrededor del pueblo: cada índice tiene que ser
+    // un hito según `hallazgoEn`, no puede faltar ninguno, y en el pueblo no hay.
+    for (Seed semilla : SEMILLAS) {
+        int total = 0;
+        for (int32_t cy = -3; cy <= 3; ++cy) {
+            for (int32_t cx = -3; cx <= 3; ++cx) {
+                const std::vector<int> hitos = hitosEnChunk(semilla, cx, cy);
+                int esperados = 0;
+                for (int y = 0; y < CHUNK; ++y) {
+                    for (int x = 0; x < CHUNK; ++x) {
+                        if (hallazgoEn(semilla, cx * CHUNK + x, cy * CHUNK + y) == Hallazgo::Hito) {
+                            ++esperados;
+                        }
+                    }
+                }
+                revisar(static_cast<int>(hitos.size()) == esperados, "hitos por chunk",
+                        "la cantidad no coincide con la de hallazgoEn");
+                for (int i : hitos) {
+                    const int32_t wx = cx * CHUNK + i % CHUNK;
+                    const int32_t wy = cy * CHUNK + i / CHUNK;
+                    revisar(hallazgoEn(semilla, wx, wy) == Hallazgo::Hito, "hitos por chunk",
+                            "un índice no cae sobre un hito");
+                    revisar(!enElPueblo(wx, wy), "hitos por chunk", "hay un hito adentro del pueblo");
+                }
+                total += static_cast<int>(hitos.size());
+            }
+        }
+        // 49 chunks son unas cincuenta mil celdas: a uno cada dos mil, tiene que
+        // haber varios. Cero querría decir que el mapa nunca va a dibujar ninguno.
+        revisar(total > 0, "hitos por chunk", "ni un hito en los 49 chunks alrededor del pueblo");
+    }
+
     // -- 4. Caminabilidad ---------------------------------------------------
     //
     // El que de verdad importa. Un mundo con lagos y roquedales bien puestos se

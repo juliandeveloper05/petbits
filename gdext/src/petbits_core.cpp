@@ -126,6 +126,8 @@ void PetBitsCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("mundo_bioma", "semilla", "x", "y"), &PetBitsCore::mundo_bioma);
     ClassDB::bind_method(D_METHOD("mundo_hallazgo", "semilla", "x", "y"),
                          &PetBitsCore::mundo_hallazgo);
+    ClassDB::bind_method(D_METHOD("mundo_hitos_chunk", "semilla", "cx", "cy"),
+                         &PetBitsCore::mundo_hitos_chunk);
     ClassDB::bind_method(D_METHOD("recolectar", "semilla", "x", "y"), &PetBitsCore::recolectar);
 
     ClassDB::bind_method(D_METHOD("codex"), &PetBitsCore::codex);
@@ -1132,6 +1134,18 @@ Dictionary PetBitsCore::mundo_hallazgo(const String& semilla, int64_t x, int64_t
             break;
     }
     return d;
+}
+
+PackedInt32Array PetBitsCore::mundo_hitos_chunk(const String& semilla, int64_t cx,
+                                                int64_t cy) const {
+    PackedInt32Array salida;
+    petbits::Seed valor = 0;
+    if (!leerSeed(semilla, valor)) return salida;
+
+    for (int i : petbits::hitosEnChunk(valor, static_cast<int32_t>(cx), static_cast<int32_t>(cy))) {
+        salida.push_back(i);
+    }
+    return salida;
 }
 
 Dictionary PetBitsCore::recolectar(const String& semilla, int64_t x, int64_t y) {

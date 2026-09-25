@@ -313,6 +313,14 @@ public:
     Dictionary mundo_hallazgo(const String& semilla, int64_t x, int64_t y) const;
 
     /**
+     * Las celdas de un chunk que tienen un hito, como índices `y * lado + x`.
+     *
+     * Para dibujarlos: sin esto, un círculo de piedras era invisible hasta
+     * pisarlo. Ver `hitosEnChunk`.
+     */
+    PackedInt32Array mundo_hitos_chunk(const String& semilla, int64_t cx, int64_t cy) const;
+
+    /**
      * Levanta lo que haya. { ok, mensaje }.
      *
      * Suma a la despensa o a las semillas, según corresponda. Que la coordenada

@@ -38,6 +38,8 @@
 
 extends Node
 
+const Historia = preload("res://scripts/Historia.gd")
+
 const RUTA := "user://demo.json"
 const RUTA_MUNDO := "user://demo_mundo.json"
 
@@ -96,7 +98,7 @@ func _correr() -> void:
 	#
 	# Está en el tile (-3, 1) y la criatura arranca en el (0, 0): tres al oeste y
 	# uno al sur. Es la única conversación de varias páginas del juego.
-	await _caminar_hasta(mundo, "move_left", "Alguien del pueblo", 4.0)
+	await _caminar_hasta(mundo, "move_left", Historia.VECINO_NOMBRE, 4.0)
 	await _esperar(10)
 	mundo._usar()
 	await _esperar(85)      # que tipee la primera página

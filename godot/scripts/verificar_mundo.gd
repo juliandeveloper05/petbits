@@ -201,6 +201,23 @@ func _correr() -> void:
 	)
 	_afirmar(Partida.semilla_mundo != "", "el mundo tiene semilla")
 
+	# ---- La vecina se llama como en la historia -----------------------------
+	#
+	# El cartel del mapa y la caja de diálogo tienen que decir el mismo nombre.
+	# Antes el mapa decía "Alguien del pueblo" y la historia la presentaba como
+	# otra: el jugador no tenía cómo saber que eran la misma.
+	var vecina: Dictionary = {}
+	for p in preload("res://scripts/PuebloMapa.gd").PUNTOS:
+		if p["tipo"] == "npc":
+			vecina = p
+	mundo._criatura.position = Vector2((vecina["x"] + 1.5) * 16, (vecina["y"] + 0.5) * 16)
+	mundo._mirar_alrededor()
+	var nombre: String = preload("res://scripts/Historia.gd").VECINO_NOMBRE
+	_afirmar(
+		mundo._cartel.text.begins_with(nombre + " — Enter para hablar"),
+		'el cartel de la vecina dice su nombre: "%s"' % mundo._cartel.text
+	)
+
 	# ---- Caminar hasta el patio -------------------------------------------
 	var patio: Dictionary = preload("res://scripts/PuebloMapa.gd").PUNTOS[0]
 	mundo._criatura.position = Vector2((patio["x"] + 0.5) * 16, (patio["y"] + 0.5) * 16)

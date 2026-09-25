@@ -26,6 +26,8 @@
 
 extends Node
 
+const Historia = preload("res://scripts/Historia.gd")
+
 const RUTA := "user://recorrido.json"
 const RUTA_MUNDO := "user://recorrido_mundo.json"
 
@@ -113,7 +115,7 @@ func _correr() -> void:
 	await _captura("pueblo_ayuda", "la ayuda de controles, visible")
 
 	# --- Caminar hasta el vecino, con las flechas, y hablarle ---
-	await _caminar_hasta("move_left", "Alguien del pueblo", 3.0)
+	await _caminar_hasta("move_left", Historia.VECINO_NOMBRE, 3.0)
 	await _captura("vecino_cerca", "parada al lado del vecino")
 	await _tecla(KEY_ENTER)
 	await _segundos(2.2)

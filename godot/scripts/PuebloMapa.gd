@@ -29,6 +29,8 @@
 
 extends RefCounted
 
+const Historia = preload("res://scripts/Historia.gd")
+
 const TILE := 16
 
 ## Este "mapa" no tiene tamaño: es el mundo. `Mundo` lo trata distinto — carga
@@ -57,21 +59,16 @@ const PUNTOS := [
 	{"x": -11, "y": 5, "nombre": "El criadero", "tipo": "puerta", "mapa": "criadero"},
 	{"x": 0, "y": -6, "nombre": "El codex", "tipo": "puerta", "mapa": "codex"},
 
-	# El vecino de la plaza. Su seed es fijo: es siempre la misma criatura, y eso
-	# importa más de lo que parece. Un NPC con genoma al azar cambiaría de cara
-	# cada vez que abrís el juego, y dejaría de ser alguien para volver a ser una
-	# textura que habla.
+	# La vecina de la plaza, Doña Cuenta. Su seed es fijo: es siempre la misma
+	# criatura, y eso importa más de lo que parece. Un NPC con genoma al azar
+	# cambiaría de cara cada vez que abrís el juego, y dejaría de ser alguien para
+	# volver a ser una textura que habla.
+	#
+	# El nombre y lo que dice salen de `Historia.gd`. Antes el cartel decía
+	# "Alguien del pueblo" escrito acá, y la historia la presentaba con otro
+	# nombre: se llamaba de una forma en la caja y de otra en el mapa.
 	{
-		"x": -3, "y": 1, "nombre": "Alguien del pueblo", "tipo": "npc",
+		"x": -3, "y": 1, "nombre": Historia.VECINO_NOMBRE, "tipo": "npc",
 		"seed": "C0FE-1DEA-5EED-B10C",
-		"dice": [
-			"Ah, vos sos la que cuida a esa. Se nota.",
-			"Mirá: al patio la podés mandar cuando quieras, no le cuesta nada."
-			+ " Al bosque y a las ruinas, solo cuando esté lista.",
-			"Y tardan lo que tardan. Andá a hacer otra cosa mientras — está bien"
-			+ " que el juego siga sin vos.",
-			"¿Y el pueblo? El pueblo se termina en el borde, pero el mundo no."
-			+ " Segui caminando y vas a ver.",
-		],
 	},
 ]

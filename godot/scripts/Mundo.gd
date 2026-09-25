@@ -127,6 +127,18 @@ var _chunks := {}
 ## En qué chunk estaba la criatura la última vez que se miró.
 var _chunk_actual := Vector2i(999999, 999999)
 
+## Los círculos de piedras, que el tilemap no tiene: un sprite por hito, colgados
+## de su propia capa —arriba del terreno, abajo de la criatura— y agrupados por
+## chunk para irse con él.
+##
+## Antes no se dibujaban. El hito existía, pero el único rastro era el cartel de
+## abajo al pisar su celda exacta: uno cada dos mil tiles, invisible. El objetivo
+## de buscar una semilla quedaba trabado para cualquiera que no supiera dónde.
+var _capa_hitos: Node2D = null
+var _hitos := {}
+var _texturas_hito := {}
+var _brillo_hitos := true
+
 ## Si ya se usó la posición guardada. Ver `_volver_donde_corresponde`.
 var _restaurada := false
 
@@ -307,7 +319,10 @@ func _rehacer_capa() -> void:
 	_capas.clear()
 	if _capa_objetos != null:
 		_capa_objetos.queue_free()
+	if _capa_hitos != null:
+		_capa_hitos.queue_free()
 	_chunks.clear()
+	_hitos.clear()
 
 	_layout = Partida.core.atlas_layout()
 
@@ -346,6 +361,11 @@ func _rehacer_capa() -> void:
 	_capa_objetos.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(_capa_objetos)
 	move_child(_capa_objetos, _capas.size())
+
+	# Los hitos, justo arriba: sobre el suelo y los árboles, debajo de la criatura.
+	_capa_hitos = Node2D.new()
+	add_child(_capa_hitos)
+	move_child(_capa_hitos, _capas.size() + 1)
 
 
 ## Vuelca la grilla de un interior, que entra entera de una.
@@ -400,6 +420,15 @@ func _actualizar_chunks() -> void:
 
 
 func _volcar_chunk(semilla: String, c: Vector2i) -> void:
+	var sprites: Array[Sprite2D] = []
+	for i in Partida.core.mundo_hitos_chunk(semilla, c.x, c.y):
+		var x: int = i % _lado_chunk
+		@warning_ignore("integer_division")
+		var y: int = i / _lado_chunk
+		sprites.append(_poner_hito(Vector2i(c.x * _lado_chunk + x, c.y * _lado_chunk + y)))
+	if not sprites.is_empty():
+		_hitos[c] = sprites
+
 	for i in _capas.size():
 		var datos: PackedByteArray = Partida.core.mundo_capa_chunk(semilla, c.x, c.y, i)
 		if datos.is_empty():
@@ -431,12 +460,76 @@ func _volcar_chunk(semilla: String, c: Vector2i) -> void:
 
 
 func _borrar_chunk(c: Vector2i) -> void:
+	for s in _hitos.get(c, []):
+		s.queue_free()
+	_hitos.erase(c)
+
 	for y in _lado_chunk:
 		for x in _lado_chunk:
 			var celda := Vector2i(c.x * _lado_chunk + x, c.y * _lado_chunk + y)
 			for capa in _capas:
 				capa.erase_cell(celda)
 			_capa_objetos.erase_cell(celda)
+
+
+## Un círculo de piedras en su celda: lleno si todavía tiene la semilla, vacío si
+## ya se levantó.
+func _poner_hito(celda: Vector2i) -> Sprite2D:
+	var s := Sprite2D.new()
+	var lleno := not Partida.ya_recolectado(celda)
+	s.texture = _textura_hito(lleno, _brillo_hitos)
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.position = Vector2((celda.x + 0.5) * TILE, (celda.y + 0.5) * TILE)
+	s.set_meta("celda", celda)
+	s.set_meta("lleno", lleno)
+	_capa_hitos.add_child(s)
+	return s
+
+
+## Al levantar la semilla, el círculo queda vacío en el acto: que se vea que ahí
+## ya no hay nada, sin esperar a que el chunk se vuelva a volcar.
+func _vaciar_hito(celda: Vector2i) -> void:
+	for sprites in _hitos.values():
+		for s in sprites:
+			if s.get_meta("celda") == celda:
+				s.set_meta("lleno", false)
+				s.texture = _textura_hito(false, false)
+
+
+## Ocho piedritas en ronda y, si está lleno, la semilla en el medio: un punto
+## verde fósforo que titila entre dos brillos, para que se vea de lejos.
+##
+## Se dibuja acá y no en el atlas del C++ por la misma razón que la sombra: es un
+## sprite suelto, no un tile que se funde con sus vecinos.
+func _textura_hito(lleno: bool, brillante: bool) -> ImageTexture:
+	var clave := "%s-%s" % [lleno, brillante and lleno]
+	if _texturas_hito.has(clave):
+		return _texturas_hito[clave]
+
+	var img := Image.create_empty(TILE, TILE, false, Image.FORMAT_RGBA8)
+	var clara := Color("#c3c9b6")
+	var oscura := Color("#6b7263")
+	var sombra := Color(0, 0, 0, 0.3)
+	for i in 8:
+		var a := i * TAU / 8.0
+		var px := int(round(7.5 + 5.0 * cos(a) - 0.5))
+		var py := int(round(7.5 + 5.0 * sin(a) - 0.5))
+		for dx in 2:
+			img.set_pixel(px + dx, py, clara)
+			img.set_pixel(px + dx, py + 1, oscura)
+			if py + 2 < TILE:
+				img.set_pixel(px + dx, py + 2, sombra)
+	if lleno:
+		var verde := Color("#9bbc0f") if brillante else Color("#6f8a0b")
+		var luz := Color("#e2f2a8") if brillante else Color("#9bbc0f")
+		for dy in 2:
+			for dx in 2:
+				img.set_pixel(7 + dx, 7 + dy, verde)
+		img.set_pixel(7, 7, luz)
+
+	var t := ImageTexture.create_from_image(img)
+	_texturas_hito[clave] = t
+	return t
 
 
 func _chunk_de(pos: Vector2) -> Vector2i:
@@ -587,6 +680,15 @@ func _animar(delta: float) -> void:
 		v.offset.y = -2.0 if fmod(fase, PERIODO_RESPIRO) < PERIODO_RESPIRO / 2.0 else 0.0
 		var ojos: Array = v.get_meta("ojos")
 		v.texture = ojos[1] if fmod(fase * 0.9 + i * 1.3, 5.0) < DURACION_PARPADEO else ojos[0]
+
+	# La semilla de los círculos titila: medio segundo prendida, medio apagada.
+	var brillo := fmod(_reloj, 1.0) < 0.5
+	if brillo != _brillo_hitos:
+		_brillo_hitos = brillo
+		for sprites in _hitos.values():
+			for s in sprites:
+				if s.get_meta("lleno"):
+					s.texture = _textura_hito(true, brillo)
 
 	_proximo_parpadeo -= delta
 	if _proximo_parpadeo <= 0.0:
@@ -1105,6 +1207,7 @@ func _recolectar() -> void:
 
 	Partida.marcar_recolectado(celda)
 	Partida.guardar_mundo()
+	_vaciar_hito(celda)
 	_caja.decir_ya(r["mensaje"])
 
 	# Un hito es un hallazgo de verdad, así que va a la bitácora: al volver a

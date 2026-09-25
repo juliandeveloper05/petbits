@@ -561,6 +561,18 @@ Hallazgo hallazgoEn(Seed semilla, int32_t x, int32_t y) {
     return Hallazgo::Nada;
 }
 
+std::vector<int> hitosEnChunk(Seed semilla, int32_t cx, int32_t cy) {
+    std::vector<int> salida;
+    for (int y = 0; y < CHUNK; ++y) {
+        for (int x = 0; x < CHUNK; ++x) {
+            if (hallazgoEn(semilla, cx * CHUNK + x, cy * CHUNK + y) == Hallazgo::Hito) {
+                salida.push_back(y * CHUNK + x);
+            }
+        }
+    }
+    return salida;
+}
+
 Seed semillaDeHito(Seed semilla, int32_t x, int32_t y) {
     // Se mezcla la posición con la semilla del mundo y se vuelve a mezclar. Sin
     // la segunda pasada, hitos vecinos darían genomas parecidos y todas las

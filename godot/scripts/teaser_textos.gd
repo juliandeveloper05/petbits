@@ -21,6 +21,7 @@
 extends SceneTree
 
 const Escritura = preload("res://scripts/Escritura.gd")
+const Historia = preload("res://scripts/Historia.gd")
 
 const ANCHO := 1080
 const ALTO := 1920
@@ -40,12 +41,16 @@ const BORDE := Color("#3d5c46")
 const FONDO := Color("#0a0e0a")
 
 ## Cada tramo: el paso (arriba) y dos renglones (abajo).
+##
+## Cuentan la historia de `Historia.gd` —la señora que contaba estrellas— y no
+## los botones: es un teaser, no un tutorial. El gancho va en los primeros tres
+## segundos, que es lo que decide si alguien sigue mirando una historia de IG.
 const TRAMOS := {
-	"titulo": ["", "Una mascota virtual,", "como las de antes."],
-	"semilla": ["1 · Nace de un número", "Ese número es su forma,", "sus colores y su carácter."],
-	"cuidala": ["2 · Cuidala", "Come, juega, duerme,", "y crece aunque no estés."],
-	"pueblo": ["3 · Salí a caminar", "Un pueblo con gente,", "y un mundo que no termina."],
-	"mundo": ["4 · Buscá semillas", "Cada una es una criatura", "que nadie vio antes."],
+	"titulo": ["", "Contó todas las estrellas", "y le sobraron mascotas."],
+	"semilla": ["1 · Nace de un número", "De cada número que enterró", "salió una criatura."],
+	"cuidala": ["2 · Cuidala", "El número dice cómo es,", "no cuánto te va a querer."],
+	"pueblo": ["3 · Salí a caminar", "En la plaza, " + Historia.VECINO_NOMBRE, "te cuenta el resto."],
+	"mundo": ["4 · Buscá sus semillas", "En círculos de piedras,", "en un mundo que no termina."],
 }
 
 
@@ -80,7 +85,7 @@ func _init() -> void:
 	var cierre := Image.create_empty(ANCHO, ALTO, false, Image.FORMAT_RGBA8)
 	cierre.fill(FONDO)
 	_centrado(cierre, tipo, "PetBits", 780, FOSFORO, 10)
-	_centrado(cierre, tipo, "Muy pronto.", 980, TEXTO, 5)
+	_centrado(cierre, tipo, "Contá los días.", 980, TEXTO, 5)
 	_centrado(cierre, tipo, "Un juego de Julian Soto", 1120, TENUE, 3)
 	cierre.save_png("res://teaser/tramo_cierre.png")
 	print("  tramo_cierre.png")
